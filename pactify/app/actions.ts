@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
+  const userType = formData.get("userType")?.toString() || "both";
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
@@ -19,11 +20,18 @@ export const signUpAction = async (formData: FormData) => {
     );
   }
 
+  // Get user's display name from email (before the @ sign)
+  const displayName = email.split('@')[0];
+
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
+      data: {
+        user_type: userType,
+        full_name: displayName,
+      },
     },
   });
 
@@ -53,7 +61,7 @@ export const signInAction = async (formData: FormData) => {
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  return redirect("/protected");
+  return redirect("/dashboard");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -131,4 +139,31 @@ export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
   return redirect("/sign-in");
+};
+
+export const signInWithGoogleAction = async () => {
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
+    },
+  });
+
+  if (error) {
+    return encodedRedirect("error", "/sign-in", error.message);
+  }
+
+  return redirect(data.url);
+};
+
+export const signUpWithGoogleAction = async () => {
+  // For Google OAuth, the sign-in and sign-up processes are the same
+  return signInWithGoogleAction();
 };
