@@ -18,6 +18,9 @@ export default function NewContractPage() {
     title: "",
     description: "",
     clientEmail: "",
+    price: "",
+    currency: "USD",
+    paymentType: "fixed",
   });
 
   const handleNextStep = () => {
@@ -48,8 +51,33 @@ export default function NewContractPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // This functionality will be implemented in a future version
-    // Currently just navigating to the contracts list
+    // Generate a unique ID for the new contract
+    const contractId = `contract-${Date.now()}`;
+    
+    // Create a new contract object
+    const newContract = {
+      id: contractId,
+      title: contractDetails.title || "Untitled Contract",
+      description: contractDetails.description || "",
+      clientEmail: contractDetails.clientEmail || "",
+      price: contractDetails.price || "0",
+      currency: contractDetails.currency || "USD",
+      paymentType: contractDetails.paymentType || "fixed",
+      status: "draft",
+      createdAt: new Date().toISOString(),
+      template: selectedTemplate || "custom",
+    };
+    
+    // Save to localStorage (in a real app, this would save to a database)
+    const existingContracts = localStorage.getItem('contracts');
+    const contracts = existingContracts ? JSON.parse(existingContracts) : [];
+    
+    localStorage.setItem('contracts', JSON.stringify([...contracts, newContract]));
+    
+    // Dispatch a storage event to notify other components
+    window.dispatchEvent(new Event('storage'));
+    
+    // Navigate to the contracts list
     router.push('/dashboard/contracts');
   };
 
@@ -210,6 +238,77 @@ export default function NewContractPage() {
                       placeholder="client@example.com" 
                     />
                     <p className="text-xs text-muted-foreground mt-1">The client will receive an invitation to review and sign the contract.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="paymentType">Payment Type</Label>
+                      <div className="flex space-x-4 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="fixed"
+                            name="paymentType"
+                            value="fixed"
+                            checked={contractDetails.paymentType === "fixed"}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-primary-500 border-gray-300 focus:ring-primary-500"
+                          />
+                          <Label htmlFor="fixed">Fixed Price</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            id="hourly"
+                            name="paymentType"
+                            value="hourly"
+                            checked={contractDetails.paymentType === "hourly"}
+                            onChange={handleInputChange}
+                            className="h-4 w-4 text-primary-500 border-gray-300 focus:ring-primary-500"
+                          />
+                          <Label htmlFor="hourly">Hourly Rate</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="price">
+                          {contractDetails.paymentType === "hourly" ? "Hourly Rate" : "Fixed Price"}
+                        </Label>
+                        <div className="relative mt-1">
+                          <Input
+                            id="price"
+                            name="price"
+                            type="text"
+                            inputMode="decimal"
+                            value={contractDetails.price}
+                            onChange={handleInputChange}
+                            placeholder={contractDetails.paymentType === "hourly" ? "e.g., 50.00" : "e.g., 500.00"}
+                            className="pl-7"
+                          />
+                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <span className="text-gray-500">$</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="currency">Currency</Label>
+                        <select
+                          id="currency"
+                          name="currency"
+                          value={contractDetails.currency}
+                          onChange={handleInputChange as any}
+                          className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="USD">USD - US Dollar</option>
+                          <option value="EUR">EUR - Euro</option>
+                          <option value="GBP">GBP - British Pound</option>
+                          <option value="CAD">CAD - Canadian Dollar</option>
+                          <option value="AUD">AUD - Australian Dollar</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 

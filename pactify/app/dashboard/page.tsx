@@ -1,19 +1,11 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { 
-  FileTextIcon, 
-  PlusIcon, 
-  TrendingUpIcon, 
-  ClockIcon, 
-  CreditCardIcon, 
-  DollarSignIcon, 
-  UserCheckIcon,
-  ArrowRightIcon
-} from "lucide-react";
+import { PlusIcon } from "lucide-react";
+import { DashboardStats } from "@/components/dashboard/dashboard-stats";
+import { RecentContracts } from "@/components/dashboard/recent-contracts";
 
 export const metadata = {
   title: "Dashboard | Pactify",
@@ -40,6 +32,7 @@ export default async function DashboardPage() {
 
   const userType = profile?.user_type || user.user_metadata?.user_type || "both";
   const displayName = profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0];
+  const availableContracts = profile?.available_contracts || 3;
 
   // Get time of day for greeting
   const hour = new Date().getHours();
@@ -54,120 +47,23 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-serif font-bold">{greeting}, {displayName}!</h1>
           <p className="text-muted-foreground mt-1">Here's what's happening with your contracts today.</p>
         </div>
-        <Button size="sm">
-          <PlusIcon className="mr-2 h-4 w-4" />
-          New Contract
+        <Button size="sm" asChild>
+          <Link href="/dashboard/contracts/new">
+            <PlusIcon className="mr-2 h-4 w-4" />
+            New Contract
+          </Link>
         </Button>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Active Contracts</p>
-              <div className="p-2 bg-primary-500/10 rounded-full">
-                <FileTextIcon className="h-5 w-5 text-primary-500" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">0</h3>
-              <Badge variant="outline" className="font-normal">
-                <TrendingUpIcon className="mr-1 h-3 w-3" />
-                <span className="text-xs">Free plan: {profile?.available_contracts || 3} remaining</span>
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Pending Signatures</p>
-              <div className="p-2 bg-secondary-500/10 rounded-full">
-                <UserCheckIcon className="h-5 w-5 text-secondary-500" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">0</h3>
-              <Badge variant="outline" className="font-normal">
-                <ClockIcon className="mr-1 h-3 w-3" />
-                <span className="text-xs">No pending signatures</span>
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">
-                {userType === 'client' ? 'Outgoing Payments' : 'Incoming Payments'}
-              </p>
-              <div className="p-2 bg-accent-500/10 rounded-full">
-                <CreditCardIcon className="h-5 w-5 text-accent-500" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">$0</h3>
-              <Badge variant="outline" className="font-normal">
-                <DollarSignIcon className="mr-1 h-3 w-3" />
-                <span className="text-xs">No active payments</span>
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">
-                {userType === 'client' ? 'Freelancers' : 'Clients'}
-              </p>
-              <div className="p-2 bg-success/10 rounded-full">
-                <UserCheckIcon className="h-5 w-5 text-success" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">0</h3>
-              <Badge variant="outline" className="font-normal">
-                <PlusIcon className="mr-1 h-3 w-3" />
-                <span className="text-xs">Add new contact</span>
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <DashboardStats userType={userType} availableContracts={availableContracts} />
 
       {/* Main content section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent contracts */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Recent Contracts</CardTitle>
-              <CardDescription>Your recently created or signed contracts.</CardDescription>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/contracts">
-                View all<ArrowRightIcon className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-lg bg-muted/30">
-              <FileTextIcon className="h-10 w-10 text-muted-foreground mb-3" />
-              <h3 className="text-lg font-medium mb-2">No contracts yet</h3>
-              <p className="text-sm text-muted-foreground mb-4 max-w-xs">
-                Create your first contract by clicking the button below.
-              </p>
-              <Button>
-                <PlusIcon className="mr-2 h-4 w-4" />
-                Create Contract
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="lg:col-span-2">
+          <RecentContracts />
+        </div>
 
         {/* Get started cards */}
         <Card>

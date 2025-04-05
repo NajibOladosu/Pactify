@@ -1,42 +1,30 @@
 "use client";
 
 import { signUpAction, signUpWithGoogleAction } from "@/app/actions";
-import { FormMessage, Message } from "@/components/form-message";
+import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/components/ui/use-toast";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { SmtpMessage } from "../smtp-message";
 
-export default function Signup({ searchParams }: { searchParams: Message }) {
+interface SearchParams {
+  success?: string;
+  error?: string;
+  message?: string;
+}
+
+export default function Signup({ 
+  searchParams = {}
+}: { 
+  searchParams?: SearchParams 
+}) {
   const [userType, setUserType] = useState<string>("both");
-  const [params, setParams] = useState<Message>({});
-  const { toast } = useToast();
 
-  useEffect(() => {
-    // Handle the Promise if needed
-    if (searchParams instanceof Promise) {
-      searchParams.then(setParams);
-    } else {
-      setParams(searchParams);
-    }
-  }, [searchParams]);
-
-  if ("message" in params) {
-    return (
-      <div className="flex flex-col items-center justify-center text-center">
-        <FormMessage message={params} />
-      </div>
-    );
-  }
-
-  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    const formData = new FormData(e.currentTarget);
-    formData.append("userType", userType);
+  const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUserType(e.target.value);
   };
 
   return (
@@ -88,25 +76,44 @@ export default function Signup({ searchParams }: { searchParams: Message }) {
 
         <div className="space-y-2">
           <Label>I am a</Label>
-          <RadioGroup 
-            name="userType" 
-            defaultValue="both"
-            className="flex flex-col space-y-1"
-            onValueChange={setUserType}
-          >
+          <div className="flex flex-col space-y-1">
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="freelancer" id="freelancer" />
+              <input 
+                type="radio" 
+                id="freelancer" 
+                name="userType" 
+                value="freelancer" 
+                onChange={handleRadioChange}
+                checked={userType === "freelancer"}
+                className="h-4 w-4"
+              />
               <Label htmlFor="freelancer" className="font-normal cursor-pointer">Freelancer</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="client" id="client" />
+              <input 
+                type="radio" 
+                id="client" 
+                name="userType" 
+                value="client"
+                onChange={handleRadioChange}
+                checked={userType === "client"}
+                className="h-4 w-4"
+              />
               <Label htmlFor="client" className="font-normal cursor-pointer">Client</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="both" id="both" />
+              <input 
+                type="radio" 
+                id="both" 
+                name="userType" 
+                value="both"
+                onChange={handleRadioChange}
+                checked={userType === "both"}
+                className="h-4 w-4"
+              />
               <Label htmlFor="both" className="font-normal cursor-pointer">Both (I hire and get hired)</Label>
             </div>
-          </RadioGroup>
+          </div>
         </div>
         
         <div className="space-y-4">
@@ -135,7 +142,17 @@ export default function Signup({ searchParams }: { searchParams: Message }) {
           </Link>
         </div>
         
-        <FormMessage message={params} />
+        {searchParams.error && (
+          <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+            {searchParams.error}
+          </div>
+        )}
+        
+        {searchParams.success && (
+          <div className="bg-green-50 text-green-600 p-3 rounded-md text-sm">
+            {searchParams.success}
+          </div>
+        )}
       </form>
       
       <div className="relative my-8">

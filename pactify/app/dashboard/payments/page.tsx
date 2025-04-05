@@ -1,148 +1,136 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { ArrowDownIcon, ArrowUpIcon, CreditCardIcon, DollarSignIcon } from "lucide-react";
+"use client";
 
-export const metadata = {
-  title: "Payments | Pactify",
-  description: "Manage your payments and escrow with Pactify",
-};
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { CreditCardIcon, ArrowUpRightIcon, ArrowDownLeftIcon, SearchIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
+
+interface Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  date: string;
+  status: "paid" | "pending" | "failed";
+  type: "incoming" | "outgoing";
+  contractTitle: string;
+  clientName: string;
+}
 
 export default function PaymentsPage() {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    // Simulate loading payments
+    const loadPayments = () => {
+      setTimeout(() => {
+        // In a real app, this would come from an API
+        setPayments([]);
+        setLoading(false);
+      }, 500);
+    };
+
+    loadPayments();
+  }, []);
+
+  const filteredPayments = payments.filter(payment => 
+    payment.contractTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.clientName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-serif font-bold">Payments</h1>
-          <p className="text-muted-foreground mt-1">Track and manage your escrow payments.</p>
+          <p className="text-muted-foreground mt-1">Track and manage contract payments.</p>
         </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Active Escrow</p>
-              <div className="p-2 bg-primary-500/10 rounded-full">
-                <CreditCardIcon className="h-5 w-5 text-primary-500" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">$0.00</h3>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Pending Release</p>
-              <div className="p-2 bg-warning/10 rounded-full">
-                <CreditCardIcon className="h-5 w-5 text-warning" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">$0.00</h3>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Total Received</p>
-              <div className="p-2 bg-success/10 rounded-full">
-                <ArrowDownIcon className="h-5 w-5 text-success" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">$0.00</h3>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-medium text-muted-foreground">Total Sent</p>
-              <div className="p-2 bg-secondary-500/10 rounded-full">
-                <ArrowUpIcon className="h-5 w-5 text-secondary-500" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h3 className="text-2xl font-bold">$0.00</h3>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter Controls */}
-      <Card className="p-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Filter by:</span>
-          <span className="flex items-center gap-2">
-            <Badge variant="outline" className="rounded-full px-3 hover:bg-accent cursor-pointer">All</Badge>
-            <Badge variant="outline" className="rounded-full px-3 hover:bg-accent cursor-pointer">Escrow</Badge>
-            <Badge variant="outline" className="rounded-full px-3 hover:bg-accent cursor-pointer">Received</Badge>
-            <Badge variant="outline" className="rounded-full px-3 hover:bg-accent cursor-pointer">Sent</Badge>
-          </span>
-        </div>
-      </Card>
-
-      {/* Empty state */}
-      <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed rounded-lg bg-muted/30">
-        <DollarSignIcon className="h-10 w-10 text-muted-foreground mb-3" />
-        <h3 className="text-lg font-medium mb-2">No payment history</h3>
-        <p className="text-sm text-muted-foreground mb-4 max-w-md">
-          You don't have any payment history yet. Payments will appear here once you start using escrow for your contracts.
-        </p>
-        <Button asChild>
-          <Link href="/dashboard/contracts">
-            View Contracts
-          </Link>
+        <Button>
+          <CreditCardIcon className="mr-2 h-4 w-4" />
+          Withdraw Funds
         </Button>
       </div>
 
-      {/* When there are payments, this will be shown instead */}
-      <div className="border rounded-lg overflow-hidden" style={{ display: 'none' }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="px-4 py-3 text-left font-medium">Date</th>
-                <th className="px-4 py-3 text-left font-medium">Description</th>
-                <th className="px-4 py-3 text-left font-medium">Contract</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              <tr className="hover:bg-muted/30">
-                <td className="px-4 py-3 text-left">May 4, 2023</td>
-                <td className="px-4 py-3 text-left">Website Development - Milestone 1</td>
-                <td className="px-4 py-3 text-left">
-                  <Link href="/dashboard/contracts/123" className="text-primary-500 hover:underline">
-                    Website Redesign
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-left">
-                  <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                    Completed
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right font-medium">$2,500.00</td>
-                <td className="px-4 py-3 text-right">
-                  <Button variant="ghost" size="sm">View</Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm font-medium text-muted-foreground">Incoming</p>
+              <ArrowDownLeftIcon className="h-5 w-5 text-green-500" />
+            </div>
+            <h3 className="text-2xl font-bold">$0.00</h3>
+            <p className="text-xs text-muted-foreground mt-1">Available for withdrawal</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm font-medium text-muted-foreground">Outgoing</p>
+              <ArrowUpRightIcon className="h-5 w-5 text-red-500" />
+            </div>
+            <h3 className="text-2xl font-bold">$0.00</h3>
+            <p className="text-xs text-muted-foreground mt-1">Sent to freelancers</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-sm font-medium text-muted-foreground">Pending</p>
+              <CreditCardIcon className="h-5 w-5 text-amber-500" />
+            </div>
+            <h3 className="text-2xl font-bold">$0.00</h3>
+            <p className="text-xs text-muted-foreground mt-1">Awaiting release or payment</p>
+          </CardContent>
+        </Card>
       </div>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex justify-between items-center">
+            <CardTitle>Transaction History</CardTitle>
+            <div className="relative w-64">
+              <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search transactions..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+          <CardDescription>Track all your contract payments in one place.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+            </div>
+          ) : filteredPayments.length > 0 ? (
+            <div className="space-y-4">
+              {/* Payments list would go here */}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="bg-muted/30 p-4 rounded-full mb-4">
+                <CreditCardIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-2">No transactions yet</h3>
+              <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+                You haven't made any payments or received any funds yet. 
+                Payments will appear here once you start sending or receiving money.
+              </p>
+              <Button variant="outline">
+                View Payment Methods
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

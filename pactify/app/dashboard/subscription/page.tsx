@@ -87,15 +87,10 @@ export default function SubscriptionPage() {
   const handleUpgrade = async (planId: string) => {
     setLoading(planId);
     
-    // This would be replaced with actual Stripe integration
+    // Redirect to checkout page
     setTimeout(() => {
-      toast({
-        title: "Coming Soon",
-        description: "Stripe integration is currently in development. Please check back later.",
-        variant: "default",
-      });
-      setLoading(null);
-    }, 1500);
+      router.push(`/checkout/${planId}`);
+    }, 500);
   };
 
   const handleCancelSubscription = async () => {
