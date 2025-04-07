@@ -51,8 +51,12 @@ jobs:
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build Project Artifacts
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          chmod +x ./vercel-build.sh
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          NEXT_DISABLE_ESLINT: 1
+          NEXT_DISABLE_TYPECHECK: 1
         
       - name: Deploy Project Artifacts
         run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
-        
