@@ -19,7 +19,7 @@ interface SearchParams {
 export default function Signup({ 
   searchParams = {}
 }: { 
-  searchParams?: SearchParams 
+  searchParams?: { [key: string]: string | string[] }
 }) {
   const [userType, setUserType] = useState<string>("both");
 
