@@ -7,13 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
-export default async function Login({ searchParams }: { searchParams: Promise<Message> }) {
-  const params = await searchParams;
+export default async function Login(props: {
+  searchParams: Promise<Message>;
+}) {
+  const searchParams = await props.searchParams;
   
-  if ("message" in params) {
+  if ("message" in searchParams) {
     return (
       <div className="flex flex-col items-center justify-center text-center">
-        <FormMessage message={params} />
+        <FormMessage message={searchParams} />
       </div>
     );
   }
@@ -75,7 +77,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<Me
           </div>
         </div>
         
-        <FormMessage message={params} />
+        <FormMessage message={searchParams} />
       </form>
       
       <div className="relative my-8">

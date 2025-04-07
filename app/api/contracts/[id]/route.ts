@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // In a real application, this would fetch from a database
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: "Contract found",
-      contractId: params.id
+      contractId: context.params.id,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     return NextResponse.json(
@@ -20,16 +20,16 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     const body = await request.json();
     
-    // In a real application, this would update the database
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: "Contract updated",
-      contractId: params.id,
-      updatedData: body
+      contractId: context.params.id,
+      updatedData: body,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     return NextResponse.json(
@@ -41,13 +41,13 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // In a real application, this would delete from a database
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: "Contract deleted",
-      contractId: params.id
+      contractId: context.params.id,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     return NextResponse.json(

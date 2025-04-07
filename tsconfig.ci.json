@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    ".next",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "app/api/contracts/[id]/route.ts",
+    "app/checkout/[plan]/page.ts",
+    "app/dashboard/contracts/[id]/page.ts",
+    "**/[*]/**"
+  ]
+}

@@ -1,31 +1,24 @@
-"use client";
-
 import { signUpAction, signUpWithGoogleAction } from "@/app/actions";
-import { FormMessage } from "@/components/form-message";
+import { FormMessage, Message } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
 import Link from "next/link";
 import { SmtpMessage } from "../smtp-message";
 
-interface SearchParams {
-  success?: string;
-  error?: string;
-  message?: string;
-}
-
-export default function Signup({ 
-  searchParams = {}
-}: { 
-  searchParams?: { [key: string]: string | string[] }
+export default async function Signup(props: {
+  searchParams: Promise<Message>;
 }) {
-  const [userType, setUserType] = useState<string>("both");
-
-  const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUserType(e.target.value);
-  };
+  const searchParams = await props.searchParams;
+  
+  if ("message" in searchParams) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center">
+        <FormMessage message={searchParams} />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -39,12 +32,6 @@ export default function Signup({
       <form 
         action={signUpAction}
         className="space-y-6"
-        onSubmit={(e) => {
-          // This is just to add the userType to the form data
-          const form = e.currentTarget;
-          const formData = new FormData(form);
-          formData.append("userType", userType);
-        }}
       >
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -75,45 +62,17 @@ export default function Signup({
         </div>
 
         <div className="space-y-2">
-          <Label>I am a</Label>
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center space-x-2">
-              <input 
-                type="radio" 
-                id="freelancer" 
-                name="userType" 
-                value="freelancer" 
-                onChange={handleRadioChange}
-                checked={userType === "freelancer"}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="freelancer" className="font-normal cursor-pointer">Freelancer</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input 
-                type="radio" 
-                id="client" 
-                name="userType" 
-                value="client"
-                onChange={handleRadioChange}
-                checked={userType === "client"}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="client" className="font-normal cursor-pointer">Client</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input 
-                type="radio" 
-                id="both" 
-                name="userType" 
-                value="both"
-                onChange={handleRadioChange}
-                checked={userType === "both"}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="both" className="font-normal cursor-pointer">Both (I hire and get hired)</Label>
-            </div>
-          </div>
+          <Label htmlFor="userType">I am a</Label>
+          <select
+            id="userType"
+            name="userType"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            defaultValue="both"
+          >
+            <option value="freelancer">Freelancer</option>
+            <option value="client">Client</option>
+            <option value="both">Both (I hire and get hired)</option>
+          </select>
         </div>
         
         <div className="space-y-4">
@@ -142,17 +101,7 @@ export default function Signup({
           </Link>
         </div>
         
-        {searchParams.error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
-            {searchParams.error}
-          </div>
-        )}
-        
-        {searchParams.success && (
-          <div className="bg-green-50 text-green-600 p-3 rounded-md text-sm">
-            {searchParams.success}
-          </div>
-        )}
+        <FormMessage message={searchParams} />
       </form>
       
       <div className="relative my-8">

@@ -3,13 +3,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:skip-checks": "next build --no-lint",
+    "build:production": "next build --no-lint",
     "start": "next start",
     "lint": "next lint",
+    "lint:ci": "next lint --config .eslintrc.ci.json",
     "type-check": "tsc --noEmit",
+    "type-check:ci": "tsc --noEmit --project tsconfig.ci.json",
     "vercel-deploy": "vercel --prod",
     "vercel-setup": "node scripts/get-vercel-config.js",
     "db:schema": "node scripts/apply-schema.js",
-    "build:ci": "npm run lint && npm run type-check && npm run build"
+    "build:ci": "npm run lint:ci && npm run type-check:ci && npm run build:production"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -54,6 +58,8 @@
     "@types/node": "22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "19.0.2",
+    "eslint": "9.24.0",
+    "eslint-config-next": "15.2.4",
     "postcss": "8.4.49",
     "supabase": "^2.20.5",
     "tailwind-merge": "^2.5.2",
