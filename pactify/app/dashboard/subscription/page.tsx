@@ -217,12 +217,7 @@ export default function SubscriptionPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {SUBSCRIPTION_TIERS.map((tier) => (
-            <Card key={tier.id} className={`${tier.mostPopular ? 'border-primary-500 border-2' : ''}`}>
-              {tier.mostPopular && (
-                <div className="bg-primary-500 text-white text-xs font-medium px-3 py-1 absolute right-4 top-0 transform -translate-y-1/2 rounded-full">
-                  Most Popular
-                </div>
-              )}
+            <Card key={tier.id} className={`${tier.mostPopular ? 'border-primary-500 border-2 relative' : ''}`}>
               <CardHeader>
                 <CardTitle>{tier.name}</CardTitle>
                 <CardDescription>{tier.description}</CardDescription>
