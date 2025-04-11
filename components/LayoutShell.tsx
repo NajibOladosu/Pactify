@@ -4,8 +4,11 @@ import { ReactNode, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { EnvVarWarning } from "@/components/env-var-warning";
 import { Toaster } from "@/components/ui/toaster";
+import dynamic from "next/dynamic";
+
+// Dynamically import AuthButton as a client component
+const AuthButton = dynamic(() => import("./header-auth-client"), { ssr: false });
 
 // Fallback header for client-only rendering (no auth)
 function MinimalHeader() {
@@ -29,7 +32,7 @@ function MinimalHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <EnvVarWarning />
+          <AuthButton />
           <ThemeSwitcher />
         </div>
       </div>
