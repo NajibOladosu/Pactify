@@ -1,3 +1,29 @@
+
+-- Drop existing tables (if needed)
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS contacts;
+DROP TABLE IF EXISTS user_subscriptions;
+DROP TABLE IF EXISTS subscription_plans;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS milestones;
+DROP TABLE IF EXISTS contract_parties;
+DROP TABLE IF EXISTS contracts;
+DROP TABLE IF EXISTS contract_templates;
+DROP TABLE IF EXISTS profiles;
+
+-- Drop existing triggers (if needed)
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS update_available_contracts_trigger ON contracts;
+DROP TRIGGER IF EXISTS set_contract_number_trigger ON contracts;
+
+-- Drop existing functions (if needed)
+DROP FUNCTION IF EXISTS handle_user_update();
+DROP FUNCTION IF EXISTS handle_new_user();
+DROP FUNCTION IF EXISTS update_available_contracts();
+DROP FUNCTION IF EXISTS set_contract_number();
+
+
 -- Pactify Database Schema
 
 -- Enable UUIDs extension

@@ -1,10 +1,11 @@
+-- Modified for safe execution with IF NOT EXISTS clauses
 -- Pactify Database Schema
 
 -- Enable UUIDs extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create profiles table to extend auth.users
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users(id) PRIMARY KEY,
     display_name TEXT,
     user_type TEXT DEFAULT 'both' CHECK (user_type IN ('freelancer', 'client', 'both')),
@@ -22,7 +23,7 @@ CREATE TABLE profiles (
 );
 
 -- Create contract templates table
-CREATE TABLE contract_templates (
+CREATE TABLE IF NOT EXISTS contract_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     description TEXT,
@@ -34,7 +35,7 @@ CREATE TABLE contract_templates (
 );
 
 -- Create contracts table
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT NOT NULL,
     description TEXT,
@@ -52,7 +53,7 @@ CREATE TABLE contracts (
 );
 
 -- Create contract parties (participants) table
-CREATE TABLE contract_parties (
+CREATE TABLE IF NOT EXISTS contract_parties (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     contract_id UUID REFERENCES contracts(id) NOT NULL,
     user_id UUID REFERENCES profiles(id) NOT NULL,
@@ -66,7 +67,7 @@ CREATE TABLE contract_parties (
 );
 
 -- Create contract milestones table
-CREATE TABLE milestones (
+CREATE TABLE IF NOT EXISTS milestones (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     contract_id UUID REFERENCES contracts(id) NOT NULL,
     title TEXT NOT NULL,
@@ -80,7 +81,7 @@ CREATE TABLE milestones (
 );
 
 -- Create payments/escrow table
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     contract_id UUID REFERENCES contracts(id) NOT NULL,
     milestone_id UUID REFERENCES milestones(id),
@@ -98,7 +99,7 @@ CREATE TABLE payments (
 );
 
 -- Create subscription plans table
-CREATE TABLE subscription_plans (
+CREATE TABLE IF NOT EXISTS subscription_plans (
     id TEXT PRIMARY KEY, -- 'free', 'professional', 'business'
     name TEXT NOT NULL,
     description TEXT,
@@ -114,7 +115,7 @@ CREATE TABLE subscription_plans (
 );
 
 -- Create user subscriptions table
-CREATE TABLE user_subscriptions (
+CREATE TABLE IF NOT EXISTS user_subscriptions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES profiles(id) NOT NULL,
     plan_id TEXT REFERENCES subscription_plans(id) NOT NULL,
@@ -130,7 +131,7 @@ CREATE TABLE user_subscriptions (
 );
 
 -- Create contacts (network) table
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES profiles(id) NOT NULL,
     contact_id UUID REFERENCES profiles(id) NOT NULL,
@@ -143,7 +144,7 @@ CREATE TABLE contacts (
 );
 
 -- Create notifications table
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES profiles(id) NOT NULL,
     type TEXT NOT NULL,
@@ -311,7 +312,7 @@ TO authenticated
 USING (user_id = auth.uid());
 
 -- Trigger for setting contract number
-CREATE OR REPLACE FUNCTION set_contract_number()
+DROP FUNCTION IF EXISTS $1; CREATE OR REPLACE FUNCTION set_contract_number()
 RETURNS TRIGGER AS $$
 DECLARE
     date_part TEXT;
@@ -340,14 +341,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER set_contract_number_trigger
+CREATE TRIGGER IF NOT EXISTS set_contract_number_trigger
 BEFORE INSERT ON contracts
 FOR EACH ROW
 WHEN (NEW.contract_number IS NULL)
 EXECUTE FUNCTION set_contract_number();
 
 -- Trigger for updating user available contracts
-CREATE OR REPLACE FUNCTION update_available_contracts()
+DROP FUNCTION IF EXISTS $1; CREATE OR REPLACE FUNCTION update_available_contracts()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Only decrement if the user is on the free plan and this is a new contract
@@ -366,13 +367,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_available_contracts_trigger
+CREATE TRIGGER IF NOT EXISTS update_available_contracts_trigger
 AFTER INSERT ON contracts
 FOR EACH ROW
 EXECUTE FUNCTION update_available_contracts();
 
 -- Create function for auth user creation hook
-CREATE OR REPLACE FUNCTION public.handle_new_user()
+DROP FUNCTION IF EXISTS $1; CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (id, display_name, user_type)
@@ -386,12 +387,12 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create trigger for new user creation
-CREATE TRIGGER on_auth_user_created
+CREATE TRIGGER IF NOT EXISTS on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Create function for updating profiles table when user is updated
-CREATE OR REPLACE FUNCTION public.handle_user_update()
+DROP FUNCTION IF EXISTS $1; CREATE OR REPLACE FUNCTION public.handle_user_update()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE public.profiles
@@ -402,6 +403,6 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create trigger for user update
-CREATE TRIGGER on_auth_user_updated
+CREATE TRIGGER IF NOT EXISTS on_auth_user_updated
   AFTER UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_user_update();

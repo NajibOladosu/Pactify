@@ -89,17 +89,7 @@ async function applySchema() {
   }
   
   // Prompt for project reference
-  const projectRef = await new Promise(resolve => {
-    rl.question('Enter your Supabase project reference (found in project URL): ', answer => {
-      resolve(answer.trim());
-    });
-  });
-  
-  if (!projectRef) {
-    console.error('❌ Project reference is required');
-    rl.close();
-    return;
-  }
+  const projectRef = 'ahswbmnczyhqfckeglut'
   
   // Check if user is already logged in
   let isLoggedIn = false;
@@ -193,7 +183,8 @@ async function applySchema() {
     // Push migration
     console.log('🔄 Pushing schema to Supabase...');
     try {
-      execSync('supabase db push', { stdio: 'inherit' });
+      execSync('supabase db push');
+      execSync('y', { stdio: 'inherit' });
       console.log('✅ Schema applied successfully!');
     } catch (error) {
       console.error('❌ Failed to push schema:', error.message);
@@ -233,7 +224,8 @@ async function applySchema() {
     // Push migration
     console.log('🔄 Resetting database and pushing schema to Supabase...');
     try {
-      execSync('supabase db push', { stdio: 'inherit' });
+      execSync('supabase db push');
+      execSync('y', { stdio: 'inherit' });
       console.log('✅ Database reset and schema applied successfully!');
     } catch (error) {
       console.error('❌ Failed to push schema:', error.message);
