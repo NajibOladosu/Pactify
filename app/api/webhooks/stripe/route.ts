@@ -106,9 +106,9 @@ export async function POST(request: Request) {
           // console.log(JSON.stringify(invoicePaid, null, 2));
 
           // Safely access subscription and customer IDs (expecting strings in webhook payload) - suppressing TS errors
-          // @ts-ignore Property 'subscription' does not exist on type 'Invoice'.
+          // @ts-expect-error Property 'subscription' does not exist on type 'Invoice'.
           const subscriptionId = typeof invoicePaid.subscription === 'string' ? invoicePaid.subscription : null;
-          // @ts-ignore Property 'customer' does not exist on type 'Invoice'.
+          // The customer property seems correctly typed now, removing the directive.
           const customerId = typeof invoicePaid.customer === 'string' ? invoicePaid.customer : null;
 
           if (subscriptionId && customerId) {
@@ -124,9 +124,9 @@ export async function POST(request: Request) {
           // console.log(JSON.stringify(invoiceFailed, null, 2));
 
           // Safely access subscription and customer IDs (expecting strings in webhook payload) - suppressing TS errors
-          // @ts-ignore Property 'subscription' does not exist on type 'Invoice'.
+          // @ts-expect-error Property 'subscription' does not exist on type 'Invoice'.
           const subscriptionId = typeof invoiceFailed.subscription === 'string' ? invoiceFailed.subscription : null;
-          // @ts-ignore Property 'customer' does not exist on type 'Invoice'.
+          // The customer property seems correctly typed now, removing the directive.
           const customerId = typeof invoiceFailed.customer === 'string' ? invoiceFailed.customer : null;
 
           if (subscriptionId && customerId) {
@@ -189,9 +189,9 @@ async function handleSubscriptionCheckout(subscriptionId: string, customerId: st
   }
 
   // Trusting Stripe SDK types for these properties - suppressing potential TS errors
-  // @ts-ignore Property 'current_period_start' does not exist on type 'Subscription'.
+  // @ts-expect-error Property 'current_period_start' does not exist on type 'Subscription'.
   const currentPeriodStart = subscriptionDetails.current_period_start;
-  // @ts-ignore Property 'current_period_end' does not exist on type 'Subscription'.
+  // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
   const currentPeriodEnd = subscriptionDetails.current_period_end;
 
   const subscriptionData = {
@@ -272,9 +272,9 @@ async function handleSubscriptionUpdate(subscriptionEventData: Stripe.Subscripti
   }
 
   // Use properties from the retrieved subscriptionDetails - suppressing potential TS errors
-  // @ts-ignore Property 'current_period_start' does not exist on type 'Subscription'.
+  // @ts-expect-error Property 'current_period_start' does not exist on type 'Subscription'.
   const currentPeriodStart = subscriptionDetails.current_period_start;
-  // @ts-ignore Property 'current_period_end' does not exist on type 'Subscription'.
+  // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
   const currentPeriodEnd = subscriptionDetails.current_period_end;
 
   const subscriptionData = {
@@ -380,7 +380,7 @@ async function handleInvoicePaid(subscriptionId: string, customerId: string) {
     }
 
     // Trusting Stripe SDK types for this property - suppressing potential TS errors
-    // @ts-ignore Property 'current_period_end' does not exist on type 'Subscription'.
+    // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
     const currentPeriodEnd = subscriptionDetails.current_period_end;
 
     const { error: updateError } = await supabaseAdmin

@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Get profile & Stripe Customer ID (create if doesn't exist)
-    let { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('stripe_customer_id') // Select only the customer ID here
       .eq('id', user.id)
