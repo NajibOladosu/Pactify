@@ -158,6 +158,30 @@ export default function SubscriptionPage() {
     // Loading state will persist until redirection or error
   };
 
+  const handleCancelSubscription = async () => {
+    setActionLoading("cancel");
+    try {
+      const response = await fetch('/api/subscription/cancel', { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel subscription.');
+      }
+      toast({
+        title: "Subscription Cancellation Initiated",
+        description: "Your plan will be downgraded to Free at the end of your current billing period.",
+      });
+      router.refresh(); // Refresh data to show updated status
+    } catch (err: any) {
+      toast({
+        title: "Error Cancelling Subscription",
+        description: err.message || "Could not process cancellation request.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const calculateYearlySavings = (plan: any) => {
     if (!plan.price.monthly || !plan.price.yearly) return 0;
     const monthlyCost = plan.price.monthly * 12;
@@ -243,20 +267,44 @@ export default function SubscriptionPage() {
                  <span className="text-2xl font-bold">{formatCurrency(currentPlan.priceMonthly)}</span>
                  <span className="text-muted-foreground">/month</span>
               </div>
-              {currentPlan.planId !== 'free' && (
-                <Button
-                  variant="outline"
-                  className="whitespace-nowrap"
-                  onClick={handleManageSubscription}
-                  disabled={actionLoading === "manage"}
-                >
-                  {actionLoading === "manage" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Manage Billing
-                </Button>
+
+              {/* --- Corrected Button Logic --- */}
+
+              {/* Case 1: Active Paid Plan, Not Cancelling */}
+              {currentPlan.planId !== 'free' && currentPlan.status === 'active' && !currentPlan.cancelAtPeriodEnd && (
+                <>
+                  <Button
+                    variant="destructive"
+                    className="whitespace-nowrap"
+                    onClick={handleCancelSubscription}
+                    disabled={actionLoading === "cancel"}
+                  >
+                    {actionLoading === "cancel" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Cancel Plan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="whitespace-nowrap"
+                    onClick={handleManageSubscription}
+                    disabled={actionLoading === "manage"}
+                  >
+                    {actionLoading === "manage" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Manage Billing
+                  </Button>
+                </>
               )}
-               {currentPlan.planId === 'free' && (
-                 <Button variant="outline" disabled>Cannot Cancel Free Plan</Button>
-               )}
+
+              {/* Case 2: Paid Plan, Cancellation Pending */}
+              {currentPlan.planId !== 'free' && currentPlan.cancelAtPeriodEnd && (
+                 <Button variant="outline" disabled>Cancellation Pending</Button>
+              )}
+
+              {/* Case 3: Free Plan */}
+              {currentPlan.planId === 'free' && (
+                 <Button variant="outline" disabled>Current Plan</Button>
+              )}
+              {/* --- End Corrected Button Logic --- */}
+
             </div>
           </div>
 
@@ -293,7 +341,7 @@ export default function SubscriptionPage() {
             <div className="p-4 border rounded-lg space-y-1">
               <p className="text-sm text-muted-foreground">Payment Method</p>
               <div className="text-2xl font-semibold">
-                {currentPlan.planId === 'free' ? 'None' : 'On File'}
+                {currentPlan.planId === 'free' ? 'None' : 'Stripe'}
               </div>
                <p className="text-xs text-muted-foreground">
                  {currentPlan.planId === 'free' ? 'No payment required' : 'Managed via Stripe'}
@@ -339,7 +387,8 @@ export default function SubscriptionPage() {
             const savings = calculateYearlySavings(tier);
 
             return (
-              <Card key={tier.id} className={`${tier.mostPopular ? 'border-primary border-2' : ''} ${isCurrent ? 'opacity-70' : ''}`}>
+              // Apply border based on isCurrent, remove mostPopular check for border
+              <Card key={tier.id} className={`${isCurrent ? 'border-primary border-2' : ''} ${isCurrent ? 'opacity-70' : ''}`}>
                 <CardHeader>
                   <CardTitle>{tier.name}</CardTitle>
                   <CardDescription>{tier.description}</CardDescription>
@@ -385,16 +434,28 @@ export default function SubscriptionPage() {
 
                   <Button
                     className="w-full mt-4"
-                    variant={isCurrent ? "outline" : (tier.mostPopular ? "default" : "outline")}
-                    disabled={isCurrent || actionLoading === tier.id}
-                    onClick={() => !isCurrent && handleUpgrade(tier.id)}
+                    // Adjust variant: Use outline if it's the current plan OR the free plan card
+                    variant={isCurrent || tier.id === 'free' ? "outline" : (tier.mostPopular ? "default" : "outline")}
+                    // Disable button if it's the current plan OR the free plan card OR if an action is loading
+                    disabled={isCurrent || tier.id === 'free' || actionLoading === tier.id}
+                    // Only attach onClick handler if it's NOT the current plan AND NOT the free plan card
+                    onClick={() => {
+                      if (!isCurrent && tier.id !== 'free') {
+                        handleUpgrade(tier.id);
+                      }
+                    }}
                   >
                     {actionLoading === tier.id
                       ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       : null}
+                    {/* Adjust button text */}
                     {isCurrent
-                      ? "Current Plan"
-                      : `Upgrade to ${tier.name}`}
+                      ? "Current Plan" // Show "Current Plan" if this card matches the user's plan
+                      : (tier.id === 'free'
+                          ? "Free Plan" // Show "Free Plan" (or similar) on the free card itself
+                          : `Upgrade to ${tier.name}` // Show "Upgrade to..." for other non-current plans
+                        )
+                    }
                   </Button>
                 </CardContent>
               </Card>

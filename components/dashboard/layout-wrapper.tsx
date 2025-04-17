@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { DashboardNav } from "./navigation";
 import { DashboardHeader } from "./header";
 import { MobileNav } from "./mobile-nav";
-import { useLocalStorage } from "@/lib/hooks/use-local-storage";
+// Removed useLocalStorage import
 
 interface DashboardLayoutWrapperProps {
   children: React.ReactNode;
@@ -12,6 +12,7 @@ interface DashboardLayoutWrapperProps {
   displayName: string;
   userInitial: string;
   userId: string;
+  currentPlan: string; // Add currentPlan prop
 }
 
 export function DashboardLayoutWrapper({
@@ -19,25 +20,11 @@ export function DashboardLayoutWrapper({
   userType,
   displayName,
   userInitial,
-  userId
+  userId,
+  currentPlan // Accept currentPlan as a prop
 }: DashboardLayoutWrapperProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [currentPlan, setCurrentPlan] = useLocalStorage<string>(`pactify-subscription-${userId}`, "free");
-  
-  // Check localStorage for subscription status on component mount
-  useEffect(() => {
-    try {
-      const savedSubscription = localStorage.getItem('subscription');
-      if (savedSubscription) {
-        const subscription = JSON.parse(savedSubscription);
-        if (subscription.status === 'active') {
-          setCurrentPlan(subscription.plan);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load subscription data:", error);
-    }
-  }, []);
+  // Removed local state and useEffect for currentPlan
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -46,15 +33,15 @@ export function DashboardLayoutWrapper({
         userType={userType}
         displayName={displayName}
         userInitial={userInitial}
-        currentPlan={currentPlan}
+        currentPlan={currentPlan} // Pass the prop down
       />
-      
+
       {/* Mobile Navigation */}
       <MobileNav
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         userType={userType}
-        currentPlan={currentPlan}
+        currentPlan={currentPlan} // Pass the prop down
       />
       
       {/* Main Content */}

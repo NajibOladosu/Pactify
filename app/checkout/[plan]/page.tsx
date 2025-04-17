@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// Import use from React
+import { useEffect, useState, use } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
-import { ArrowLeftIcon, LockIcon, CreditCardIcon, CheckIcon, Loader2 } from "lucide-react"; // Added Loader2
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeftIcon, LockIcon, CreditCardIcon, CheckIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
 // Removed Input and Label as the form is gone
@@ -46,7 +47,12 @@ export default function CheckoutPage({ params }: { params: { plan: string } }) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(initialBillingCycle);
   const { toast } = useToast();
 
-  const planId = params.plan;
+  // Unwrap params using React.use() - Note: This might require adjusting component structure if not already compatible
+  // For now, we assume the component structure allows top-level use()
+  // If this causes issues, the component might need refactoring
+  const routeParams = use(Promise.resolve(params)); // Simulate unwrapping if params is a Promise like searchParams
+  const planId = routeParams.plan; // Access unwrapped param
+
   const plan = planId === 'professional' || planId === 'business'
     ? PLANS[planId as keyof typeof PLANS]
     : null;
