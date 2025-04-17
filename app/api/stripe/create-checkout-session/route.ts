@@ -10,10 +10,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 // Get base URL for redirects
 const getURL = () => {
+  // Prioritize NEXT_PUBLIC_SITE_URL based on user's Vercel config
   let url =
-    process?.env?.NEXT_PUBLIC_APP_URL ?? // Set this to your site URL in production env.
-    process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Automatically set by Vercel.
-    'http://localhost:3000/';
+    process?.env?.NEXT_PUBLIC_SITE_URL ?? // Use the variable set in Vercel
+    process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Fallback to Vercel system variable
+    'http://localhost:3000/'; // Default for local dev
   // Make sure to include `https://` when not localhost.
   url = url.includes('http') ? url : `https://${url}`;
   // Make sure to include a trailing `/`.
@@ -102,6 +103,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Price ID for the selected plan/cycle is not configured.` }, { status: 500 });
     }
 
+    // --- Add Logging ---
+    const nodeEnv = process.env.NODE_ENV;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_URL; // Check this one too
+    const calculatedBaseUrl = getURL();
+    const successUrl = `${calculatedBaseUrl}dashboard/subscription?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${calculatedBaseUrl}dashboard/subscription`;
+
+    console.log('[Stripe Checkout] NODE_ENV:', nodeEnv);
+    console.log('[Stripe Checkout] NEXT_PUBLIC_SITE_URL:', siteUrl);
+    console.log('[Stripe Checkout] NEXT_PUBLIC_VERCEL_URL:', vercelUrl);
+    console.log('[Stripe Checkout] Calculated Base URL:', calculatedBaseUrl);
+    console.log('[Stripe Checkout] Success URL:', successUrl);
+    console.log('[Stripe Checkout] Cancel URL:', cancelUrl);
+    // --- End Logging ---
+
     // 4. Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -113,8 +130,8 @@ export async function POST(request: Request) {
           quantity: 1,
         },
       ],
-      success_url: `${getURL()}dashboard/subscription?session_id={CHECKOUT_SESSION_ID}`, // Redirect back to subscription page on success
-      cancel_url: `${getURL()}dashboard/subscription`, // Redirect back on cancellation
+      success_url: successUrl, // Use logged variable
+      cancel_url: cancelUrl,   // Use logged variable
       // Allow promotion codes if needed
       // allow_promotion_codes: true,
       // If you need to collect tax, configure automatic tax
