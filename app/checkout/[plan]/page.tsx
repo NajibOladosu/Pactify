@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, LockIcon, CreditCardIcon, CheckIcon } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation"; // Added useSearchParams
+import { ArrowLeftIcon, LockIcon, CreditCardIcon, CheckIcon, Loader2 } from "lucide-react"; // Added Loader2
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
+// Removed Input and Label as the form is gone
 
 // Define plan details for display
 const PLANS = {
@@ -40,116 +39,68 @@ const PLANS = {
 
 export default function CheckoutPage({ params }: { params: { plan: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams(); // Get query params
   const [loading, setLoading] = useState(false);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
-  const [formState, setFormState] = useState({
-    cardNumber: "",
-    cardExpiry: "",
-    cardCvc: "",
-    cardName: "",
-    billingEmail: ""
-  });
+  // Read initial billing cycle from query param or default to monthly
+  const initialBillingCycle = searchParams.get('period') === 'yearly' ? 'yearly' : 'monthly';
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(initialBillingCycle);
   const { toast } = useToast();
-  
-  const plan = params.plan === 'professional' || params.plan === 'business' 
-    ? PLANS[params.plan as keyof typeof PLANS] 
+
+  const planId = params.plan;
+  const plan = planId === 'professional' || planId === 'business'
+    ? PLANS[planId as keyof typeof PLANS]
     : null;
-  
+
   useEffect(() => {
-    // Redirect if invalid plan
+    // Redirect if invalid plan ID in URL
     if (!plan) {
+      toast({ title: "Invalid Plan", description: "The selected plan does not exist.", variant: "destructive" });
       router.push('/dashboard/subscription');
     }
-  }, [plan, router]);
+  }, [plan, router, toast]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    
-    // Format card number with spaces
-    if (name === 'cardNumber') {
-      const formatted = value
-        .replace(/\s/g, '')
-        .replace(/(.{4})/g, '$1 ')
-        .trim()
-        .substring(0, 19);
-      
-      setFormState(prev => ({ ...prev, [name]: formatted }));
-      return;
-    }
-    
-    // Format expiry date with slash
-    if (name === 'cardExpiry') {
-      const input = value.replace(/\D/g, '');
-      let formatted = input;
-      
-      if (input.length >= 3) {
-        formatted = `${input.substring(0, 2)}/${input.substring(2, 4)}`;
-      }
-      
-      setFormState(prev => ({ ...prev, [name]: formatted }));
-      return;
-    }
-    
-    // Handle all other fields
-    setFormState(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Function to handle redirecting to Stripe Checkout
+  const handleProceedToPayment = async () => {
     setLoading(true);
-    
     try {
-      // Call API to update subscription
-      const response = await fetch('/api/subscription/update', {
+      const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          plan: params.plan,
-          billingCycle
+          planId: planId,
+          billingCycle: billingCycle
         }),
       });
-      
+
       const result = await response.json();
-      
-      if (result.success) {
-        // Store plan info in localStorage
-        localStorage.setItem('subscription', JSON.stringify({
-          plan: params.plan,
-          billingCycle,
-          purchaseDate: new Date().toISOString(),
-          status: 'active'
-        }));
-        
-        // Dispatch event to update UI components that use subscription data
-        window.dispatchEvent(new Event('storage'));
-        
-        // Show success message
-        toast({
-          title: "Subscription upgraded successfully!",
-          description: `Your ${plan?.name} plan is now active.`,
-          variant: "default",
-        });
-        
-        // Redirect to subscription page
-        router.push('/dashboard/subscription');
+
+      if (response.ok && result.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = result.url;
       } else {
-        throw new Error(result.error || 'Failed to process payment');
+        throw new Error(result.error || 'Failed to create checkout session.');
       }
-    } catch (error) {
-      console.error('Payment error:', error);
+    } catch (error: any) {
+      console.error('Checkout session error:', error);
       toast({
-        title: "Payment failed",
-        description: "There was an error processing your payment. Please try again.",
+        title: "Checkout Error",
+        description: error.message || "Could not initiate the payment process. Please try again.",
         variant: "destructive",
       });
-      setLoading(false);
+      setLoading(false); // Stop loading indicator on error
     }
+    // Note: setLoading(false) is not called on success because the page redirects
   };
 
   if (!plan) {
-    return <div>Loading...</div>;
+    // Render minimal loading/redirecting state
+    return (
+       <div className="flex justify-center items-center h-screen">
+         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+       </div>
+    );
   }
 
   return (
@@ -232,111 +183,53 @@ export default function CheckoutPage({ params }: { params: { plan: string } }) {
             </div>
           </div>
           
-          {/* Right side - Payment details */}
+          {/* Right side - Simplified confirmation */}
           <div className="lg:col-span-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Details</CardTitle>
-                <CardDescription>Enter your payment information to upgrade to the {plan.name} plan.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="cardName">Name on card</Label>
-                      <Input 
-                        id="cardName" 
-                        name="cardName" 
-                        placeholder="John Smith" 
-                        value={formState.cardName}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="cardNumber">Card number</Label>
-                      <div className="relative">
-                        <Input 
-                          id="cardNumber" 
-                          name="cardNumber" 
-                          placeholder="4242 4242 4242 4242" 
-                          value={formState.cardNumber}
-                          onChange={handleInputChange}
-                          maxLength={19}
-                          required 
-                        />
-                        <CreditCardIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="cardExpiry">Expiry date</Label>
-                        <Input 
-                          id="cardExpiry" 
-                          name="cardExpiry" 
-                          placeholder="MM/YY" 
-                          value={formState.cardExpiry}
-                          onChange={handleInputChange}
-                          maxLength={5}
-                          required 
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="cardCvc">CVC</Label>
-                        <div className="relative">
-                          <Input 
-                            id="cardCvc" 
-                            name="cardCvc" 
-                            placeholder="123" 
-                            value={formState.cardCvc}
-                            onChange={handleInputChange}
-                            maxLength={3}
-                            required 
-                          />
-                          <LockIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="billingEmail">Email for receipt</Label>
-                      <Input 
-                        id="billingEmail" 
-                        name="billingEmail" 
-                        type="email" 
-                        placeholder="you@example.com" 
-                        value={formState.billingEmail}
-                        onChange={handleInputChange}
-                        required 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t">
-                    <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                      {loading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Processing...
-                        </>
-                      ) : (
-                        `Pay ${billingCycle === 'monthly' ? `$${plan.price.monthly.toFixed(2)}` : `$${plan.price.yearly.toFixed(2)}`}`
-                      )}
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      You can cancel your subscription at any time from your dashboard
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-center space-x-2 pt-6">
-                    <LockIcon className="h-4 w-4 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">Secure payment processing</p>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+             <Card>
+               <CardHeader>
+                 <CardTitle>Confirm Your Upgrade</CardTitle>
+                 <CardDescription>
+                   You are upgrading to the <strong>{plan.name}</strong> plan with{' '}
+                   <strong>{billingCycle === 'monthly' ? 'Monthly' : 'Annual'}</strong> billing.
+                 </CardDescription>
+               </CardHeader>
+               <CardContent>
+                 <div className="space-y-4">
+                   <p>
+                     Click the button below to proceed to our secure payment partner, Stripe,
+                     to complete your subscription.
+                   </p>
+                   <p className="text-sm text-muted-foreground">
+                     You will be charged{' '}
+                     <strong>
+                       ${billingCycle === 'monthly' ? plan.price.monthly.toFixed(2) : plan.price.yearly.toFixed(2)}
+                     </strong>{' '}
+                     today.
+                   </p>
+                 </div>
+
+                 <div className="pt-6 border-t mt-6">
+                   <Button onClick={handleProceedToPayment} className="w-full" size="lg" disabled={loading}>
+                     {loading ? (
+                       <>
+                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                         Redirecting to payment...
+                       </>
+                     ) : (
+                       `Proceed to Secure Payment`
+                     )}
+                   </Button>
+                   <p className="text-xs text-muted-foreground text-center mt-2">
+                     You can manage your subscription later from your dashboard.
+                   </p>
+                 </div>
+
+                 <div className="flex items-center justify-center space-x-2 pt-6">
+                   <LockIcon className="h-4 w-4 text-muted-foreground" />
+                   <p className="text-xs text-muted-foreground">Secure checkout via Stripe</p>
+                 </div>
+               </CardContent>
+             </Card>
           </div>
         </div>
       </div>

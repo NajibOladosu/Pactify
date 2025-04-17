@@ -41,25 +41,108 @@ export async function POST(request: Request) {
   }
 }
 
+import { createClient } from '@/utils/supabase/server'; // Corrected import name
+import { cookies } from 'next/headers'; // Keep cookies import if needed elsewhere, but not for createClient
+
 export async function GET() {
+  // const cookieStore = cookies(); // No longer needed here
+  const supabase = await createClient(); // Await the async function and remove argument
+
   try {
-    // In a real application, this would fetch from a database
-    // Here we return a mock subscription
-    const subscription = {
-      id: "sub_current",
-      plan: "free",
-      status: "active",
-      createdAt: new Date().toISOString(),
-      currentPeriodEnd: null
-    };
-    
-    return NextResponse.json({ 
-      message: "Subscription fetched",
-      subscription
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error('Error fetching user:', userError);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Fetch profile data (includes base tier and contract usage)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('subscription_tier, available_contracts, stripe_customer_id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      return NextResponse.json({ error: 'Failed to fetch profile data' }, { status: 500 });
+    }
+
+    // Fetch active subscription details from user_subscriptions table
+    const { data: activeSubscription, error: subscriptionError } = await supabase
+      .from('user_subscriptions')
+      .select('*, subscription_plans(*)') // Join with subscription_plans
+      .eq('user_id', user.id)
+      .in('status', ['active', 'trialing', 'past_due']) // Active states
+      .maybeSingle(); // User might not have an active paid subscription
+
+    if (subscriptionError) {
+      console.error('Error fetching active subscription:', subscriptionError);
+      // Don't fail outright, user might just be on free tier
+    }
+
+    let finalSubscriptionData;
+
+    if (activeSubscription && activeSubscription.subscription_plans) {
+      // User has an active paid subscription
+      finalSubscriptionData = {
+        planId: activeSubscription.plan_id,
+        planName: activeSubscription.subscription_plans.name,
+        status: activeSubscription.status,
+        currentPeriodEnd: activeSubscription.current_period_end,
+        cancelAtPeriodEnd: activeSubscription.cancel_at_period_end,
+        stripeSubscriptionId: activeSubscription.stripe_subscription_id,
+        stripePriceId: activeSubscription.stripe_price_id,
+        priceMonthly: activeSubscription.subscription_plans.price_monthly,
+        priceYearly: activeSubscription.subscription_plans.price_yearly,
+        escrowFeePercentage: activeSubscription.subscription_plans.escrow_fee_percentage,
+        maxContracts: activeSubscription.subscription_plans.max_contracts,
+        features: activeSubscription.subscription_plans.features,
+        // Include profile data for consistency if needed, though it might be redundant
+        availableContracts: profile.available_contracts, // This might be NULL for paid plans
+        stripeCustomerId: profile.stripe_customer_id,
+      };
+    } else {
+      // User is likely on the free plan (or subscription expired/cancelled without active entry)
+      // Fetch free plan details directly
+      const { data: freePlan, error: freePlanError } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('id', 'free')
+        .single();
+
+      if (freePlanError || !freePlan) {
+         console.error('Error fetching free plan details:', freePlanError);
+         return NextResponse.json({ error: 'Failed to fetch plan details' }, { status: 500 });
+      }
+
+      finalSubscriptionData = {
+        planId: 'free',
+        planName: freePlan.name,
+        status: 'active', // Assume active if no specific subscription status
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        stripeSubscriptionId: null,
+        stripePriceId: null,
+        priceMonthly: freePlan.price_monthly,
+        priceYearly: freePlan.price_yearly,
+        escrowFeePercentage: freePlan.escrow_fee_percentage,
+        maxContracts: freePlan.max_contracts,
+        features: freePlan.features,
+        availableContracts: profile.available_contracts, // Relevant for free plan
+        stripeCustomerId: profile.stripe_customer_id,
+      };
+    }
+
+    return NextResponse.json({
+      message: "Subscription details fetched successfully",
+      subscription: finalSubscriptionData
     });
+
   } catch (error) {
+    console.error('Unexpected error fetching subscription:', error);
     return NextResponse.json(
-      { error: "Failed to fetch subscription" },
+      { error: "Failed to fetch subscription details" },
       { status: 500 }
     );
   }
