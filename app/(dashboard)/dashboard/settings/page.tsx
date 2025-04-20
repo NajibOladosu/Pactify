@@ -9,6 +9,7 @@ import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon, CheckCircleI
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
+import { updateUserProfile } from "@/app/actions"; // Import the server action
 
 export const metadata = {
   title: "Settings | Pactify",
@@ -324,13 +325,15 @@ export default async function SettingsPage() {
                 </div>
               </div>
 
-              <form className="space-y-6">
+              {/* Add action attribute and name attributes to inputs */}
+              <form action={updateUserProfile} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <Label htmlFor="display_name">Full Name</Label>
-                    <Input 
-                      id="display_name" 
-                      defaultValue={displayName} 
+                    <Input
+                      id="display_name"
+                      name="display_name" // Add name attribute
+                      defaultValue={displayName}
                       placeholder="Your name"
                     />
                   </div>
@@ -349,17 +352,19 @@ export default async function SettingsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <Label htmlFor="company">Company Name</Label>
-                    <Input 
-                      id="company" 
-                      defaultValue={profile?.company_name || ''} 
+                    <Input
+                      id="company"
+                      name="company_name" // Add name attribute
+                      defaultValue={profile?.company_name || ''}
                       placeholder="Your company name"
                     />
                   </div>
                   <div>
                     <Label htmlFor="website">Website</Label>
-                    <Input 
-                      id="website" 
-                      defaultValue={profile?.website || ''} 
+                    <Input
+                      id="website"
+                      name="website" // Add name attribute
+                      defaultValue={profile?.website || ''}
                       placeholder="https://your-website.com"
                     />
                   </div>
@@ -367,8 +372,9 @@ export default async function SettingsPage() {
 
                 <div>
                   <Label htmlFor="bio">Bio</Label>
-                  <textarea 
-                    id="bio" 
+                  <textarea
+                    id="bio"
+                    name="bio" // Add name attribute
                     className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     defaultValue={profile?.bio || ''}
                     placeholder="Tell others about yourself or your business..."

@@ -1,9 +1,12 @@
 "use server";
 
+"use server";
+
 import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache"; // Import revalidatePath
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -140,6 +143,61 @@ export const signOutAction = async () => {
   await supabase.auth.signOut();
   return redirect("/sign-in");
 };
+
+// Action to update user profile information
+export const updateUserProfile = async (formData: FormData) => {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    console.error("Error getting user:", getUserError);
+    // Handle error appropriately, maybe redirect to sign-in
+    // For now, just log the error and return
+    return; 
+  }
+
+  const profileData = {
+    display_name: formData.get("display_name")?.toString(),
+    company_name: formData.get("company_name")?.toString(),
+    website: formData.get("website")?.toString(),
+    bio: formData.get("bio")?.toString(),
+    // Add other fields from your profiles table if needed
+  };
+
+  // Filter out undefined values if necessary, or handle them in Supabase policies/defaults
+  const updateData = Object.fromEntries(
+    Object.entries(profileData).filter(([_, v]) => v !== undefined)
+  );
+
+  if (Object.keys(updateData).length === 0) {
+    // No actual data to update
+    console.log("No profile changes detected.");
+    return; 
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update(updateData)
+    .eq("id", user.id);
+
+  if (updateError) {
+    console.error("Error updating profile:", updateError);
+    // Log the error and return
+    return; 
+  }
+
+  // Revalidate the path to show updated data
+  revalidatePath("/dashboard/settings");
+
+  console.log("Profile updated successfully!");
+  // Server actions used directly in `action` should typically return void or Promise<void>.
+  // Feedback (like toasts) would require using `useFormState` on the client.
+};
+
 
 export const signInWithGoogleAction = async () => {
   const supabase = await createClient();
