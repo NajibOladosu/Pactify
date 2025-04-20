@@ -8,7 +8,8 @@ export default function Home() {
     <>
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-b from-background to-primary-50 dark:from-background dark:to-primary-900/10">
-        <div className="container mx-auto px-4 py-20 md:py-32 max-w-7xl">
+        {/* Add padding-top to account for sticky header, adjust bottom padding for balance */}
+        <div className="container mx-auto px-4 pt-24 pb-20 md:pt-32 md:pb-32 max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="flex flex-col gap-6">
               <Badge className="w-fit bg-primary-500 hover:bg-primary-600 text-white">Freelancer Friendly</Badge>
@@ -63,9 +64,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Decorative Elements */}
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-accent-500/10 rounded-full blur-2xl"></div>
+        {/* Decorative Elements - Added pointer-events-none */}
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-accent-500/10 rounded-full blur-2xl pointer-events-none"></div>
       </section>
 
       {/* Features Section */}
