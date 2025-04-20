@@ -282,15 +282,6 @@ export default function SubscriptionPage() {
                     {actionLoading === "cancel" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Cancel Plan
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="whitespace-nowrap"
-                    onClick={handleManageSubscription}
-                    disabled={actionLoading === "manage"}
-                  >
-                    {actionLoading === "manage" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Manage Billing
-                  </Button>
                 </>
               )}
 

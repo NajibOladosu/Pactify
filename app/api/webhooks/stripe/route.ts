@@ -158,7 +158,7 @@ async function handleSubscriptionCheckout(subscriptionId: string, customerId: st
   let subscriptionDetails: Stripe.Subscription;
   try {
       subscriptionDetails = await stripe.subscriptions.retrieve(subscriptionId);
-      // console.log(`--- Retrieved Subscription Details (Checkout) for ${subscriptionId} ---`);
+      // console.log(`--- Retrieved Subscription Details (Checkout) for ${subscriptionId} ---`); // Removed temporary logging
       // console.log(JSON.stringify(subscriptionDetails, null, 2));
   } catch (retrieveError) {
       console.error(`Could not retrieve subscription ${subscriptionId} from Stripe during checkout handling:`, retrieveError);
@@ -188,11 +188,20 @@ async function handleSubscriptionCheckout(subscriptionId: string, customerId: st
     return;
   }
 
-  // Trusting Stripe SDK types for these properties - suppressing potential TS errors
-  // @ts-expect-error Property 'current_period_start' does not exist on type 'Subscription'.
-  const currentPeriodStart = subscriptionDetails.current_period_start;
-  // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
-  const currentPeriodEnd = subscriptionDetails.current_period_end;
+  // Safely access period dates from items.data[0] and validate
+  const firstItem = subscriptionDetails.items?.data?.[0];
+  if (!firstItem) {
+    console.error(`Webhook Error (Checkout): Subscription ${subscriptionId} has no items.`);
+    return;
+  }
+  const currentPeriodStart = firstItem.current_period_start;
+  const currentPeriodEnd = firstItem.current_period_end;
+
+  if (typeof currentPeriodStart !== 'number' || typeof currentPeriodEnd !== 'number') {
+    console.error(`Webhook Error (Checkout): Missing or invalid period dates for subscription ${subscriptionId}. Start: ${currentPeriodStart}, End: ${currentPeriodEnd}`);
+    // Optionally throw an error to make Stripe retry, or just return to acknowledge
+    return; // Acknowledge webhook but don't update DB with bad data
+  }
 
   const subscriptionData = {
     user_id: userId,
@@ -271,11 +280,20 @@ async function handleSubscriptionUpdate(subscriptionEventData: Stripe.Subscripti
     return;
   }
 
-  // Use properties from the retrieved subscriptionDetails - suppressing potential TS errors
-  // @ts-expect-error Property 'current_period_start' does not exist on type 'Subscription'.
-  const currentPeriodStart = subscriptionDetails.current_period_start;
-  // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
-  const currentPeriodEnd = subscriptionDetails.current_period_end;
+  // Safely access period dates from items.data[0] and validate
+  const firstItemUpdate = subscriptionDetails.items?.data?.[0];
+   if (!firstItemUpdate) {
+     console.error(`Webhook Error (Update): Subscription ${subscriptionDetails.id} has no items.`);
+     return;
+   }
+  const currentPeriodStart = firstItemUpdate.current_period_start;
+  const currentPeriodEnd = firstItemUpdate.current_period_end;
+
+
+  if (typeof currentPeriodStart !== 'number' || typeof currentPeriodEnd !== 'number') {
+    console.error(`Webhook Error (Update): Missing or invalid period dates for subscription ${subscriptionDetails.id}. Start: ${currentPeriodStart}, End: ${currentPeriodEnd}`);
+    return; // Acknowledge webhook but don't update DB with bad data
+  }
 
   const subscriptionData = {
     plan_id: plan.id,
@@ -367,10 +385,10 @@ async function handleInvoicePaid(subscriptionId: string, customerId: string) {
     let subscriptionDetails: Stripe.Subscription;
      try {
          subscriptionDetails = await stripe.subscriptions.retrieve(subscriptionId);
-         // console.log(`--- Retrieved Subscription Details (Invoice Paid) for ${subscriptionId} ---`);
-         // console.log(JSON.stringify(subscriptionDetails, null, 2));
-     } catch (retrieveError) {
-         console.error(`Could not retrieve subscription ${subscriptionId} from Stripe during invoice.paid handling:`, retrieveError);
+      // console.log(`--- Retrieved Subscription Details (Invoice Paid) for ${subscriptionId} ---`); // Removed temporary logging
+      // console.log(JSON.stringify(subscriptionDetails, null, 2));
+  } catch (retrieveError) {
+      console.error(`Could not retrieve subscription ${subscriptionId} from Stripe during invoice.paid handling:`, retrieveError);
          return;
      }
 
@@ -379,9 +397,19 @@ async function handleInvoicePaid(subscriptionId: string, customerId: string) {
         return;
     }
 
-    // Trusting Stripe SDK types for this property - suppressing potential TS errors
-    // @ts-expect-error Property 'current_period_end' does not exist on type 'Subscription'.
-    const currentPeriodEnd = subscriptionDetails.current_period_end;
+    // Safely access period end date from items.data[0] and validate
+    const firstItemInvoice = subscriptionDetails.items?.data?.[0];
+    if (!firstItemInvoice) {
+      console.error(`Webhook Error (Invoice Paid): Subscription ${subscriptionId} has no items.`);
+      return;
+    }
+    const currentPeriodEnd = firstItemInvoice.current_period_end;
+
+
+    if (typeof currentPeriodEnd !== 'number') {
+        console.error(`Webhook Error (Invoice Paid): Missing or invalid current_period_end for subscription ${subscriptionId}. End: ${currentPeriodEnd}`);
+        return; // Acknowledge webhook but don't update DB with bad data
+    }
 
     const { error: updateError } = await supabaseAdmin
       .from('user_subscriptions')

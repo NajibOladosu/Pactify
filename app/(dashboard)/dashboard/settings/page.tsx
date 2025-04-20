@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { redirect } from "next/navigation";
-import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon } from "lucide-react";
+import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon, CheckCircleIcon } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { format } from 'date-fns';
 
 export const metadata = {
   title: "Settings | Pactify",
@@ -32,8 +33,243 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
+  // Fetch user subscription
+  const { data: subscription } = await supabase
+    .from("user_subscriptions")
+    .select(`
+      *,
+      subscription_plans (
+        id,
+        name,
+        description,
+        features
+      )
+    `)
+    .eq("user_id", user.id)
+    .in("status", ["active", "trialing", "past_due"]) // Fetch active, trialing, or past_due subscriptions
+    .maybeSingle(); // Use maybeSingle as user might not have a subscription
+
   const userType = profile?.user_type || user.user_metadata?.user_type || "both";
   const displayName = profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0];
+
+  // Helper function to format dates
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'PPP'); // e.g., Jun 20, 2024
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return 'Invalid Date';
+    }
+  };
+
+  // Helper function to parse features JSON
+  const parseFeatures = (featuresJson: any) => {
+    try {
+      if (typeof featuresJson === 'string') {
+        const parsed = JSON.parse(featuresJson);
+        return parsed?.features || [];
+      }
+      if (typeof featuresJson === 'object' && featuresJson !== null && Array.isArray(featuresJson.features)) {
+        return featuresJson.features;
+      }
+      return [];
+    } catch (error) {
+      console.error("Error parsing features JSON:", error);
+      return [];
+    }
+  };
+
+  const currentPlan = subscription?.subscription_plans;
+  const currentPlanFeatures = currentPlan ? parseFeatures(currentPlan.features) : [];
+  const isFreeTier = !subscription || currentPlan?.id === 'free'; // Consider no subscription as free tier for display
+
+  // Determine subscription content before return
+  let subscriptionContent;
+  if (currentPlan && !isFreeTier) {
+    // User has an active paid subscription
+    subscriptionContent = (
+      <div className="p-4 border rounded-md bg-muted/30">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-lg">{currentPlan.name} Plan</h3>
+              <Badge variant={subscription.status === 'active' || subscription.status === 'trialing' ? 'default' : 'destructive'}>
+                {subscription.status === 'trialing' ? 'Trialing' : subscription.status === 'past_due' ? 'Past Due' : 'Active'}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">{currentPlan.description}</p>
+          </div>
+          {/* Add Price Display if available in subscription_plans */}
+        </div>
+
+        <div className="mt-4 pt-4 border-t space-y-2 text-sm">
+          <p>
+            Current Period: {formatDate(subscription.current_period_start)} - {formatDate(subscription.current_period_end)}
+          </p>
+          {subscription.cancel_at_period_end && (
+            <p className="text-destructive">
+              Your subscription will be cancelled at the end of the current period ({formatDate(subscription.current_period_end)}).
+            </p>
+          )}
+           {subscription.status === 'trialing' && (
+            <p className="text-primary-500">
+              Your trial ends on {formatDate(subscription.current_period_end)}.
+            </p>
+          )}
+           {subscription.status === 'past_due' && (
+            <p className="text-destructive">
+              Your payment is past due. Please update your payment method.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 pt-4 border-t">
+          <h4 className="font-medium mb-2">Plan Features:</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+            {currentPlanFeatures.length > 0 ? (
+              currentPlanFeatures.map((feature: string, index: number) => (
+                <div key={index} className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500 flex-shrink-0" />
+                  <span>{feature}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted-foreground">No specific features listed.</p>
+            )}
+          </div>
+        </div>
+        {/* Placeholder for Manage Billing Button (Phase 2) */}
+        <div className="mt-6 flex justify-end">
+           <Button variant="outline" disabled>Manage Billing (Coming Soon)</Button>
+        </div>
+      </div>
+    );
+  } else {
+    // User is on Free Tier or has no subscription
+    subscriptionContent = (
+      <>
+        <div className="p-4 border rounded-md bg-muted/30">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-lg">Free Plan</h3>
+                <Badge>Current Plan</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">Basic features for individuals just getting started</p>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold">$0</span>
+              <span className="text-muted-foreground">/month</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+               <div className="flex items-center gap-2">
+                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                 <span>Up to 3 contracts</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                 <span>Basic contract templates</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                 <span>10% escrow fee</span>
+               </div>
+            </div> {/* Close Grid */}
+          </div> {/* Close Features container */}
+        </div> {/* Close Free plan block */}
+
+        {/* Upgrade Section */}
+        <div className="space-y-4 pt-6 border-t">
+          <h3 className="font-medium text-lg">Upgrade Your Plan</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Professional Plan Card */}
+            <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Professional</CardTitle>
+                  <CardDescription className="mt-1">For growing freelance businesses</CardDescription>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">$19.99</span> {/* TODO: Fetch dynamically */}
+                  <span className="text-muted-foreground">/mo</span> {/* TODO: Add yearly toggle */}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 text-sm">
+                {/* TODO: Fetch features dynamically */}
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>Unlimited contracts</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>All professional templates</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>7.5% escrow fee</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>Basic custom branding</span>
+                </div>
+              </div>
+              <Button asChild className="w-full">
+                <Link href="/checkout/professional">Upgrade to Professional</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Business Plan Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Business</CardTitle>
+                  <CardDescription className="mt-1">For established freelance businesses</CardDescription>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">$49.99</span> {/* TODO: Fetch dynamically */}
+                  <span className="text-muted-foreground">/mo</span> {/* TODO: Add yearly toggle */}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 text-sm">
+                {/* TODO: Fetch features dynamically */}
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>All Professional features</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>Team collaboration (up to 5)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>5% escrow fee</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
+                  <span>Full white-labeling</span>
+                </div>
+              </div>
+               <Button asChild variant="outline" className="w-full">
+                 <Link href="/checkout/business">Upgrade to Business</Link>
+               </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      </>
+    );
+  }
+
 
   return (
     <div className="space-y-8">
@@ -157,140 +393,11 @@ export default async function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-4 border rounded-md bg-muted/30">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-lg">Free Plan</h3>
-                      <Badge>Current Plan</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">Basic features for individuals just getting started</p>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold">$0</span>
-                    <span className="text-muted-foreground">/month</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Up to 3 contracts</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Basic contract templates</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>10% escrow fee</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="font-medium text-lg">Upgrade Your Plan</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card className="border-2 border-primary-500">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle>Professional</CardTitle>
-                          <CardDescription className="mt-1">For growing freelance businesses</CardDescription>
-                        </div>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold">$19.99</span>
-                          <span className="text-muted-foreground">/mo</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Unlimited contracts</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>All professional templates</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>7.5% escrow fee</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Basic custom branding</span>
-                        </div>
-                      </div>
-                      <Button className="w-full">Upgrade to Professional</Button>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle>Business</CardTitle>
-                          <CardDescription className="mt-1">For established freelance businesses</CardDescription>
-                        </div>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold">$49.99</span>
-                          <span className="text-muted-foreground">/mo</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>All Professional features</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Team collaboration (up to 5)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>5% escrow fee</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Full white-labeling</span>
-                        </div>
-                      </div>
-                      <Button variant="outline" className="w-full">Upgrade to Business</Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+              {subscriptionContent} {/* Render the determined content */}
             </CardContent>
           </Card>
         </TabsContent>
+
 
         {/* Notifications Tab */}
         <TabsContent value="notifications">
