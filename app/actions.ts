@@ -225,3 +225,333 @@ export const signUpWithGoogleAction = async () => {
   // For Google OAuth, the sign-in and sign-up processes are the same
   return signInWithGoogleAction();
 };
+
+// Action to create a new contract
+export const createContractAction = async (formData: {
+  title: string;
+  description: string;
+  clientEmail: string; // Assuming clientEmail is used to identify/invite the other party later
+  price: string;
+  currency: string;
+  paymentType: string;
+  template: string | null; // ID of the template used, or 'custom'
+}) => {
+  const supabase = await createClient();
+
+  // 1. Get current user
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    console.error("Create Contract Error: User not found.", getUserError);
+    return { error: "You must be logged in to create a contract." };
+  }
+  const userId = user.id;
+
+  // 2. Get user's active subscription plan
+  let planId = 'free'; // Default to free
+  let maxContracts: number | null = 3; // Default limit for free
+
+  const { data: subscription, error: getSubscriptionError } = await supabase
+    .from('user_subscriptions')
+    .select('plan_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle(); // Use maybeSingle as user might not have a subscription record
+
+  if (getSubscriptionError) {
+    console.error("Create Contract Error: Failed to fetch subscription.", getSubscriptionError);
+    // Proceed assuming free plan, but log the error
+  }
+
+  if (subscription?.plan_id) {
+    planId = subscription.plan_id;
+    // 3. Get plan details (max_contracts)
+    const { data: planDetails, error: getPlanError } = await supabase
+      .from('subscription_plans')
+      .select('max_contracts')
+      .eq('id', planId)
+      .single();
+
+    if (getPlanError) {
+      console.error("Create Contract Error: Failed to fetch plan details.", getPlanError);
+      // If plan details fail, cautiously default to free limit
+      planId = 'free';
+      maxContracts = 3;
+    } else {
+      maxContracts = planDetails.max_contracts; // Can be null for paid plans
+    }
+  } else {
+      // If no active subscription found, explicitly check the free plan details
+      const { data: freePlanDetails, error: getFreePlanError } = await supabase
+        .from('subscription_plans')
+        .select('max_contracts')
+        .eq('id', 'free')
+        .single();
+      if (!getFreePlanError && freePlanDetails) {
+          maxContracts = freePlanDetails.max_contracts;
+      } else {
+          console.error("Create Contract Error: Failed to fetch free plan details.", getFreePlanError);
+          // Fallback if even free plan details fail
+          maxContracts = 3;
+      }
+  }
+
+
+  // 4. Check contract limit if applicable (maxContracts is not null)
+  if (maxContracts !== null) {
+    // Use RPC call to the secure function
+    const { data: count, error: rpcError } = await supabase.rpc(
+      'get_active_contract_count',
+      { p_user_id: userId }
+    );
+
+    if (rpcError) {
+      console.error("Create Contract Error: Failed to count active contracts via RPC.", rpcError);
+      return { error: "Could not verify your current contract count. Please try again." };
+    }
+
+    // RPC returns the count directly
+    if (count !== null && count >= maxContracts) {
+      console.log(`User ${userId} on plan ${planId} reached limit of ${maxContracts} contracts (Count: ${count}).`);
+      return { error: `You have reached the maximum number of active contracts (${maxContracts}) for the ${planId} plan. Please upgrade to create more.` };
+    }
+  }
+
+  // 5. Fetch Template ID if a template name was provided
+  let templateUuid: string | null = null;
+  if (formData.template && formData.template !== 'custom') {
+    const { data: templateData, error: templateError } = await supabase
+      .from('contract_templates')
+      .select('id')
+      .eq('name', formData.template)
+      .maybeSingle(); // Use maybeSingle as template might not exist (though unlikely)
+
+    if (templateError) {
+      console.error(`Create Contract Error: Failed to fetch template ID for name "${formData.template}".`, templateError);
+      // Decide how to handle: error out or proceed without template? Let's error out for safety.
+      return { error: `Could not find the specified template "${formData.template}".` };
+    }
+    if (!templateData) {
+        console.warn(`Create Contract Warning: Template name "${formData.template}" not found in database.`);
+        // Proceed without template ID if not found, or return error? Let's proceed without.
+        templateUuid = null;
+    } else {
+        templateUuid = templateData.id;
+    }
+  }
+
+
+  // 6. Prepare contract data for insertion
+  const contractData = {
+    creator_id: userId,
+    title: formData.title || "Untitled Contract",
+    description: formData.description,
+    // Placeholder for content - needs refinement based on template logic
+    content: {
+      title: formData.title,
+      description: formData.description,
+      clientEmail: formData.clientEmail,
+      price: formData.price,
+      currency: formData.currency,
+      paymentType: formData.paymentType,
+      template: formData.template,
+    },
+    status: 'draft', // Initial status
+    total_amount: parseFloat(formData.price) || 0, // Ensure it's a number
+    currency: formData.currency || 'USD',
+    template_id: templateUuid, // Use the fetched UUID or null
+    // clientEmail is not directly in contracts table, handle invitation separately
+  };
+
+  // 7. Insert the contract
+  const { data: newContract, error: insertError } = await supabase
+    .from('contracts')
+    .insert(contractData)
+    .select('id') // Select the ID of the newly created contract
+    .single();
+
+  if (insertError) {
+    console.error("Create Contract Error: Failed to insert contract.", insertError);
+    return { error: "Failed to create the contract in the database. Please try again." };
+  }
+
+  if (!newContract) {
+      console.error("Create Contract Error: Insert operation did not return the new contract.");
+      return { error: "Failed to get confirmation of contract creation." };
+  }
+
+  // 7.5 Insert creator into contract_parties
+  const { error: partyInsertError } = await supabase
+    .from('contract_parties')
+    .insert({
+      contract_id: newContract.id,
+      user_id: userId,
+      role: 'creator',
+      status: 'signed', // Creator is implicitly signed upon creation
+      signature_date: new Date().toISOString(), // Record signing time
+    });
+
+  if (partyInsertError) {
+      // Log the error, but don't fail the whole operation.
+      // The contract exists, but the party link failed. Consider cleanup or notification.
+      console.error(`Create Contract Warning: Failed to insert creator party record for contract ${newContract.id}.`, partyInsertError);
+      // Optionally return a specific error or warning to the user
+      // return { error: "Contract created, but failed to link creator party. Please contact support." };
+  }
+
+  // 8. Revalidate paths
+  revalidatePath('/dashboard/contracts');
+  revalidatePath(`/dashboard/contracts/${newContract.id}`); // Revalidate detail page too
+  revalidatePath('/dashboard'); // Revalidate dashboard for stats update
+
+  console.log(`Contract ${newContract.id} created successfully for user ${userId} (Template ID: ${templateUuid}). Creator party added.`);
+  // 9. Return success
+  return { success: true, contractId: newContract.id };
+};
+
+// Action to update contract content
+export const updateContractContentAction = async (formData: {
+  contractId: string;
+  newContent: any; // Tiptap JSON content
+}) => {
+  const supabase = await createClient();
+
+  // 1. Get current user
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    console.error("Update Contract Error: User not found.", getUserError);
+    return { error: "Authentication required." };
+  }
+  const userId = user.id;
+
+  // 2. Validate input
+  if (!formData.contractId || !formData.newContent) {
+    return { error: "Contract ID and content are required." };
+  }
+
+  // 3. Fetch the contract to verify ownership and status
+  const { data: contract, error: fetchError } = await supabase
+    .from('contracts')
+    .select('creator_id, status')
+    .eq('id', formData.contractId)
+    .single(); // Expecting exactly one contract
+
+  if (fetchError || !contract) {
+    console.error(`Update Contract Error: Failed to fetch contract ${formData.contractId}.`, fetchError);
+    return { error: "Contract not found or access denied." };
+  }
+
+  // 4. Check ownership
+  if (contract.creator_id !== userId) {
+    console.error(`Update Contract Error: User ${userId} does not own contract ${formData.contractId}.`);
+    return { error: "You do not have permission to edit this contract." };
+  }
+
+  // 5. Check status (only allow editing drafts)
+  if (contract.status !== 'draft') {
+    console.warn(`Update Contract Error: Contract ${formData.contractId} is not in draft status (${contract.status}).`);
+    return { error: `Cannot edit contract because its status is "${contract.status}".` };
+  }
+
+  // 6. Update the contract content
+  const { error: updateError } = await supabase
+    .from('contracts')
+    .update({
+      content: formData.newContent,
+      updated_at: new Date().toISOString(), // Update timestamp
+    })
+    .eq('id', formData.contractId);
+
+  if (updateError) {
+    console.error(`Update Contract Error: Failed to update content for contract ${formData.contractId}.`, updateError);
+    return { error: "Failed to save changes to the database." };
+  }
+
+  // 7. Revalidate relevant paths
+  revalidatePath(`/dashboard/contracts/${formData.contractId}`);
+  revalidatePath(`/dashboard/contracts/${formData.contractId}/edit`); // Revalidate edit page too
+
+  console.log(`Contract ${formData.contractId} content updated successfully by user ${userId}.`);
+  // 8. Return success
+  return { success: true };
+};
+
+// Action to delete a contract
+export const deleteContractAction = async (formData: { contractId: string }) => {
+  const supabase = await createClient();
+
+  // 1. Get current user
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    console.error("Delete Contract Error: User not found.", getUserError);
+    return { error: "Authentication required." };
+  }
+  const userId = user.id;
+
+  // 2. Validate input
+  if (!formData.contractId) {
+    return { error: "Contract ID is required." };
+  }
+
+  // 3. Fetch the contract to verify ownership
+  // We only need creator_id for the check
+  const { data: contract, error: fetchError } = await supabase
+    .from('contracts')
+    .select('creator_id')
+    .eq('id', formData.contractId)
+    .single();
+
+  if (fetchError || !contract) {
+    console.error(`Delete Contract Error: Failed to fetch contract ${formData.contractId}.`, fetchError);
+    // Don't reveal if contract exists but user doesn't own it
+    return { error: "Contract not found or you do not have permission to delete it." };
+  }
+
+  // 4. Check ownership
+  if (contract.creator_id !== userId) {
+    console.error(`Delete Contract Error: User ${userId} attempted to delete contract ${formData.contractId} owned by ${contract.creator_id}.`);
+    return { error: "You do not have permission to delete this contract." };
+  }
+
+  // 5. Delete associated contract_parties first (important for foreign key constraints)
+  const { error: deletePartiesError } = await supabase
+    .from('contract_parties')
+    .delete()
+    .eq('contract_id', formData.contractId);
+
+  if (deletePartiesError) {
+      console.error(`Delete Contract Error: Failed to delete parties for contract ${formData.contractId}.`, deletePartiesError);
+      // Decide if we should proceed or stop. Let's stop to be safe.
+      return { error: "Failed to delete associated contract parties. Contract not deleted." };
+  }
+
+  // 6. Delete the contract itself
+  const { error: deleteContractError } = await supabase
+    .from('contracts')
+    .delete()
+    .eq('id', formData.contractId);
+
+  if (deleteContractError) {
+      console.error(`Delete Contract Error: Failed to delete contract ${formData.contractId}.`, deleteContractError);
+      return { error: "Failed to delete the contract from the database." };
+  }
+
+  // 7. Revalidate relevant paths
+  revalidatePath('/dashboard/contracts');
+  revalidatePath('/dashboard'); // For stats potentially
+
+  console.log(`Contract ${formData.contractId} deleted successfully by user ${userId}.`);
+  // 8. Return success
+  return { success: true };
+};

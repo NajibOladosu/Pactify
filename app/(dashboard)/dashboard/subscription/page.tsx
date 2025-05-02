@@ -29,10 +29,11 @@ interface SubscriptionData {
   priceYearly: number;
   escrowFeePercentage: number;
   maxContracts: number | null;
-  features: SubscriptionPlanFeatures; // Assuming features is JSONB like {"features": [...]}
-  availableContracts: number | null; // From profiles table
-  stripeCustomerId: string | null;
-}
+   features: SubscriptionPlanFeatures; // Assuming features is JSONB like {"features": [...]}
+   availableContracts: number | null; // From profiles table (might be deprecated for display)
+   activeContractsCount: number; // Added: Fetched count from RPC
+   stripeCustomerId: string | null;
+ }
 
 interface InvoiceData {
   id: string;
@@ -228,12 +229,14 @@ export default function SubscriptionPage() {
     );
   }
 
-  // Determine current plan details from fetched data
-  const currentPlan = subscription;
-  const currentPlanFeatures = currentPlan.features?.features || []; // Safely access nested features array
-  const contractsUsed = currentPlan.maxContracts ? (currentPlan.maxContracts - (currentPlan.availableContracts ?? 0)) : 0;
-  const contractsLimit = currentPlan.maxContracts ?? 'Unlimited';
-  const usagePercentage = currentPlan.maxContracts ? (contractsUsed / currentPlan.maxContracts) * 100 : 0;
+   // Determine current plan details from fetched data
+   const currentPlan = subscription;
+   const currentPlanFeatures = currentPlan.features?.features || []; // Safely access nested features array
+   // Use the directly fetched activeContractsCount
+   const contractsUsed = currentPlan.activeContractsCount;
+   const contractsLimit = currentPlan.maxContracts ?? 'Unlimited';
+   // Calculate usage percentage based on active count and limit
+   const usagePercentage = currentPlan.maxContracts ? (contractsUsed / currentPlan.maxContracts) * 100 : 0;
 
   return (
     <div className="space-y-8">

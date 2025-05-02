@@ -134,9 +134,31 @@ export async function GET() {
       };
     }
 
+    // Fetch active contract count using RPC
+    let activeContractsCount = 0;
+    const { data: countData, error: rpcError } = await supabase.rpc(
+      'get_active_contract_count',
+      { p_user_id: user.id }
+    );
+
+    if (rpcError) {
+      console.error("API Error: Failed to count active contracts via RPC.", rpcError);
+      // Handle error appropriately, maybe default to 0 but log it
+      activeContractsCount = 0; // Default to 0 on error
+    } else {
+      activeContractsCount = countData ?? 0;
+    }
+
+    // Add the count to the response data
+    const responseData = {
+      ...finalSubscriptionData,
+      activeContractsCount: activeContractsCount, // Add the fetched count
+    };
+
+
     return NextResponse.json({
       message: "Subscription details fetched successfully",
-      subscription: finalSubscriptionData
+      subscription: responseData // Send the combined data
     });
 
   } catch (error) {

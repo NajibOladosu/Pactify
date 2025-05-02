@@ -1,17 +1,20 @@
-"use client"
+"use client";
 
-import { createClient } from "@/utils/supabase/client";
+import { createContractAction } from "@/app/actions"; // Import the server action
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast"; // Import useToast
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ChevronRightIcon, PlusIcon, FileTextIcon, FileIcon } from "lucide-react";
+import { useState, useTransition } from "react"; // Import useTransition
+import { ChevronRightIcon, PlusIcon, FileTextIcon, Loader2 } from "lucide-react"; // Import Loader2
 import Link from "next/link";
 
 export default function NewContractPage() {
   const router = useRouter();
+  const { toast } = useToast(); // Initialize toast
+  const [isPending, startTransition] = useTransition(); // For loading state
   const [step, setStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [contractDetails, setContractDetails] = useState({
@@ -22,6 +25,7 @@ export default function NewContractPage() {
     currency: "USD",
     paymentType: "fixed",
   });
+  const [formError, setFormError] = useState<string | null>(null); // State for form-level errors
 
   const handleNextStep = () => {
     if (step < 3) {
@@ -50,35 +54,57 @@ export default function NewContractPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Generate a unique ID for the new contract
-    const contractId = `contract-${Date.now()}`;
-    
-    // Create a new contract object
-    const newContract = {
-      id: contractId,
-      title: contractDetails.title || "Untitled Contract",
-      description: contractDetails.description || "",
-      clientEmail: contractDetails.clientEmail || "",
-      price: contractDetails.price || "0",
-      currency: contractDetails.currency || "USD",
-      paymentType: contractDetails.paymentType || "fixed",
-      status: "draft",
-      createdAt: new Date().toISOString(),
-      template: selectedTemplate || "custom",
-    };
-    
-    // Save to localStorage (in a real app, this would save to a database)
-    const existingContracts = localStorage.getItem('contracts');
-    const contracts = existingContracts ? JSON.parse(existingContracts) : [];
-    
-    localStorage.setItem('contracts', JSON.stringify([...contracts, newContract]));
-    
-    // Dispatch a storage event to notify other components
-    window.dispatchEvent(new Event('storage'));
-    
-    // Navigate to the contracts list
-    router.push('/dashboard/contracts');
+    setFormError(null); // Clear previous errors
+
+    // Basic validation (can be expanded)
+    if (!contractDetails.title) {
+      setFormError("Contract title is required.");
+      return;
+    }
+    if (!contractDetails.clientEmail) {
+      setFormError("Client's email is required.");
+      return;
+    }
+     if (!contractDetails.price) {
+      setFormError("Price/Rate is required.");
+      return;
+    }
+
+
+    startTransition(async () => {
+      const result = await createContractAction({
+        title: contractDetails.title,
+        description: contractDetails.description,
+        clientEmail: contractDetails.clientEmail,
+        price: contractDetails.price,
+        currency: contractDetails.currency,
+        paymentType: contractDetails.paymentType,
+        template: selectedTemplate,
+      });
+
+      if (result.error) {
+        toast({
+          title: "Error Creating Contract",
+          description: result.error,
+          variant: "destructive",
+        });
+        setFormError(result.error); // Show error near the button
+      } else if (result.success && result.contractId) {
+        toast({
+          title: "Contract Created",
+          description: "Your new contract draft has been saved.",
+        });
+        // Navigate to the newly created contract's page (or contracts list)
+        // router.push(`/dashboard/contracts/${result.contractId}`); // Option: Go to specific contract
+        router.push('/dashboard/contracts'); // Option: Go to list
+      } else {
+         toast({
+          title: "Error",
+          description: "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   return (
@@ -129,10 +155,12 @@ export default function NewContractPage() {
               <CardDescription>Choose a starting point for your contract.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Corrected Grid Structure */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div 
+                {/* Basic Freelance Agreement */}
+                <div
                   className="border rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:bg-primary-500/5"
-                  onClick={() => handleTemplateSelect('basic-freelance')}
+                  onClick={() => handleTemplateSelect('Basic Freelance Agreement')}
                 >
                   <div className="flex items-start gap-3">
                     <FileTextIcon className="h-6 w-6 text-primary-500 mt-1" />
@@ -142,10 +170,11 @@ export default function NewContractPage() {
                     </div>
                   </div>
                 </div>
-                
-                <div 
+
+                {/* Web Development Contract */}
+                <div
                   className="border rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:bg-primary-500/5"
-                  onClick={() => handleTemplateSelect('web-development')}
+                  onClick={() => handleTemplateSelect('Web Development Contract')}
                 >
                   <div className="flex items-start gap-3">
                     <FileTextIcon className="h-6 w-6 text-primary-500 mt-1" />
@@ -155,10 +184,11 @@ export default function NewContractPage() {
                     </div>
                   </div>
                 </div>
-                
-                <div 
+
+                {/* Graphic Design Contract */}
+                <div
                   className="border rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:bg-primary-500/5"
-                  onClick={() => handleTemplateSelect('graphic-design')}
+                  onClick={() => handleTemplateSelect('Graphic Design Contract')}
                 >
                   <div className="flex items-start gap-3">
                     <FileTextIcon className="h-6 w-6 text-primary-500 mt-1" />
@@ -168,10 +198,11 @@ export default function NewContractPage() {
                     </div>
                   </div>
                 </div>
-                
-                <div 
+
+                {/* Start from Scratch */}
+                <div
                   className="border rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:bg-primary-500/5"
-                  onClick={() => handleTemplateSelect('custom')}
+                  onClick={() => handleTemplateSelect('custom')} // 'custom' is fine here as it signifies no template ID
                 >
                   <div className="flex items-start gap-3">
                     <PlusIcon className="h-6 w-6 text-primary-500 mt-1" />
@@ -337,14 +368,12 @@ export default function NewContractPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground">Contract Type</h4>
+                      {/* Display the selected template name or 'Custom' */}
                       <p className="text-sm font-medium">
-                        {selectedTemplate === 'basic-freelance' && 'Basic Freelance Agreement'}
-                        {selectedTemplate === 'web-development' && 'Web Development Contract'}
-                        {selectedTemplate === 'graphic-design' && 'Graphic Design Contract'}
-                        {selectedTemplate === 'custom' && 'Custom Contract'}
+                        {selectedTemplate === 'custom' ? 'Custom Contract' : selectedTemplate}
                       </p>
                     </div>
-                    
+
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground">Contract Title</h4>
                       <p className="text-sm font-medium">{contractDetails.title || "Not specified"}</p>
@@ -374,13 +403,23 @@ export default function NewContractPage() {
                     </div>
                   </div>
                 </div>
-                
+
+                {/* Display Form Error Here */}
+                {formError && <p className="text-sm text-destructive mt-4 text-center">{formError}</p>}
+
                 <div className="flex justify-between mt-8">
-                  <Button type="button" variant="outline" onClick={handlePrevStep}>
+                  <Button type="button" variant="outline" onClick={handlePrevStep} disabled={isPending}>
                     Back
                   </Button>
-                  <Button onClick={handleSubmit}>
-                    Create Contract
+                  <Button onClick={handleSubmit} disabled={isPending}>
+                    {isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Contract"
+                    )}
                   </Button>
                 </div>
               </div>
