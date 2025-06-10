@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { CheckIcon, XIcon, ArrowRightIcon, CreditCardIcon, ExternalLinkIcon, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { CheckIcon, XIcon, CreditCardIcon, ExternalLinkIcon, Loader2 } from "lucide-react";
+// import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Progress } from "@/components/ui/progress"; // Assuming you have a Progress component
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Assuming you have Table components
@@ -44,36 +44,18 @@ interface InvoiceData {
   pdfUrl: string | null;
 }
 
-// Placeholder for available plans - ideally fetch this too, but keep static for now
-const AVAILABLE_PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    description: "Basic features for individuals just getting started",
-    price: { monthly: 0, yearly: 0 },
-    features: ["Up to 3 contracts", "Basic contract templates", "10% escrow fee", "Email support"],
-    limitations: ["No custom branding", "Limited templates", "No team features"],
-    mostPopular: false,
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    description: "For growing freelance businesses",
-    price: { monthly: 19.99, yearly: 199.99 },
-    features: ["Unlimited contracts", "All professional templates", "7.5% escrow fee", "Basic custom branding", "Priority email support"],
-    limitations: ["No team features", "Basic reporting only"],
-    mostPopular: true,
-  },
-  {
-    id: "business",
-    name: "Business",
-    description: "For established freelance businesses",
-    price: { monthly: 49.99, yearly: 499.99 },
-    features: ["All Professional features", "Team collaboration (up to 5)", "5% escrow fee", "Full white-labeling", "Priority support", "API access", "Advanced analytics"],
-    limitations: [],
-    mostPopular: false,
-  }
-];
+// Interface for available plans
+interface AvailablePlan {
+  id: string;
+  name: string;
+  description: string;
+  price: { monthly: number; yearly: number };
+  features: string[];
+  limitations: string[];
+  mostPopular: boolean;
+  escrowFeePercentage: number;
+  maxContracts: number | null;
+}
 
 export default function SubscriptionPage() {
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
@@ -81,6 +63,7 @@ export default function SubscriptionPage() {
   const [dataLoading, setDataLoading] = useState<boolean>(true); // For initial data fetch
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [invoices, setInvoices] = useState<InvoiceData[]>([]);
+  const [availablePlans, setAvailablePlans] = useState<AvailablePlan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
@@ -97,6 +80,17 @@ export default function SubscriptionPage() {
         }
         const subData = await subRes.json();
         setSubscription(subData.subscription);
+
+        // Fetch available plans from database
+        const plansRes = await fetch('/api/subscription-plans');
+        if (!plansRes.ok) {
+          console.warn(`Failed to fetch subscription plans: ${plansRes.statusText}`);
+          // Keep empty array as fallback
+          setAvailablePlans([]);
+        } else {
+          const plansData = await plansRes.json();
+          setAvailablePlans(plansData.plans || []);
+        }
 
         // Fetch invoices
         const invRes = await fetch('/api/subscription/invoices');
@@ -234,7 +228,7 @@ export default function SubscriptionPage() {
    const currentPlanFeatures = currentPlan.features?.features || []; // Safely access nested features array
    // Use the directly fetched activeContractsCount
    const contractsUsed = currentPlan.activeContractsCount;
-   const contractsLimit = currentPlan.maxContracts ?? 'Unlimited';
+   const contractsLimit = currentPlan.maxContracts === null ? 'Unlimited' : currentPlan.maxContracts;
    // Calculate usage percentage based on active count and limit
    const usagePercentage = currentPlan.maxContracts ? (contractsUsed / currentPlan.maxContracts) * 100 : 0;
 
@@ -259,9 +253,9 @@ export default function SubscriptionPage() {
                 <Badge variant="outline" className="text-xs capitalize">{currentPlan.status}</Badge>
                 {currentPlan.cancelAtPeriodEnd && <Badge variant="destructive" className="text-xs">Cancels on {formatDate(currentPlan.currentPeriodEnd ? Date.parse(currentPlan.currentPeriodEnd)/1000 : null)}</Badge>}
               </div>
-              {/* Find description from AVAILABLE_PLANS or add to API response */}
+              {/* Find description from fetched plans */}
               <p className="text-sm text-muted-foreground mt-1">
-                {AVAILABLE_PLANS.find(p => p.id === currentPlan.planId)?.description || 'Plan details'}
+                {availablePlans.find(p => p.id === currentPlan.planId)?.description || 'Plan details'}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -307,7 +301,7 @@ export default function SubscriptionPage() {
               <p className="text-sm text-muted-foreground">Contracts Used</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-semibold">{contractsUsed}</span>
-                {currentPlan.maxContracts !== null && <span className="text-sm text-muted-foreground">/ {contractsLimit}</span>}
+                <span className="text-sm text-muted-foreground">/ {contractsLimit}</span>
               </div>
               {currentPlan.maxContracts !== null && (
                 <Progress value={usagePercentage} className="h-2 mt-2" />
@@ -342,15 +336,17 @@ export default function SubscriptionPage() {
                </p>
             </div>
           </div>
+
         </CardContent>
       </Card>
 
       {/* Available Plans - Dynamic Current Plan Check */}
-      <div className="pt-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-medium">Upgrade Your Plan</h2>
-          <p className="text-muted-foreground">Choose a plan that's right for your business.</p>
-        </div>
+      {availablePlans.length > 0 && (
+        <div className="pt-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-medium">Upgrade Your Plan</h2>
+            <p className="text-muted-foreground">Choose a plan that's right for your business.</p>
+          </div>
 
         <div className="flex justify-end mb-6">
           <div className="bg-muted/30 p-1 rounded-lg inline-flex">
@@ -367,14 +363,14 @@ export default function SubscriptionPage() {
               Yearly
               {/* Calculate savings based on actual plans if possible */}
               <span className="ml-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
-                Save {calculateYearlySavings(AVAILABLE_PLANS.find(p => p.id === 'professional'))}%+
+                Save {calculateYearlySavings(availablePlans.find(p => p.id === 'professional'))}%+
               </span>
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {AVAILABLE_PLANS.map((tier) => {
+          {availablePlans.map((tier) => {
             const isCurrent = tier.id === currentPlan.planId;
             const price = billingPeriod === 'monthly' ? tier.price.monthly : (tier.price.yearly / 12);
             const yearlyPrice = tier.price.yearly;
@@ -456,7 +452,8 @@ export default function SubscriptionPage() {
             );
           })}
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Billing History - Dynamic */}
       <Card className="mt-8">

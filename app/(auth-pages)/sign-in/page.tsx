@@ -8,14 +8,30 @@ import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
 export default async function Login(props: {
-  searchParams: Promise<Message>;
+  searchParams: Promise<Message & { error?: string }>;
 }) {
   const searchParams = await props.searchParams;
   
-  if ("message" in searchParams) {
+  // Handle specific error messages from dashboard redirect
+  let errorMessage = "";
+  if ((searchParams as any).error === "profile_creation_failed") {
+    errorMessage = "There was an issue setting up your profile. Please try signing in again.";
+  } else if ((searchParams as any).error === "database_error") {
+    errorMessage = "Database connection issue. Please try again in a moment.";
+  } else if ((searchParams as any).error === "profile_missing") {
+    errorMessage = "Profile setup incomplete. Please contact support if this persists.";
+  }
+  
+  if ("message" in searchParams || errorMessage) {
     return (
       <div className="flex flex-col items-center justify-center text-center">
-        <FormMessage message={searchParams} />
+        {errorMessage ? (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-800 text-sm">{errorMessage}</p>
+          </div>
+        ) : (
+          <FormMessage message={searchParams} />
+        )}
       </div>
     );
   }
