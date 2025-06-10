@@ -69,15 +69,35 @@ export async function GET() {
     }
 
     // Fetch active subscription details from user_subscriptions table
+    console.log('🔍 Fetching subscription for user:', user.id);
     const { data: activeSubscription, error: subscriptionError } = await supabase
       .from('user_subscriptions')
-      .select('*, subscription_plans(*)') // Join with subscription_plans
+      .select(`
+        *,
+        subscription_plans (
+          id,
+          name,
+          description,
+          price_monthly,
+          price_yearly,
+          escrow_fee_percentage,
+          max_contracts,
+          features
+        )
+      `)
       .eq('user_id', user.id)
       .in('status', ['active', 'trialing', 'past_due']) // Active states
+      .order('created_at', { ascending: false })
       .maybeSingle(); // User might not have an active paid subscription
 
+    console.log('📊 Active subscription result:', {
+      activeSubscription,
+      subscriptionError,
+      userId: user.id
+    });
+
     if (subscriptionError) {
-      console.error('Error fetching active subscription:', subscriptionError);
+      console.error('❌ Error fetching active subscription:', subscriptionError);
       // Don't fail outright, user might just be on free tier
     }
 
@@ -85,6 +105,7 @@ export async function GET() {
 
     if (activeSubscription && activeSubscription.subscription_plans) {
       // User has an active paid subscription
+      console.log('✅ Found active subscription, creating paid plan response');
       finalSubscriptionData = {
         planId: activeSubscription.plan_id,
         planName: activeSubscription.subscription_plans.name,
@@ -104,6 +125,7 @@ export async function GET() {
       };
     } else {
       // User is likely on the free plan (or subscription expired/cancelled without active entry)
+      console.log('🆓 No active subscription found, falling back to free plan');
       // Fetch free plan details directly
       const { data: freePlan, error: freePlanError } = await supabase
         .from('subscription_plans')
@@ -155,6 +177,8 @@ export async function GET() {
       activeContractsCount: activeContractsCount, // Add the fetched count
     };
 
+
+    console.log('📤 Final response data:', responseData);
 
     return NextResponse.json({
       message: "Subscription details fetched successfully",
