@@ -8,125 +8,213 @@ export async function GET(
   try {
     const supabase = await createClient();
     
-    // Check authentication
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Authentication required" },
+        { status: 401 }
+      );
     }
 
-    // Validate contract ID format
-    if (!context.params.id || typeof context.params.id !== 'string') {
-      return NextResponse.json({ error: "Invalid contract ID" }, { status: 400 });
-    }
+    const contractId = context.params.id;
 
-    // Fetch contract ensuring user owns it
-    const { data: contract, error: fetchError } = await supabase
-      .from('contracts')
+    // Fetch contract with full details
+    const { data: contract, error } = await supabase
+      .from("contracts")
       .select(`
         *,
-        contract_templates ( name )
+        contract_templates(name, description, content),
+        milestones(
+          id, title, description, amount, status, 
+          due_date, order_index, deliverables, 
+          created_at, updated_at
+        ),
+        contract_activities(
+          id, activity_type, description, created_at, metadata,
+          profiles(display_name, avatar_url)
+        ),
+        profiles!creator_id(display_name, avatar_url, user_type),
+        client:profiles!client_id(display_name, avatar_url, user_type),
+        freelancer:profiles!freelancer_id(display_name, avatar_url, user_type)
       `)
-      .eq('id', context.params.id)
-      .eq('creator_id', user.id)
+      .eq("id", contractId)
       .single();
 
-    if (fetchError || !contract) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json(
+          { error: "NOT_FOUND", message: "Contract not found" },
+          { status: 404 }
+        );
+      }
+      console.error("Contract fetch error:", error);
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to fetch contract" },
+        { status: 500 }
+      );
+    }
+
+    // Check if user has access to this contract
+    const hasAccess = 
+      contract.creator_id === user.id ||
+      contract.client_id === user.id ||
+      contract.freelancer_id === user.id;
+
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: "FORBIDDEN", message: "Access denied to this contract" },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({
-      message: "Contract found",
+      success: true,
       contract
     });
+
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error("Contract fetch error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "INTERNAL_ERROR", message: "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(
+export async function PATCH(
   request: Request,
   context: { params: { id: string } }
 ) {
   try {
     const supabase = await createClient();
     
-    // Check authentication
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Authentication required" },
+        { status: 401 }
+      );
     }
 
-    // Validate contract ID format
-    if (!context.params.id || typeof context.params.id !== 'string') {
-      return NextResponse.json({ error: "Invalid contract ID" }, { status: 400 });
-    }
-
+    const contractId = context.params.id;
     const body = await request.json();
 
-    // Validate input
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
-
-    // Check if user owns the contract first
-    const { data: existingContract, error: checkError } = await supabase
-      .from('contracts')
-      .select('id, creator_id, locked')
-      .eq('id', context.params.id)
-      .eq('creator_id', user.id)
+    // First, fetch the contract to check permissions and current status
+    const { data: existingContract, error: fetchError } = await supabase
+      .from("contracts")
+      .select("*")
+      .eq("id", contractId)
       .single();
 
-    if (checkError || !existingContract) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        return NextResponse.json(
+          { error: "NOT_FOUND", message: "Contract not found" },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to fetch contract" },
+        { status: 500 }
+      );
+    }
+
+    // Check if user has permission to edit this contract
+    const canEdit = 
+      existingContract.creator_id === user.id ||
+      existingContract.client_id === user.id ||
+      existingContract.freelancer_id === user.id;
+
+    if (!canEdit) {
+      return NextResponse.json(
+        { error: "FORBIDDEN", message: "Access denied to edit this contract" },
+        { status: 403 }
+      );
     }
 
     // Check if contract is locked
     if (existingContract.locked) {
-      return NextResponse.json({ error: "Contract is locked and cannot be modified" }, { status: 403 });
+      return NextResponse.json(
+        { error: "CONTRACT_LOCKED", message: "Cannot edit locked contract" },
+        { status: 400 }
+      );
     }
 
-    // Prepare update data (only allow certain fields)
-    const allowedFields = ['title', 'description', 'content', 'client_email', 'total_amount', 'currency'];
-    const updateData: any = {};
-    
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
+    // Validate status transitions
+    if (body.status && body.status !== existingContract.status) {
+      const validTransitions = getValidStatusTransitions(existingContract.status);
+      if (!validTransitions.includes(body.status)) {
+        return NextResponse.json(
+          { 
+            error: "INVALID_TRANSITION", 
+            message: `Cannot transition from ${existingContract.status} to ${body.status}`,
+            validTransitions
+          },
+          { status: 400 }
+        );
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    }
+    // Prepare update data
+    const updateData: any = {};
+    const allowedFields = [
+      'title', 'description', 'content', 'total_amount', 'currency',
+      'start_date', 'end_date', 'terms_and_conditions', 'status',
+      'client_id', 'freelancer_id', 'client_email'
+    ];
 
+    allowedFields.forEach(field => {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
+      }
+    });
+
+    // Add updated timestamp
     updateData.updated_at = new Date().toISOString();
 
     // Update contract
     const { data: updatedContract, error: updateError } = await supabase
-      .from('contracts')
+      .from("contracts")
       .update(updateData)
-      .eq('id', context.params.id)
-      .eq('creator_id', user.id)
+      .eq("id", contractId)
       .select()
       .single();
 
     if (updateError) {
-      console.error('Error updating contract:', updateError);
-      return NextResponse.json({ error: "Failed to update contract" }, { status: 500 });
+      console.error("Contract update error:", updateError);
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to update contract" },
+        { status: 500 }
+      );
+    }
+
+    // Log the update activity
+    if (Object.keys(updateData).length > 1) { // More than just updated_at
+      await supabase.from("contract_activities").insert({
+        contract_id: contractId,
+        user_id: user.id,
+        activity_type: "contract_updated",
+        description: `Contract updated`,
+        metadata: {
+          updated_fields: Object.keys(updateData).filter(key => key !== 'updated_at'),
+          previous_status: existingContract.status,
+          new_status: body.status
+        }
+      });
     }
 
     return NextResponse.json({
-      message: "Contract updated successfully",
-      contract: updatedContract
+      success: true,
+      contract: updatedContract,
+      message: "Contract updated successfully"
     });
+
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error("Contract update error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "INTERNAL_ERROR", message: "Internal server error" },
       { status: 500 }
     );
   }
@@ -139,56 +227,96 @@ export async function DELETE(
   try {
     const supabase = await createClient();
     
-    // Check authentication
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Authentication required" },
+        { status: 401 }
+      );
     }
 
-    // Validate contract ID format
-    if (!context.params.id || typeof context.params.id !== 'string') {
-      return NextResponse.json({ error: "Invalid contract ID" }, { status: 400 });
-    }
+    const contractId = context.params.id;
 
-    // Check if user owns the contract and if it can be deleted
-    const { data: existingContract, error: checkError } = await supabase
-      .from('contracts')
-      .select('id, creator_id, status, locked')
-      .eq('id', context.params.id)
-      .eq('creator_id', user.id)
+    // Check if contract exists and user is the creator
+    const { data: contract, error: fetchError } = await supabase
+      .from("contracts")
+      .select("creator_id, status, title")
+      .eq("id", contractId)
       .single();
 
-    if (checkError || !existingContract) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        return NextResponse.json(
+          { error: "NOT_FOUND", message: "Contract not found" },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to fetch contract" },
+        { status: 500 }
+      );
     }
 
-    // Prevent deletion of signed/completed contracts
-    if (['signed', 'completed'].includes(existingContract.status)) {
-      return NextResponse.json({ 
-        error: "Cannot delete signed or completed contracts" 
-      }, { status: 403 });
+    // Only creator can delete the contract
+    if (contract.creator_id !== user.id) {
+      return NextResponse.json(
+        { error: "FORBIDDEN", message: "Only the contract creator can delete it" },
+        { status: 403 }
+      );
     }
 
-    // Delete contract
+    // Cannot delete contracts that are not in draft status
+    if (contract.status !== "draft") {
+      return NextResponse.json(
+        { error: "INVALID_STATUS", message: "Can only delete contracts in draft status" },
+        { status: 400 }
+      );
+    }
+
+    // Delete the contract (this will cascade to related records)
     const { error: deleteError } = await supabase
-      .from('contracts')
+      .from("contracts")
       .delete()
-      .eq('id', context.params.id)
-      .eq('creator_id', user.id);
+      .eq("id", contractId);
 
     if (deleteError) {
-      console.error('Error deleting contract:', deleteError);
-      return NextResponse.json({ error: "Failed to delete contract" }, { status: 500 });
+      console.error("Contract deletion error:", deleteError);
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to delete contract" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
+      success: true,
       message: "Contract deleted successfully"
     });
+
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error("Contract deletion error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "INTERNAL_ERROR", message: "Internal server error" },
       { status: 500 }
     );
   }
+}
+
+// Helper function to determine valid status transitions
+function getValidStatusTransitions(currentStatus: string): string[] {
+  const transitions: Record<string, string[]> = {
+    "draft": ["pending_signatures", "cancelled"],
+    "pending_signatures": ["pending_funding", "draft", "cancelled"],
+    "pending_funding": ["active", "cancelled"],
+    "active": ["pending_delivery", "cancelled", "disputed"],
+    "pending_delivery": ["in_review", "active", "disputed"],
+    "in_review": ["revision_requested", "pending_completion", "disputed"],
+    "revision_requested": ["active", "disputed"],
+    "pending_completion": ["completed", "disputed"],
+    "completed": [], // Final state
+    "cancelled": [], // Final state
+    "disputed": ["active", "cancelled"] // Can be resolved back to active or cancelled
+  };
+
+  return transitions[currentStatus] || [];
 }
