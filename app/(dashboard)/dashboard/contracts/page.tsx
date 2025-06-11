@@ -1,7 +1,6 @@
 // Remove "use client" - this is now primarily a Server Component
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card"; // Keep Card for layout
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
 import { createClient } from "@/utils/supabase/server"; // Use server client
@@ -11,7 +10,7 @@ import { Database } from "@/types/supabase"; // Assuming you have types generate
 
 // Define the type for fetched contracts based on your schema
 export type ContractWithTemplate = Database['public']['Tables']['contracts']['Row'] & {
-  contract_templates: Pick<Database['public']['Tables']['contract_templates']['Row'], 'name'> | null;
+  contract_templates: { name: string } | null;
 };
 
 

@@ -28,11 +28,15 @@ export default async function SettingsPage() {
   }
 
   // Fetch user profile
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  if (profileError) {
+    console.error("Error fetching profile:", profileError);
+  }
 
   // Fetch user subscription
   const { data: subscription } = await supabase

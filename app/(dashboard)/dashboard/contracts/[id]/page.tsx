@@ -38,8 +38,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     return redirect("/sign-in");
   }
 
-  // Fetch the specific contract by ID, ensuring it belongs to the user OR they are a party
-  // TODO: Adjust query later to check contract_parties table as well for client view access
+  // Fetch the specific contract by ID, ensuring it belongs to the user
   const { data: contract, error: fetchError } = await supabase
     .from("contracts")
     .select(`
@@ -47,6 +46,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       contract_templates ( name )
     `)
     .eq("id", params.id)
+    .eq("creator_id", user.id)
     .maybeSingle();
 
   if (fetchError) {
@@ -58,12 +58,8 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     notFound(); // Trigger Next.js 404 page
   }
 
-  // TODO: Add proper authorization check: user must be creator OR a party in contract_parties
-  if (contract.creator_id !== user.id) {
-      // For now, just log a warning if not the creator. Implement party check later.
-      console.warn(`User ${user.id} is viewing contract ${params.id} but is not the creator.`);
-      // Allow viewing for now, but restrict actions via RLS/Client Actions component logic
-  }
+  // Access is already controlled by the query filter above (creator_id = user.id)
+  // If we reach here, the user has proper access to view this contract
 
 
   // Cast to the specific type for easier access
