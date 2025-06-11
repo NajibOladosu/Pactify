@@ -19,11 +19,14 @@ export default async function DashboardLayout({
   }
 
   // Fetch user profile including subscription tier
-  const { data: profile, error: profileError } = await supabase
+  const profileResult = await supabase
     .from("profiles")
     .select("*, subscription_tier") // Ensure subscription_tier is selected
     .eq("id", user.id)
     .single();
+
+  let profile = profileResult.data;
+  const profileError = profileResult.error;
 
   // Handle potential error fetching profile
   if (profileError) {
