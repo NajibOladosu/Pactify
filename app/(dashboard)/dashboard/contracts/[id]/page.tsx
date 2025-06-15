@@ -14,6 +14,9 @@ import { ContractDetailClientActions } from "@/components/dashboard/contract-det
 import TiptapEditor from '@/components/editor/tiptap-editor'; // Import the Tiptap editor
 import DigitalSignaturePad from '@/components/contracts/digital-signature-pad';
 import PaymentReleaseManager from '@/components/contracts/payment-release-manager';
+import ContractCollaboration from '@/components/contracts/contract-collaboration';
+import DisputeResolution from '@/components/contracts/dispute-resolution';
+import RefundCancellationManager from '@/components/contracts/refund-cancellation-manager';
 
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
@@ -221,6 +224,47 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               })) || []}
               onPaymentReleased={() => {
                 // Refresh the page to update status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Contract Collaboration Section */}
+          {(['draft', 'pending_signatures', 'pending_funding'].includes(contractDetail.status)) && (
+            <ContractCollaboration
+              contractId={contractDetail.id}
+              currentUserId={user.id}
+              userType={userRole}
+              initialContract={contractDetail}
+            />
+          )}
+
+          {/* Dispute Resolution Section */}
+          {(contractDetail.status === 'disputed' || ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractDetail.status)) && (
+            <DisputeResolution
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractTitle={contractDetail.title}
+              onDisputeStatusChange={() => {
+                // Refresh the page to update contract status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Refund & Cancellation Section */}
+          {!['completed', 'cancelled'].includes(contractDetail.status) && (
+            <RefundCancellationManager
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractStatus={contractDetail.status}
+              totalAmount={contractDetail.total_amount || 0}
+              currency={contractDetail.currency || 'USD'}
+              escrowStatus="held" // TODO: Fetch actual escrow status
+              onStatusChange={() => {
+                // Refresh the page to update contract status
                 window.location.reload();
               }}
             />
