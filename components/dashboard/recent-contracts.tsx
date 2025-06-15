@@ -1,4 +1,5 @@
-import { createClient } from "@/utils/supabase/server";
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,31 +14,42 @@ import {
   FileIcon,
   SendIcon
 } from "lucide-react";
-import { Database } from "@/types/supabase"; // Import database types
 
-// Define the type for fetched contracts based on your schema
-// Include necessary fields for display
-type RecentContract = Pick<
-  Database['public']['Tables']['contracts']['Row'],
-  'id' | 'title' | 'status' | 'created_at'
-> & {
-  // Add related data if needed, e.g., client name from contract_parties
-  // For now, we'll just use what's directly on the contract
+// Define the type for recent contracts
+type RecentContract = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  created_at: string;
 };
 
 // Define status type more broadly based on schema
-type ContractStatus = 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled' | 'disputed';
+type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
+
+interface RecentContractsProps {
+  contracts: RecentContract[];
+}
 
 const getStatusBadge = (status: string | null) => {
   switch (status as ContractStatus) {
     case "draft":
-      return <Badge variant="outline" className="bg-muted text-muted-foreground">Draft</Badge>;
-    case "pending":
-       return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending</Badge>;
-    case "signed":
-      return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-200">Signed</Badge>;
+      return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">Draft</Badge>;
+    case "pending_signatures":
+      return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending Signatures</Badge>;
+    case "pending_funding":
+      return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">Pending Funding</Badge>;
+    case "active":
+      return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">Active</Badge>;
+    case "pending_delivery":
+      return <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-200">Pending Delivery</Badge>;
+    case "in_review":
+      return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-200">In Review</Badge>;
+    case "revision_requested":
+      return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-200">Revision Requested</Badge>;
+    case "pending_completion":
+      return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-200">Pending Completion</Badge>;
     case "completed":
-      return <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-300">Completed</Badge>;
+      return <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-300">Completed</Badge>;
     case "cancelled":
       return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-200">Cancelled</Badge>;
     case "disputed":
@@ -51,73 +63,26 @@ const getStatusIcon = (status: string | null) => {
   switch (status as ContractStatus) {
     case "draft":
       return <FileIcon className="h-5 w-5 text-muted-foreground" />;
-    case "pending":
-      return <SendIcon className="h-5 w-5 text-yellow-600" />; // Use yellow for pending
-    case "signed":
+    case "pending_signatures":
+    case "pending_funding":
+      return <SendIcon className="h-5 w-5 text-yellow-600" />;
+    case "active":
+    case "pending_delivery":
+    case "in_review":
+    case "pending_completion":
       return <CheckCircleIcon className="h-5 w-5 text-green-500" />;
     case "completed":
       return <CheckCircleIcon className="h-5 w-5 text-green-600" />;
     case "cancelled":
       return <XCircleIcon className="h-5 w-5 text-red-500" />;
     case "disputed":
-      return <XCircleIcon className="h-5 w-5 text-destructive" />; // Use destructive color
+      return <XCircleIcon className="h-5 w-5 text-destructive" />;
     default:
       return <FileIcon className="h-5 w-5 text-muted-foreground" />;
   }
 };
 
-export async function RecentContracts() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // If no user, maybe show a different state or return null
-  if (!user) {
-    return (
-       <Card>
-        <CardHeader>
-          <CardTitle>Recent Contracts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Please sign in to view contracts.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Fetch the 5 most recent contracts for the user
-  // TODO: Later, adjust to fetch contracts where user is creator OR a party
-  const { data: contracts, error } = await supabase
-    .from("contracts")
-    .select(`
-      id,
-      title,
-      status,
-      created_at
-    `)
-    .eq("creator_id", user.id) // Fetch contracts created by the user for now
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (error) {
-    console.error("Error fetching recent contracts:", error);
-    // Handle error display appropriately
-    return (
-       <Card>
-        <CardHeader>
-          <CardTitle>Recent Contracts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-destructive">Could not load recent contracts.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const recentContracts: RecentContract[] = contracts || [];
-
+export function RecentContracts({ contracts }: RecentContractsProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -132,9 +97,9 @@ export async function RecentContracts() {
         </Button>
       </CardHeader>
       <CardContent>
-        {recentContracts.length > 0 ? (
+        {contracts.length > 0 ? (
           <div className="space-y-4">
-            {recentContracts.map((contract) => (
+            {contracts.map((contract) => (
               <div key={contract.id} className="flex items-start p-3 rounded-lg border hover:bg-muted/20 transition-colors">
                 <div className="mr-4 mt-0.5">
                   {getStatusIcon(contract.status)}
@@ -151,9 +116,6 @@ export async function RecentContracts() {
                   <div className="mt-1 flex items-center text-xs text-muted-foreground">
                     <ClockIcon className="mr-1 h-3 w-3" />
                     Created {contract.created_at ? new Date(contract.created_at).toLocaleDateString() : 'N/A'}
-                    {/* TODO: Add client info here once fetched */}
-                    {/* <span className="mx-2">•</span>
-                    <span className="truncate">{contract.clientName || 'No Client'}</span> */}
                   </div>
                 </div>
               </div>

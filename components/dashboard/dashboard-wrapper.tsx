@@ -29,6 +29,12 @@ interface DashboardWrapperProps {
   maxContracts: number | null;
   isLimitReached: boolean;
   greeting: string;
+  recentContracts: Array<{
+    id: string;
+    title: string | null;
+    status: string | null;
+    created_at: string;
+  }>;
 }
 
 export default function DashboardWrapper({
@@ -38,7 +44,8 @@ export default function DashboardWrapper({
   activeContractsCount,
   maxContracts,
   isLimitReached,
-  greeting
+  greeting,
+  recentContracts
 }: DashboardWrapperProps) {
   const [activeView, setActiveView] = useState<'overview' | 'analytics'>('overview');
 
@@ -123,7 +130,7 @@ export default function DashboardWrapper({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Recent contracts */}
             <div className="lg:col-span-2">
-              <RecentContracts />
+              <RecentContracts contracts={recentContracts} />
             </div>
 
             {/* Get started cards */}

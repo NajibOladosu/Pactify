@@ -77,6 +77,19 @@ export default async function DashboardPage() {
 
   // 4. Determine if limit is reached (only for plans with a limit)
   const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
+
+  // 5. Fetch recent contracts
+  const { data: recentContracts } = await supabase
+    .from("contracts")
+    .select(`
+      id,
+      title,
+      status,
+      created_at
+    `)
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
+    .order("created_at", { ascending: false })
+    .limit(5);
   // --- End Fetch ---
 
 
@@ -95,6 +108,7 @@ export default async function DashboardPage() {
       maxContracts={maxContracts}
       isLimitReached={isLimitReached}
       greeting={greeting}
+      recentContracts={recentContracts || []}
     />
   );
 }
