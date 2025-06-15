@@ -12,6 +12,11 @@ import { notFound } from 'next/navigation'; // Use Next.js notFound
 import { Database } from "@/types/supabase"; // Import generated types
 import { ContractDetailClientActions } from "@/components/dashboard/contract-detail-client-actions"; // Client component for actions
 import TiptapEditor from '@/components/editor/tiptap-editor'; // Import the Tiptap editor
+import DigitalSignaturePad from '@/components/contracts/digital-signature-pad';
+import PaymentReleaseManager from '@/components/contracts/payment-release-manager';
+import ContractCollaboration from '@/components/contracts/contract-collaboration';
+import DisputeResolution from '@/components/contracts/dispute-resolution';
+import RefundCancellationManager from '@/components/contracts/refund-cancellation-manager';
 
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
@@ -20,8 +25,8 @@ export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & 
   // contract_parties: Array<Database['public']['Tables']['contract_parties']['Row'] & { profiles: Pick<Database['public']['Tables']['profiles']['Row'], 'display_name' | 'email'> | null }> | null; // Example join
 };
 
-// Define status type more broadly based on schema
-type ContractStatus = 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled' | 'disputed';
+// Updated status type based on new workflow
+type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
 
 // Fetch data server-side
@@ -38,7 +43,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     return redirect("/sign-in");
   }
 
-  // Fetch the specific contract by ID, ensuring it belongs to the user
+  // Fetch the specific contract by ID, ensuring user has access (creator, client, or freelancer)
   const { data: contract, error: fetchError } = await supabase
     .from("contracts")
     .select(`
@@ -46,8 +51,15 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       contract_templates ( name )
     `)
     .eq("id", params.id)
-    .eq("creator_id", user.id)
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
     .maybeSingle();
+
+  // Fetch milestones if it's a milestone contract
+  const { data: milestones } = await supabase
+    .from("contract_milestones")
+    .select("*")
+    .eq("contract_id", params.id)
+    .order("order_index", { ascending: true });
 
   if (fetchError) {
     console.error(`Error fetching contract ${params.id}:`, fetchError);
@@ -65,6 +77,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   // Cast to the specific type for easier access
   const contractDetail = contract as ContractDetail;
 
+  // Determine user role for signature workflow
+  let userRole: 'client' | 'freelancer' | 'creator' = 'creator';
+  if (contractDetail.client_id === user.id) {
+    userRole = 'client';
+  } else if (contractDetail.freelancer_id === user.id) {
+    userRole = 'freelancer';
+  }
+
   // Default content structure if contract.content is null/invalid
   const editorContent = contractDetail.content || { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Contract content is empty or invalid." }] }] };
 
@@ -76,13 +96,23 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case "draft":
-        return <Badge variant="outline" className="bg-muted text-muted-foreground">Draft</Badge>;
-      case "pending":
-         return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending</Badge>;
-      case "signed":
-        return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-200">Signed</Badge>;
+        return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">Draft</Badge>;
+      case "pending_signatures":
+        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending Signatures</Badge>;
+      case "pending_funding":
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">Pending Funding</Badge>;
+      case "active":
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">Active</Badge>;
+      case "pending_delivery":
+        return <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-200">Pending Delivery</Badge>;
+      case "in_review":
+        return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-200">In Review</Badge>;
+      case "revision_requested":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-200">Revision Requested</Badge>;
+      case "pending_completion":
+        return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-200">Pending Completion</Badge>;
       case "completed":
-        return <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-300">Completed</Badge>;
+        return <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-300">Completed</Badge>;
       case "cancelled":
         return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-200">Cancelled</Badge>;
       case "disputed":
@@ -161,6 +191,84 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               </div>
             </CardContent>
           </Card>
+
+          {/* Digital Signature Section */}
+          {(contractDetail.status === 'draft' || contractDetail.status === 'pending_signatures') && (
+            <DigitalSignaturePad
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractTitle={contractDetail.title}
+              isSigningEnabled={contractDetail.status === 'draft' || contractDetail.status === 'pending_signatures'}
+              onSignatureComplete={() => {
+                // Refresh the page to update status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Payment Release Section */}
+          {(['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status)) && (
+            <PaymentReleaseManager
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractType={contractDetail.type as 'fixed' | 'milestone' | 'hourly'}
+              contractStatus={contractDetail.status}
+              milestones={milestones?.map(m => ({
+                id: m.id,
+                title: m.title,
+                amount: m.amount,
+                status: m.status as any,
+                due_date: m.due_date
+              })) || []}
+              onPaymentReleased={() => {
+                // Refresh the page to update status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Contract Collaboration Section */}
+          {(['draft', 'pending_signatures', 'pending_funding'].includes(contractDetail.status)) && (
+            <ContractCollaboration
+              contractId={contractDetail.id}
+              currentUserId={user.id}
+              userType={userRole}
+              initialContract={contractDetail}
+            />
+          )}
+
+          {/* Dispute Resolution Section */}
+          {(contractDetail.status === 'disputed' || ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractDetail.status)) && (
+            <DisputeResolution
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractTitle={contractDetail.title}
+              onDisputeStatusChange={() => {
+                // Refresh the page to update contract status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Refund & Cancellation Section */}
+          {!['completed', 'cancelled'].includes(contractDetail.status) && (
+            <RefundCancellationManager
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractStatus={contractDetail.status}
+              totalAmount={contractDetail.total_amount || 0}
+              currency={contractDetail.currency || 'USD'}
+              escrowStatus="held" // TODO: Fetch actual escrow status
+              onStatusChange={() => {
+                // Refresh the page to update contract status
+                window.location.reload();
+              }}
+            />
+          )}
         </div>
 
         {/* Sidebar Column */}

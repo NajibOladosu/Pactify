@@ -1,28 +1,66 @@
-// This is a mock email service for demonstration purposes
-// In a real application, you would integrate with a service like SendGrid, Mailgun, etc.
+import nodemailer from 'nodemailer';
 
 export type EmailOptions = {
   to: string;
   subject: string;
   text?: string;
   html?: string;
+  from?: string;
 };
+
+// Create reusable transporter object
+let transporter: nodemailer.Transporter | null = null;
+
+function getTransporter() {
+  if (!transporter) {
+    const emailHost = process.env.EMAIL_SERVER_HOST;
+    const emailPort = parseInt(process.env.EMAIL_SERVER_PORT || '587');
+    const emailUser = process.env.EMAIL_SERVER_USER;
+    const emailPass = process.env.EMAIL_SERVER_PASSWORD;
+
+    if (!emailHost || !emailUser || !emailPass) {
+      console.warn('Email configuration missing, using mock email service');
+      return null;
+    }
+
+    transporter = nodemailer.createTransport({
+      host: emailHost,
+      port: emailPort,
+      secure: emailPort === 465, // true for 465, false for other ports
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    });
+  }
+  return transporter;
+}
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
-    console.log('====== EMAIL WOULD BE SENT ======');
-    console.log(`To: ${options.to}`);
-    console.log(`Subject: ${options.subject}`);
-    console.log(`Content: ${options.text || options.html}`);
-    console.log('=================================');
+    const emailTransporter = getTransporter();
     
-    // Simulate API call to email service
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Simulate successful email sending
-        resolve(true);
-      }, 500);
-    });
+    if (!emailTransporter) {
+      // Fallback to mock service for development
+      console.log('====== EMAIL WOULD BE SENT (MOCK) ======');
+      console.log(`To: ${options.to}`);
+      console.log(`Subject: ${options.subject}`);
+      console.log(`Content: ${options.text || options.html}`);
+      console.log('=================================');
+      return true;
+    }
+
+    const mailOptions = {
+      from: options.from || process.env.EMAIL_FROM || 'noreply@pactify.com',
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+    };
+
+    const info = await emailTransporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
+    return true;
   } catch (error) {
     console.error('Error sending email:', error);
     return false;
@@ -37,9 +75,12 @@ export function getContractInvitationEmail(
 ): EmailOptions {
   const subject = `${senderName} has sent you a contract to review`;
   
-  const contractUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/contracts/review/${contractId}`
-    : `/contracts/review/${contractId}`;
+  // Use environment variable for base URL or default for development
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : 'http://localhost:3000';
+  
+  const contractUrl = `${baseUrl}/dashboard/contracts/${contractId}`;
   
   const text = `
     Hello,

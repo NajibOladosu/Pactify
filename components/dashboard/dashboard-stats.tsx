@@ -13,27 +13,82 @@ import {
   UserCheckIcon,
   PlusIcon
 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 interface DashboardStatsProps {
   userType: string;
-  activeContractsCount: number; // Renamed from availableContracts
-  maxContracts: number | null; // Can be null for unlimited
+  activeContractsCount: number;
+  maxContracts: number | null;
 }
 
-// Placeholder stats for parts not yet refactored
-const placeholderStats = {
-  pendingSignatures: 0, // TODO: Fetch real data
-  pendingPayments: 0,   // TODO: Fetch real data
-  clientCount: 0,       // TODO: Fetch real data
-};
+interface DashboardStatsData {
+  pendingSignatures: number;
+  pendingPayments: number;
+  contactsCount: number;
+}
 
 export function DashboardStats({
   userType,
   activeContractsCount,
   maxContracts,
 }: DashboardStatsProps) {
-  // The activeContractsCount is now passed directly as a prop.
-  // Other stats are placeholders for now.
+  const [stats, setStats] = useState<DashboardStatsData>({
+    pendingSignatures: 0,
+    pendingPayments: 0,
+    contactsCount: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) return;
+
+        // Fetch contracts data to calculate stats
+        const { data: contracts } = await supabase
+          .from('contracts')
+          .select('status, total_amount, creator_id, client_id, freelancer_id')
+          .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`);
+
+        if (contracts) {
+          const pendingSignatures = contracts.filter(c => c.status === 'pending_signatures').length;
+          const pendingPayments = contracts
+            .filter(c => ['pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion'].includes(c.status))
+            .reduce((sum, c) => sum + (c.total_amount || 0), 0);
+
+          // Count unique contacts
+          const uniqueContacts = new Set();
+          contracts.forEach(contract => {
+            if (contract.creator_id === user.id) {
+              if (contract.client_id) uniqueContacts.add(contract.client_id);
+              if (contract.freelancer_id) uniqueContacts.add(contract.freelancer_id);
+            } else if (contract.client_id === user.id) {
+              if (contract.creator_id) uniqueContacts.add(contract.creator_id);
+              if (contract.freelancer_id) uniqueContacts.add(contract.freelancer_id);
+            } else if (contract.freelancer_id === user.id) {
+              if (contract.creator_id) uniqueContacts.add(contract.creator_id);
+              if (contract.client_id) uniqueContacts.add(contract.client_id);
+            }
+          });
+
+          setStats({
+            pendingSignatures,
+            pendingPayments,
+            contactsCount: uniqueContacts.size,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchStats();
+  }, []);
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -75,13 +130,14 @@ export function DashboardStats({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            {/* Placeholder */}
-            <h3 className="text-2xl font-bold">{placeholderStats.pendingSignatures}</h3>
+            <h3 className="text-2xl font-bold">
+              {loading ? "..." : stats.pendingSignatures}
+            </h3>
             <Badge variant="outline" className="font-normal">
               <ClockIcon className="mr-1 h-3 w-3" />
               <span className="text-xs">
-                {placeholderStats.pendingSignatures
-                  ? `${placeholderStats.pendingSignatures} awaiting signature`
+                {stats.pendingSignatures
+                  ? `${stats.pendingSignatures} awaiting signature`
                   : "No pending signatures"}
               </span>
             </Badge>
@@ -100,13 +156,14 @@ export function DashboardStats({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-             {/* Placeholder */}
-            <h3 className="text-2xl font-bold">${placeholderStats.pendingPayments}</h3>
+            <h3 className="text-2xl font-bold">
+              {loading ? "..." : `$${stats.pendingPayments.toLocaleString()}`}
+            </h3>
             <Badge variant="outline" className="font-normal">
               <DollarSignIcon className="mr-1 h-3 w-3" />
               <span className="text-xs">
-                {placeholderStats.pendingPayments
-                  ? `${placeholderStats.pendingPayments} pending payments`
+                {stats.pendingPayments > 0
+                  ? "pending payments"
                   : "No active payments"}
               </span>
             </Badge>
@@ -125,8 +182,9 @@ export function DashboardStats({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-             {/* Placeholder */}
-            <h3 className="text-2xl font-bold">{placeholderStats.clientCount}</h3>
+            <h3 className="text-2xl font-bold">
+              {loading ? "..." : stats.contactsCount}
+            </h3>
             <Badge variant="outline" className="font-normal">
               <PlusIcon className="mr-1 h-3 w-3" />
               <span className="text-xs">Add new contact</span>

@@ -17,8 +17,12 @@
 
 # production
 /build
+
+# project-info
 .mcp.json
 CLAUDE.md
+pactify_contract_workflow.md
+IMPLEMENTATION_TASKS.md
 
 # misc
 .DS_Store

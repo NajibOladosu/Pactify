@@ -1,17 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { PlusIcon } from "lucide-react";
-import { DashboardStats } from "@/components/dashboard/dashboard-stats";
-import { RecentContracts } from "@/components/dashboard/recent-contracts";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"; // Import Tooltip components
+import DashboardWrapper from "@/components/dashboard/dashboard-wrapper";
 
 export const metadata = {
   title: "Dashboard | Pactify",
@@ -72,18 +61,18 @@ export default async function DashboardPage() {
      maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
   }
 
-  // 3. Count active contracts using RPC
-  const { data: countData, error: rpcError } = await supabase.rpc(
-    'get_active_contract_count',
-    { p_user_id: user.id }
-  );
+  // 3. Count active contracts directly
+  const { data: contracts, error: contractsError } = await supabase
+    .from('contracts')
+    .select('id')
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
+    .in('status', ['draft', 'pending_signatures', 'pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion']);
 
-  if (rpcError) {
-    console.error("Dashboard Error: Failed to count active contracts via RPC.", rpcError);
-    // Handle error appropriately, maybe show a message or default to 0
+  if (contractsError) {
+    console.error("Dashboard Error: Failed to count active contracts.", contractsError);
     activeContractsCount = 0; // Default to 0 on error
   } else {
-    activeContractsCount = countData ?? 0;
+    activeContractsCount = contracts?.length ?? 0;
   }
 
   // 4. Determine if limit is reached (only for plans with a limit)
@@ -98,114 +87,14 @@ export default async function DashboardPage() {
   if (hour >= 18) greeting = "Good evening";
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-start flex-col sm:flex-row gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-bold">{greeting}, {displayName}!</h1>
-          <p className="text-muted-foreground mt-1">Here's what's happening with your contracts today.</p>
-        </div>
-        <TooltipProvider>
-          <Tooltip delayDuration={100}>
-            <TooltipTrigger asChild>
-              {/* Wrap the Link/Button structure for tooltip compatibility when disabled */}
-              <div className={isLimitReached ? 'cursor-not-allowed' : ''}>
-                <Button size="sm" asChild={!isLimitReached} disabled={isLimitReached}>
-                  {isLimitReached ? (
-                    // Render a span or div when disabled for TooltipTrigger
-                    <span className="inline-flex items-center px-3 py-1.5">
-                      <PlusIcon className="mr-2 h-4 w-4" />
-                      New Contract
-                    </span>
-                  ) : (
-                    <Link href="/dashboard/contracts/new">
-                      <PlusIcon className="mr-2 h-4 w-4" />
-                      New Contract
-                    </Link>
-                  )}
-                </Button>
-              </div>
-            </TooltipTrigger>
-            {isLimitReached && (
-              <TooltipContent>
-                <p>Upgrade to create more contracts.</p>
-                <p className="text-xs text-muted-foreground">Free plan limit ({maxContracts}) reached.</p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* Quick Stats - Pass new props */}
-      <DashboardStats
-        userType={userType}
-        activeContractsCount={activeContractsCount}
-        maxContracts={maxContracts}
-      />
-
-      {/* Main content section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent contracts */}
-        <div className="lg:col-span-2">
-          <RecentContracts />
-        </div>
-
-        {/* Get started cards */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>Complete these steps to set up your account.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="border rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-success/20 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Create your account</h4>
-                  <p className="text-xs text-muted-foreground">You've successfully created your account.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-background flex items-center justify-center border">
-                  <span className="text-sm font-medium">2</span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Complete your profile</h4>
-                  <p className="text-xs text-muted-foreground mb-2">Add your business details and contact information.</p>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link href="/dashboard/settings">
-                      Complete profile
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 h-8 w-8 rounded-full bg-background flex items-center justify-center border">
-                  <span className="text-sm font-medium">3</span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Create your first contract</h4>
-                  <p className="text-xs text-muted-foreground mb-2">Select a template or create a custom contract.</p>
-                  <Button size="sm" asChild>
-                    <Link href="/dashboard/contracts/new">
-                      Create contract
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <DashboardWrapper
+      displayName={displayName}
+      userType={userType}
+      userId={user.id}
+      activeContractsCount={activeContractsCount}
+      maxContracts={maxContracts}
+      isLimitReached={isLimitReached}
+      greeting={greeting}
+    />
   );
 }
