@@ -72,18 +72,18 @@ export default async function DashboardPage() {
      maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
   }
 
-  // 3. Count active contracts using RPC
-  const { data: countData, error: rpcError } = await supabase.rpc(
-    'get_active_contract_count',
-    { p_user_id: user.id }
-  );
+  // 3. Count active contracts directly
+  const { data: contracts, error: contractsError } = await supabase
+    .from('contracts')
+    .select('id')
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
+    .in('status', ['draft', 'pending_signatures', 'pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion']);
 
-  if (rpcError) {
-    console.error("Dashboard Error: Failed to count active contracts via RPC.", rpcError);
-    // Handle error appropriately, maybe show a message or default to 0
+  if (contractsError) {
+    console.error("Dashboard Error: Failed to count active contracts.", contractsError);
     activeContractsCount = 0; // Default to 0 on error
   } else {
-    activeContractsCount = countData ?? 0;
+    activeContractsCount = contracts?.length ?? 0;
   }
 
   // 4. Determine if limit is reached (only for plans with a limit)

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { Database } from "@/types/supabase";
+import { Database } from "@/types/supabase-enhanced";
+import { 
+  MilestoneCreateSchema,
+  MilestoneUpdateSchema,
+  validateSchema 
+} from "@/utils/security/enhanced-validation-schemas";
+import { auditLog } from "@/utils/security/audit-logger";
 
-type MilestoneInsert = Database["public"]["Tables"]["milestones"]["Insert"];
+type MilestoneInsert = Database["public"]["Tables"]["contract_milestones"]["Insert"];
 
 export async function GET(
   request: NextRequest,
@@ -48,10 +54,21 @@ export async function GET(
       );
     }
 
-    // Get milestones
+    // Get milestones with related data
     const { data: milestones, error: milestonesError } = await supabase
-      .from("milestones")
-      .select("*")
+      .from("contract_milestones")
+      .select(`
+        *,
+        contract_deliverables(
+          id, file_name, file_url, is_final, created_at, uploaded_by
+        ),
+        escrow_payments(
+          id, amount, status, funded_at, released_at
+        ),
+        contract_reviews(
+          id, review_type, rating, feedback, created_at, reviewer_id
+        )
+      `)
       .eq("contract_id", contractId)
       .order("order_index", { ascending: true });
 
@@ -107,14 +124,18 @@ export async function POST(
 
     const contractId = params.id;
     const body = await request.json();
-    const { title, description, amount, due_date, deliverables = [] } = body;
-
-    if (!title || !amount) {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "Title and amount are required" },
-        { status: 400 }
-      );
+    
+    // Validate input using enhanced schema
+    const validation = validateSchema(MilestoneCreateSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ 
+        error: "VALIDATION_ERROR", 
+        message: "Invalid input data",
+        details: validation.errors 
+      }, { status: 400 });
     }
+
+    const { title, description, amount, due_date, deliverables = [], order_index } = validation.data!;
 
     // Verify access to contract and check if it's still in draft
     const { data: contract, error: contractError } = await supabase
@@ -157,15 +178,18 @@ export async function POST(
       );
     }
 
-    // Get next order index
-    const { data: existingMilestones } = await supabase
-      .from("milestones")
-      .select("order_index")
-      .eq("contract_id", contractId)
-      .order("order_index", { ascending: false })
-      .limit(1);
+    // Determine order index
+    let finalOrderIndex = order_index;
+    if (!finalOrderIndex) {
+      const { data: existingMilestones } = await supabase
+        .from("contract_milestones")
+        .select("order_index")
+        .eq("contract_id", contractId)
+        .order("order_index", { ascending: false })
+        .limit(1);
 
-    const nextOrderIndex = existingMilestones?.[0]?.order_index ? existingMilestones[0].order_index + 1 : 1;
+      finalOrderIndex = existingMilestones?.[0]?.order_index ? existingMilestones[0].order_index + 1 : 1;
+    }
 
     // Create milestone
     const milestoneData: MilestoneInsert = {
@@ -175,12 +199,12 @@ export async function POST(
       amount: parseFloat(amount.toString()),
       due_date,
       deliverables,
-      order_index: nextOrderIndex,
+      order_index: finalOrderIndex,
       status: "pending"
     };
 
     const { data: milestone, error: milestoneError } = await supabase
-      .from("milestones")
+      .from("contract_milestones")
       .insert(milestoneData)
       .select()
       .single();
@@ -193,16 +217,19 @@ export async function POST(
       );
     }
 
-    // Log activity
-    await supabase.from("contract_activities").insert({
-      contract_id: contractId,
-      user_id: user.id,
-      activity_type: "milestone_created",
-      description: `Milestone "${title}" created`,
+    // Log activity using audit logger
+    await auditLog({
+      action: 'milestone_created',
+      resource: 'contract_milestone',
+      resourceId: milestone.id,
+      userId: user.id,
       metadata: {
-        milestone_id: milestone.id,
-        milestone_amount: amount,
-        order_index: nextOrderIndex
+        contract_id: contractId,
+        milestone_title: title,
+        amount: amount,
+        order_index: finalOrderIndex,
+        has_due_date: !!due_date,
+        deliverables_count: deliverables?.length || 0
       }
     });
 

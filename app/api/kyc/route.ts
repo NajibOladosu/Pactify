@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { Database } from "@/types/supabase";
+import { Database } from "@/types/supabase-enhanced";
+import { 
+  KycVerificationSchema, 
+  validateSchema 
+} from "@/utils/security/enhanced-validation-schemas";
+import { auditLog } from "@/utils/security/audit-logger";
 
 type KycInsert = Database["public"]["Tables"]["kyc_verifications"]["Insert"];
 type KycUpdate = Database["public"]["Tables"]["kyc_verifications"]["Update"];
@@ -19,16 +24,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { verification_level = "basic", documents = [] } = body;
-
-    // Validate verification level
-    const validLevels = ["basic", "enhanced", "business"];
-    if (!validLevels.includes(verification_level)) {
-      return NextResponse.json(
-        { error: "VALIDATION_ERROR", message: "Invalid verification level" },
-        { status: 400 }
-      );
+    
+    // Validate input using enhanced schema
+    const validation = validateSchema(KycVerificationSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ 
+        error: "VALIDATION_ERROR", 
+        message: "Invalid input data",
+        details: validation.errors 
+      }, { status: 400 });
     }
+
+    const { verification_level = "basic", documents = [], personal_info, business_info } = validation.data!
 
     // Check if KYC verification already exists
     const { data: existingKyc } = await supabase
@@ -57,7 +64,12 @@ export async function POST(request: NextRequest) {
       status: "in_progress",
       required_documents: requiredDocuments[verification_level],
       submitted_documents: documents.length > 0 ? documents : null,
-      submitted_at: documents.length > 0 ? new Date().toISOString() : null
+      submitted_at: documents.length > 0 ? new Date().toISOString() : null,
+      verification_data: {
+        personal_info: personal_info || {},
+        business_info: business_info || {},
+        timestamp: new Date().toISOString()
+      }
     };
 
     let result;
@@ -129,16 +141,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Log activity
-    await supabase.from("contract_activities").insert({
-      contract_id: "00000000-0000-0000-0000-000000000000", // System activity
-      user_id: user.id,
-      activity_type: "kyc_initiated",
-      description: `KYC verification initiated for ${verification_level} level`,
+    // Log activity using audit logger
+    await auditLog({
+      action: existingKyc ? 'kyc_updated' : 'kyc_initiated',
+      resource: 'kyc_verification',
+      resourceId: result.id,
+      userId: user.id,
       metadata: {
         verification_level,
         required_documents: requiredDocuments[verification_level],
-        documents_submitted: documents.length
+        documents_submitted: documents.length,
+        has_personal_info: !!personal_info,
+        has_business_info: !!business_info
       }
     });
 

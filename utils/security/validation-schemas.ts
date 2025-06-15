@@ -9,6 +9,14 @@ const sanitizedString = (maxLength: number = SECURITY_CONFIG.INPUT_LIMITS.shortT
     .regex(/^[^<>]*$/, "Invalid characters detected")
     .transform(str => str.replace(/[<>]/g, "")); // Remove any remaining angle brackets
 
+const sanitizedStringWithMin = (maxLength: number = SECURITY_CONFIG.INPUT_LIMITS.shortText, minLength: number = 0) =>
+  z.string()
+    .trim()
+    .min(minLength)
+    .max(maxLength)
+    .regex(/^[^<>]*$/, "Invalid characters detected")
+    .transform(str => str.replace(/[<>]/g, "")); // Remove any remaining angle brackets
+
 const positiveNumber = (min: number = SECURITY_CONFIG.INPUT_LIMITS.minAmount, max: number = SECURITY_CONFIG.INPUT_LIMITS.maxAmount) =>
   z.number()
     .positive()
@@ -77,21 +85,21 @@ const pastOrPresentDate = () =>
 
 // Contract schemas
 export const ContractCreateSchema = z.object({
-  title: sanitizedString(255).min(1, "Title is required"),
-  description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.description).min(10, "Description must be at least 10 characters"),
+  title: sanitizedStringWithMin(255, 1),
+  description: sanitizedStringWithMin(SECURITY_CONFIG.INPUT_LIMITS.description, 10),
   client_id: uuid().optional(),
   freelancer_id: uuid().optional(),
   client_email: email().optional(),
   total_amount: positiveNumber(SECURITY_CONFIG.INPUT_LIMITS.minAmount, SECURITY_CONFIG.INPUT_LIMITS.maxContractAmount),
   currency: currency().default("USD"),
-  type: z.enum(["fixed", "milestone", "hourly"]).default("fixed"),
+  type: z.enum(["fixed", "milestone", "hourly"]),
   start_date: futureDate().optional(),
   end_date: futureDate().optional(),
   terms_and_conditions: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.longText).optional(),
   template_id: uuid().optional(),
   content: z.any(), // JSON content
   milestones: z.array(z.object({
-    title: sanitizedString(255).min(1),
+    title: sanitizedStringWithMin(255, 1),
     description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.mediumText).optional(),
     amount: positiveNumber(),
     due_date: futureDate().optional(),
@@ -140,7 +148,7 @@ export const ContractUpdateSchema = z.object({
 
 // Milestone schemas
 export const MilestoneCreateSchema = z.object({
-  title: sanitizedString(255).min(1, "Title is required"),
+  title: sanitizedStringWithMin(255, 1),
   description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.mediumText).optional(),
   amount: positiveNumber(),
   due_date: futureDate().optional(),
@@ -161,7 +169,7 @@ export const MilestoneUpdateSchema = z.object({
 
 // Signature schemas
 export const SignatureCreateSchema = z.object({
-  signature_data: sanitizedString(10000).min(1, "Signature data is required")
+  signature_data: sanitizedStringWithMin(10000, 1)
 });
 
 // Payment schemas
@@ -171,7 +179,7 @@ export const PaymentCreateSchema = z.object({
 });
 
 export const PaymentConfirmSchema = z.object({
-  payment_intent_id: sanitizedString(255).min(1, "Payment intent ID is required"),
+  payment_intent_id: sanitizedStringWithMin(255, 1),
   payment_method_id: sanitizedString(255).optional()
 });
 
@@ -227,7 +235,7 @@ export const KycDocumentSubmissionSchema = z.object({
     ]),
     filename: filename(),
     file_url: url()
-  })).min(1, "At least one document is required").max(10),
+  })).min(1).max(10),
   document_type: z.string().optional()
 });
 
@@ -258,7 +266,7 @@ export const ActivityCreateSchema = z.object({
     "contract_completed", "contract_cancelled", "dispute_raised", "comment_added",
     "file_uploaded", "deadline_extended", "status_changed"
   ]),
-  description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.mediumText).min(1, "Description is required"),
+  description: sanitizedStringWithMin(SECURITY_CONFIG.INPUT_LIMITS.mediumText, 1),
   metadata: z.record(z.any()).optional()
 });
 
@@ -285,8 +293,8 @@ export const StripeOnboardingSchema = z.object({
 
 // Query parameter schemas
 export const PaginationSchema = z.object({
-  limit: z.string().transform(val => parseInt(val)).pipe(z.number().int().min(1).max(100)).default("10"),
-  offset: z.string().transform(val => parseInt(val)).pipe(z.number().int().min(0)).default("0")
+  limit: z.string().default("10").transform(val => parseInt(val, 10)).pipe(z.number().int().min(1).max(100)),
+  offset: z.string().default("0").transform(val => parseInt(val, 10)).pipe(z.number().int().min(0))
 });
 
 export const ContractQuerySchema = PaginationSchema.extend({

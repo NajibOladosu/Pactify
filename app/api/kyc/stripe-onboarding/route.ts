@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { 
+  StripeOnboardingSchema,
+  validateSchema 
+} from "@/utils/security/enhanced-validation-schemas";
+import { auditLog } from "@/utils/security/audit-logger";
+import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +21,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { country = "US", business_type = "individual" } = body;
+    
+    // Validate input
+    const validation = validateSchema(StripeOnboardingSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ 
+        error: "VALIDATION_ERROR", 
+        message: "Invalid input data",
+        details: validation.errors 
+      }, { status: 400 });
+    }
+
+    const { country = "US", business_type = "individual" } = validation.data!;
 
     // Get user profile and KYC verification
     const { data: profile } = await supabase
@@ -44,43 +61,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    try {
-      // In a real implementation, this would create a Stripe Express account
-      const mockStripeAccount = {
-        id: `acct_${Date.now()}_${user.id.slice(0, 8)}`,
-        object: "account",
-        business_type,
-        country,
-        email: profile?.id || user.email, // Use profile email if available
-        type: "express",
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true }
-        },
-        requirements: {
-          currently_due: [],
-          eventually_due: [],
-          pending_verification: []
-        },
-        details_submitted: false,
-        charges_enabled: false,
-        payouts_enabled: false
-      };
+    // Initialize Stripe (if STRIPE_SECRET_KEY is available)
+    const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-03-31.basil',
+    }) : null;
 
-      // Create account link for onboarding
-      const mockAccountLink = {
-        object: "account_link",
-        created: Math.floor(Date.now() / 1000),
-        expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-        url: `https://connect.stripe.com/setup/e/${mockStripeAccount.id}`,
-        type: "account_onboarding"
-      };
+    try {
+      let stripeAccount;
+      let accountLink;
+
+      if (stripe) {
+        // Create real Stripe Express account
+        stripeAccount = await stripe.accounts.create({
+          type: 'express',
+          country: country,
+          business_type: business_type as 'individual' | 'company',
+          email: user.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true }
+          },
+          metadata: {
+            user_id: user.id,
+            verification_level: kycVerification.verification_level || 'enhanced'
+          }
+        });
+
+        // Create account link for onboarding
+        accountLink = await stripe.accountLinks.create({
+          account: stripeAccount.id,
+          refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe_refresh=true`,
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe_success=true`,
+          type: 'account_onboarding',
+        });
+      } else {
+        // Fallback to mock for development
+        stripeAccount = {
+          id: `acct_${Date.now()}_${user.id.slice(0, 8)}`,
+          object: "account",
+          business_type,
+          country,
+          email: user.email,
+          type: "express",
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true }
+          },
+          requirements: {
+            currently_due: [],
+            eventually_due: [],
+            pending_verification: []
+          },
+          details_submitted: false,
+          charges_enabled: false,
+          payouts_enabled: false
+        };
+
+        accountLink = {
+          object: "account_link",
+          created: Math.floor(Date.now() / 1000),
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe_mock=true&account=${stripeAccount.id}`,
+          type: "account_onboarding"
+        };
+      }
 
       // Update KYC verification with Stripe account ID
       const { error: updateError } = await supabase
         .from("kyc_verifications")
         .update({
-          stripe_account_id: mockStripeAccount.id,
+          stripe_account_id: stripeAccount.id,
           updated_at: new Date().toISOString()
         })
         .eq("profile_id", user.id);
@@ -96,38 +146,40 @@ export async function POST(request: NextRequest) {
       // Update profile with Stripe Connect account ID
       await supabase
         .from("profiles")
-        .update({ stripe_connect_account_id: mockStripeAccount.id })
+        .update({ stripe_connect_account_id: stripeAccount.id })
         .eq("id", user.id);
 
-      // Log activity
-      await supabase.from("contract_activities").insert({
-        contract_id: "00000000-0000-0000-0000-000000000000",
-        user_id: user.id,
-        activity_type: "stripe_onboarding_started",
-        description: "Stripe Connect onboarding initiated",
+      // Log activity using audit logger
+      await auditLog({
+        action: 'stripe_onboarding_started',
+        resource: 'stripe_account',
+        resourceId: stripeAccount.id,
+        userId: user.id,
         metadata: {
-          stripe_account_id: mockStripeAccount.id,
           business_type,
           country,
-          verification_level: kycVerification.verification_level
+          verification_level: kycVerification.verification_level,
+          is_real_stripe: !!stripe,
+          onboarding_url: accountLink.url
         }
       });
 
       return NextResponse.json({
         success: true,
         stripe_account: {
-          id: mockStripeAccount.id,
-          business_type: mockStripeAccount.business_type,
-          country: mockStripeAccount.country,
-          details_submitted: mockStripeAccount.details_submitted,
-          charges_enabled: mockStripeAccount.charges_enabled,
-          payouts_enabled: mockStripeAccount.payouts_enabled
+          id: stripeAccount.id,
+          business_type: stripeAccount.business_type,
+          country: stripeAccount.country,
+          details_submitted: stripeAccount.details_submitted || false,
+          charges_enabled: stripeAccount.charges_enabled || false,
+          payouts_enabled: stripeAccount.payouts_enabled || false
         },
         onboarding_link: {
-          url: mockAccountLink.url,
-          expires_at: mockAccountLink.expires_at
+          url: accountLink.url,
+          expires_at: accountLink.expires_at
         },
-        message: "Stripe Connect account created. Complete onboarding to enable payments."
+        message: "Stripe Connect account created. Complete onboarding to enable payments.",
+        is_production: !!stripe
       });
 
     } catch (stripeError) {

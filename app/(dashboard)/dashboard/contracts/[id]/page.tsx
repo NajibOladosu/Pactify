@@ -20,8 +20,8 @@ export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & 
   // contract_parties: Array<Database['public']['Tables']['contract_parties']['Row'] & { profiles: Pick<Database['public']['Tables']['profiles']['Row'], 'display_name' | 'email'> | null }> | null; // Example join
 };
 
-// Define status type more broadly based on schema
-type ContractStatus = 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled' | 'disputed';
+// Updated status type based on new workflow
+type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
 
 // Fetch data server-side
@@ -38,7 +38,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     return redirect("/sign-in");
   }
 
-  // Fetch the specific contract by ID, ensuring it belongs to the user
+  // Fetch the specific contract by ID, ensuring user has access (creator, client, or freelancer)
   const { data: contract, error: fetchError } = await supabase
     .from("contracts")
     .select(`
@@ -46,7 +46,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       contract_templates ( name )
     `)
     .eq("id", params.id)
-    .eq("creator_id", user.id)
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
     .maybeSingle();
 
   if (fetchError) {
@@ -76,13 +76,23 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case "draft":
-        return <Badge variant="outline" className="bg-muted text-muted-foreground">Draft</Badge>;
-      case "pending":
-         return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending</Badge>;
-      case "signed":
-        return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-200">Signed</Badge>;
+        return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">Draft</Badge>;
+      case "pending_signatures":
+        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">Pending Signatures</Badge>;
+      case "pending_funding":
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-200">Pending Funding</Badge>;
+      case "active":
+        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">Active</Badge>;
+      case "pending_delivery":
+        return <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-200">Pending Delivery</Badge>;
+      case "in_review":
+        return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-200">In Review</Badge>;
+      case "revision_requested":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-200">Revision Requested</Badge>;
+      case "pending_completion":
+        return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-200">Pending Completion</Badge>;
       case "completed":
-        return <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-300">Completed</Badge>;
+        return <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-300">Completed</Badge>;
       case "cancelled":
         return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-200">Cancelled</Badge>;
       case "disputed":

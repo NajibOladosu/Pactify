@@ -53,6 +53,7 @@ export {
 export {
   ContractCreateSchema,
   ContractUpdateSchema,
+  ContractQuerySchema,
   MilestoneCreateSchema,
   MilestoneUpdateSchema,
   SubmissionCreateSchema,

@@ -61,18 +61,18 @@ const secureHandler = SecurityMiddleware.withSecurity(
         title: validatedData.title,
         description: validatedData.description,
         creator_id: user.id,
-        client_id: validatedData.client_id,
-        freelancer_id: validatedData.freelancer_id,
-        template_id: validatedData.template_id,
-        content: validatedData.content,
-        type: validatedData.type,
+        client_id: validatedData.client_id || null,
+        freelancer_id: validatedData.freelancer_id || null,
+        template_id: validatedData.template_id || null,
+        content: validatedData.content || null,
+        type: validatedData.type as "fixed" | "milestone" | "hourly",
         total_amount: validatedData.total_amount,
         currency: validatedData.currency,
-        start_date: validatedData.start_date,
-        end_date: validatedData.end_date,
-        terms_and_conditions: validatedData.terms_and_conditions,
+        start_date: validatedData.start_date || null,
+        end_date: validatedData.end_date || null,
+        terms_and_conditions: validatedData.terms_and_conditions || null,
         status: "draft",
-        client_email: validatedData.client_email
+        client_email: validatedData.client_email || null
       };
 
       // Insert contract
@@ -203,19 +203,50 @@ const secureGetHandler = SecurityMiddleware.withSecurity(
 
       const { searchParams } = new URL(request.url);
       
-      // Validate query parameters
-      const rawQueryData = {
-        status: searchParams.get("status"),
-        type: searchParams.get("type"),
-        limit: searchParams.get("limit") || "10",
-        offset: searchParams.get("offset") || "0"
-      };
-      const queryData = validateAndSanitize(ContractQuerySchema, rawQueryData) as {
-        status?: string;
-        type?: string;
-        limit: number;
-        offset: number;
-      };
+      // Parse and validate query parameters
+      const status = searchParams.get("status");
+      const type = searchParams.get("type");
+      const limit = parseInt(searchParams.get("limit") || "10", 10);
+      const offset = parseInt(searchParams.get("offset") || "0", 10);
+
+      // Validate parameters
+      if (limit < 1 || limit > 100) {
+        return NextResponse.json(
+          { error: "INVALID_LIMIT", message: "Limit must be between 1 and 100" },
+          { status: 400 }
+        );
+      }
+
+      if (offset < 0) {
+        return NextResponse.json(
+          { error: "INVALID_OFFSET", message: "Offset must be non-negative" },
+          { status: 400 }
+        );
+      }
+
+      // Validate status if provided
+      const allowedStatuses = [
+        "draft", "pending_signatures", "pending_funding", "active",
+        "pending_delivery", "in_review", "revision_requested", 
+        "pending_completion", "completed", "cancelled", "disputed"
+      ];
+      if (status && !allowedStatuses.includes(status)) {
+        return NextResponse.json(
+          { error: "INVALID_STATUS", message: "Invalid status parameter" },
+          { status: 400 }
+        );
+      }
+
+      // Validate type if provided
+      const allowedTypes = ["fixed", "milestone", "hourly"];
+      if (type && !allowedTypes.includes(type)) {
+        return NextResponse.json(
+          { error: "INVALID_TYPE", message: "Invalid type parameter" },
+          { status: 400 }
+        );
+      }
+
+      const queryData = { status, type, limit, offset };
 
       let query = supabase
         .from("contracts")

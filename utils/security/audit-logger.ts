@@ -503,3 +503,22 @@ export const logPaymentEvent = (
   details?: any,
   success: boolean = true
 ) => auditLogger.logPaymentEvent(action, paymentId, userId, amount, currency, details, success);
+
+// Simple audit log function for backward compatibility
+export const auditLog = async (entry: {
+  action: string;
+  resource: string;
+  resourceId: string;
+  userId: string;
+  metadata?: Record<string, any>;
+}) => {
+  await auditLogger.logSecurityEvent({
+    action: entry.action,
+    resource: entry.resource,
+    resourceId: entry.resourceId,
+    userId: entry.userId,
+    details: entry.metadata,
+    success: true,
+    severity: 'low'
+  });
+};

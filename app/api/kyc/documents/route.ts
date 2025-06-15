@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { 
+  FileUploadSchema,
+  validateSchema 
+} from "@/utils/security/enhanced-validation-schemas";
+import { auditLog } from "@/utils/security/audit-logger";
+import { SECURITY_CONFIG } from "@/utils/security/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +28,53 @@ export async function POST(request: NextRequest) {
         { error: "VALIDATION_ERROR", message: "Documents are required" },
         { status: 400 }
       );
+    }
+
+    // Validate each document upload
+    const validationErrors = [];
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      const validation = validateSchema(FileUploadSchema, {
+        contract_id: "00000000-0000-0000-0000-000000000000", // KYC documents
+        file_name: doc.filename,
+        file_size: doc.file_size || 0,
+        file_type: doc.file_type || 'application/pdf',
+        file_url: doc.file_url,
+        description: `KYC document: ${doc.type}`,
+        category: 'kyc'
+      });
+
+      if (!validation.success) {
+        validationErrors.push({
+          document_index: i,
+          filename: doc.filename,
+          errors: validation.errors
+        });
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return NextResponse.json({
+        error: "VALIDATION_ERROR",
+        message: "Document validation failed",
+        validation_errors: validationErrors
+      }, { status: 400 });
+    }
+
+    // Check document type restrictions
+    const allowedDocumentTypes = [
+      'passport', 'drivers_license', 'national_id', 'utility_bill', 
+      'bank_statement', 'business_registration', 'tax_document', 'selfie'
+    ];
+    
+    for (const doc of documents) {
+      if (!allowedDocumentTypes.includes(doc.type)) {
+        return NextResponse.json({
+          error: "VALIDATION_ERROR",
+          message: `Invalid document type: ${doc.type}`,
+          allowed_types: allowedDocumentTypes
+        }, { status: 400 });
+      }
     }
 
     // Get existing KYC verification
@@ -95,17 +148,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log activity
-    await supabase.from("contract_activities").insert({
-      contract_id: "00000000-0000-0000-0000-000000000000", // System activity
-      user_id: user.id,
-      activity_type: "kyc_documents_submitted",
-      description: `KYC documents submitted: ${documents.map((d: any) => d.type).join(', ')}`,
+    // Log activity using audit logger
+    await auditLog({
+      action: 'kyc_documents_submitted',
+      resource: 'kyc_verification',
+      resourceId: updatedKyc.id,
+      userId: user.id,
       metadata: {
         document_types: documents.map((d: any) => d.type),
         verification_level: kycVerification.verification_level,
         all_required_submitted: allRequiredSubmitted,
-        new_status: updateData.status || kycVerification.status
+        new_status: updateData.status || kycVerification.status,
+        documents_count: newDocuments.length,
+        total_file_size: documents.reduce((sum: number, doc: any) => sum + (doc.file_size || 0), 0)
       }
     });
 

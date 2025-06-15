@@ -1,19 +1,32 @@
 "use client";
 
-import { useState, useTransition } from "react"; // Import useTransition
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import { PrinterIcon, DownloadIcon, SendIcon, CheckCircleIcon, XCircleIcon, PenIcon, TrashIcon, Loader2 } from "lucide-react"; // Added TrashIcon, Loader2
-import { ContractDetail } from "@/app/(dashboard)/dashboard/contracts/[id]/page"; // Import type from server component
-import { deleteContractAction } from "@/app/actions"; // Import delete action
+import { 
+  PrinterIcon, 
+  DownloadIcon, 
+  SendIcon, 
+  CheckCircleIcon, 
+  XCircleIcon, 
+  PenIcon, 
+  TrashIcon, 
+  Loader2,
+  CreditCardIcon,
+  DollarSignIcon,
+  UserCheckIcon,
+  FileSignatureIcon
+} from "lucide-react";
+import { ContractDetail } from "@/app/(dashboard)/dashboard/contracts/[id]/page";
+import { deleteContractAction } from "@/app/actions";
 
 interface ContractDetailClientActionsProps {
   contract: ContractDetail;
 }
 
-// Define status type more broadly based on schema
-type ContractStatus = 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled' | 'disputed';
+// Updated status type based on new workflow
+type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
 export function ContractDetailClientActions({ contract: initialContract }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
@@ -21,36 +34,155 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
   const { toast } = useToast();
   const router = useRouter();
 
-  // TODO: Implement Server Actions for status changes
-  const handleChangeStatus = async (newStatus: ContractStatus) => {
-    console.warn(`Status change to ${newStatus} requires a Server Action.`);
-    // Optimistic UI update (optional)
-    setContract({ ...contract, status: newStatus });
-    toast({
-      title: "Status updated (Locally)",
-      description: `Implement server action to change status to ${newStatus}.`,
-    });
-    // Revalidate path or refetch data after server action completes
+  // Send contract via email
+  const handleSendContract = async () => {
+    const email = prompt("Enter client email address:");
+    if (!email) return;
+    
+    setContract({ ...contract, status: 'pending_signatures' });
+    
+    try {
+      const response = await fetch('/api/contracts/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractId: contract.id,
+          recipientEmail: email
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Contract sent successfully",
+          description: `Contract invitation sent to ${email}`,
+        });
+        // Refresh the page to get updated data
+        window.location.reload();
+      } else {
+        setContract({ ...contract, status: 'draft' }); // Revert status
+        toast({
+          title: "Failed to send contract",
+          description: result.message || "Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      setContract({ ...contract, status: 'draft' }); // Revert status
+      console.error("Failed to send contract:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send contract. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
-  // TODO: Implement Server Action for sending
-  const handleSendContract = async () => {
-     console.warn(`Sending contract requires an API route or Server Action.`);
-     // Placeholder for API call
-     try {
-        // Example: Call an API route (needs to be created)
-        // const response = await fetch('/api/contracts/send', { ... });
-        // const result = await response.json();
-        // if (result.success) {
-        //    handleChangeStatus("pending"); // Assuming 'pending' is the status after sending
-        //    toast({ title: "Contract sent", ... });
-        // } else { ... }
-        handleChangeStatus("pending"); // Optimistic update for demo
-        toast({ title: "Contract sent (Locally)", description: "Implement server action/API route." });
-     } catch (error) {
-        console.error("Failed to send contract:", error);
-        toast({ title: "Error", description: "Failed to send contract.", variant: "destructive" });
-     }
+  // Fund contract via escrow
+  const handleFundContract = async () => {
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          return_url: `${window.location.origin}/dashboard/contracts/${contract.id}`
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.checkout_url) {
+        // Redirect to Stripe checkout
+        window.location.href = result.checkout_url;
+      } else {
+        toast({
+          title: "Failed to initiate funding",
+          description: result.message || "Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fund contract:", error);
+      toast({
+        title: "Error",
+        description: "Failed to initiate funding. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Sign contract
+  const handleSignContract = async () => {
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signature_data: 'digital_signature_placeholder' // In real implementation, this would be from a signature component
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Contract signed successfully",
+          description: "The contract has been digitally signed.",
+        });
+        window.location.reload();
+      } else {
+        toast({
+          title: "Failed to sign contract",
+          description: result.message || "Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Failed to sign contract:", error);
+      toast({
+        title: "Error",
+        description: "Failed to sign contract. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Release payment
+  const handleReleasePayment = async () => {
+    if (!confirm("Are you sure you want to release the payment? This action cannot be undone.")) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/release-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Payment released successfully",
+          description: "The payment has been released to the freelancer.",
+        });
+        window.location.reload();
+      } else {
+        toast({
+          title: "Failed to release payment",
+          description: result.message || "Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Failed to release payment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to release payment. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
  const handleDeleteContract = () => {
@@ -91,6 +223,7 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
 
   return (
     <div className="flex flex-wrap gap-2">
+      {/* Basic Actions */}
       <Button variant="outline" size="sm" onClick={() => window.print()} disabled={isPending}>
         <PrinterIcon className="h-4 w-4 mr-2" />
         Print
@@ -100,84 +233,117 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
         Download
       </Button>
 
-      {/* Conditional Action Buttons based on status */}
+      {/* Workflow Actions */}
       {contract.status === "draft" && (
-        <Button
-          size="sm"
-          onClick={handleSendContract}
-          disabled={isPending}
-        >
-          <SendIcon className="h-4 w-4 mr-2" />
-          Send to Client (Action Needed)
-        </Button>
-      )}
-
-      {contract.status === "pending" && ( // Assuming 'pending' is the status after sending
-        <Button
-          size="sm"
-          onClick={() => handleChangeStatus("signed")}
-          disabled={isPending}
-        >
-          <CheckCircleIcon className="h-4 w-4 mr-2" />
-          Mark as Signed (Action Needed)
-        </Button>
-      )}
-
-      {contract.status === "signed" && (
-        <Button
-          size="sm"
-          onClick={() => handleChangeStatus("completed")}
-          disabled={isPending}
-        >
-          <CheckCircleIcon className="h-4 w-4 mr-2" />
-          Complete Contract (Action Needed)
-        </Button>
-      )}
-
-       {/* Add Cancel Button - needs server action */}
-       {contract.status !== "cancelled" && contract.status !== "completed" && (
-         <Button
-           variant="outline"
-           size="sm"
-           className="text-red-500 hover:text-red-600 disabled:opacity-50"
-           onClick={() => handleChangeStatus("cancelled")}
-           disabled={isPending}
-         >
-           <XCircleIcon className="h-4 w-4 mr-2" />
-           Cancel (Action Needed)
-         </Button>
-       )}
-
-        {/* Add Delete Button */}
-       <Button
-         variant="outline"
-         size="sm"
-         className="text-red-500 hover:text-red-600 disabled:opacity-50"
-         onClick={handleDeleteContract}
-         disabled={isPending} // Disable while any action is pending
-       >
-         {isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-         ) : (
-            <TrashIcon className="h-4 w-4 mr-2" />
-         )}
-         {isPending ? 'Deleting...' : 'Delete'}
-       </Button>
-
-        {/* Link Edit Button to the new edit page if contract is draft */}
-       {contract.status === 'draft' && (
-          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/contracts/${contract.id}/edit`)} disabled={isPending}>
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/dashboard/contracts/${contract.id}/edit`)}
+            disabled={isPending}
+          >
             <PenIcon className="h-4 w-4 mr-2" />
             Edit
           </Button>
-       )}
-       {/* Show disabled edit button if not draft */}
-       {contract.status !== 'draft' && (
-          <Button variant="outline" size="sm" disabled>
-            <PenIcon className="h-4 w-4 mr-2" />
-            Edit (Locked)
+          <Button
+            size="sm"
+            onClick={handleSendContract}
+            disabled={isPending}
+          >
+            <SendIcon className="h-4 w-4 mr-2" />
+            Send Contract
           </Button>
-       )}
+        </>
+      )}
+
+      {contract.status === "pending_signatures" && (
+        <Button
+          size="sm"
+          onClick={handleSignContract}
+          disabled={isPending}
+        >
+          <FileSignatureIcon className="h-4 w-4 mr-2" />
+          Sign Contract
+        </Button>
+      )}
+
+      {contract.status === "pending_funding" && (
+        <Button
+          size="sm"
+          onClick={handleFundContract}
+          disabled={isPending}
+        >
+          <CreditCardIcon className="h-4 w-4 mr-2" />
+          Fund Escrow
+        </Button>
+      )}
+
+      {(contract.status === "active" || contract.status === "pending_completion") && (
+        <Button
+          size="sm"
+          onClick={handleReleasePayment}
+          disabled={isPending}
+        >
+          <DollarSignIcon className="h-4 w-4 mr-2" />
+          Release Payment
+        </Button>
+      )}
+
+      {contract.status === "completed" && (
+        <Button variant="outline" size="sm" disabled>
+          <CheckCircleIcon className="h-4 w-4 mr-2" />
+          Completed
+        </Button>
+      )}
+
+      {/* Edit Button (locked for non-draft) */}
+      {contract.status !== 'draft' && (
+        <Button variant="outline" size="sm" disabled>
+          <PenIcon className="h-4 w-4 mr-2" />
+          Edit (Locked)
+        </Button>
+      )}
+
+      {/* Cancel Button */}
+      {!["cancelled", "completed"].includes(contract.status) && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-red-500 hover:text-red-600"
+          onClick={() => {
+            if (confirm("Are you sure you want to cancel this contract?")) {
+              // TODO: Implement cancel contract API
+              toast({
+                title: "Cancel functionality",
+                description: "Cancel contract functionality not yet implemented.",
+                variant: "destructive"
+              });
+            }
+          }}
+          disabled={isPending}
+        >
+          <XCircleIcon className="h-4 w-4 mr-2" />
+          Cancel
+        </Button>
+      )}
+
+      {/* Delete Button (only for draft contracts) */}
+      {contract.status === 'draft' && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-red-500 hover:text-red-600"
+          onClick={handleDeleteContract}
+          disabled={isPending}
+        >
+          {isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <TrashIcon className="h-4 w-4 mr-2" />
+          )}
+          {isPending ? 'Deleting...' : 'Delete'}
+        </Button>
+      )}
     </div>
   );
 }
