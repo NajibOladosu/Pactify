@@ -10,7 +10,9 @@ import {
   CreditCardIcon, 
   UsersIcon, 
   SettingsIcon,
-  LogOutIcon
+  LogOutIcon,
+  BarChart3Icon,
+  TrendingUpIcon
 } from "lucide-react";
 import { signOutAction } from "@/app/actions";
 
@@ -94,6 +96,18 @@ export function DashboardNav({ userType, displayName, userInitial, currentPlan =
             >
               <UsersIcon className={`mr-3 h-5 w-5 ${isActiveLink('/dashboard/clients') ? 'text-primary-500' : 'text-muted-foreground'}`} />
               {userType === 'client' ? 'Freelancers' : 'Clients'}
+            </Link>
+            
+            <Link 
+              href="/dashboard/progress" 
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                isActiveLink('/dashboard/progress') 
+                  ? 'text-primary-500 bg-primary-500/10 hover:bg-primary-500/15' 
+                  : 'text-foreground hover:bg-accent/50'
+              }`}
+            >
+              <TrendingUpIcon className={`mr-3 h-5 w-5 ${isActiveLink('/dashboard/progress') ? 'text-primary-500' : 'text-muted-foreground'}`} />
+              Progress
             </Link>
           </div>
         </div>

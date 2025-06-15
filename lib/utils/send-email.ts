@@ -23,7 +23,7 @@ function getTransporter() {
       return null;
     }
 
-    transporter = nodemailer.createTransporter({
+    transporter = nodemailer.createTransport({
       host: emailHost,
       port: emailPort,
       secure: emailPort === 465, // true for 465, false for other ports

@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { redirect } from "next/navigation";
-import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon, CheckCircleIcon } from "lucide-react";
+import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon, CheckCircleIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
 import { updateUserProfile } from "@/app/actions"; // Import the server action
+import KycStatusDashboard from "@/components/dashboard/kyc-status-dashboard";
+import EmailNotificationSettings from "@/components/dashboard/email-notification-settings";
 
 export const metadata = {
   title: "Settings | Pactify",
@@ -53,6 +55,13 @@ export default async function SettingsPage() {
     .eq("user_id", user.id)
     .in("status", ["active", "trialing", "past_due"]) // Fetch active, trialing, or past_due subscriptions
     .maybeSingle(); // Use maybeSingle as user might not have a subscription
+
+  // Fetch KYC verification data
+  const { data: kycVerification } = await supabase
+    .from("kyc_verifications")
+    .select("*")
+    .eq("profile_id", user.id)
+    .single();
 
   const userType = profile?.user_type || user.user_metadata?.user_type || "both";
   const displayName = profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0];
@@ -289,6 +298,10 @@ export default async function SettingsPage() {
             <UserIcon className="h-4 w-4" />
             <span>Profile</span>
           </TabsTrigger>
+          <TabsTrigger value="verification" className="flex items-center gap-2">
+            <ShieldCheckIcon className="h-4 w-4" />
+            <span>Verification</span>
+          </TabsTrigger>
           <TabsTrigger value="subscription" className="flex items-center gap-2">
             <CreditCardIcon className="h-4 w-4" />
             <span>Subscription</span>
@@ -393,6 +406,20 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* Verification Tab */}
+        <TabsContent value="verification">
+          <div>
+            <h2 className="text-2xl font-semibold mb-2">Identity Verification</h2>
+            <p className="text-muted-foreground mb-6">
+              Complete your identity verification to unlock all platform features and enable secure payments.
+            </p>
+            <KycStatusDashboard 
+              kycVerification={kycVerification} 
+              profile={profile} 
+            />
+          </div>
+        </TabsContent>
+
         {/* Subscription Tab */}
         <TabsContent value="subscription">
           <Card>
@@ -411,57 +438,7 @@ export default async function SettingsPage() {
 
         {/* Notifications Tab */}
         <TabsContent value="notifications">
-          <Card>
-            <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>
-                Choose how and when you want to be notified.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="font-medium">Email Notifications</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <h4 className="font-medium text-sm">Contract Updates</h4>
-                        <p className="text-xs text-muted-foreground">Notify when a contract is viewed, signed, or updated</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" value="" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-muted after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                      </label>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <h4 className="font-medium text-sm">Payment Notifications</h4>
-                        <p className="text-xs text-muted-foreground">Notify about escrow deposits, releases, and refunds</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" value="" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-muted after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                      </label>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <h4 className="font-medium text-sm">Marketing Communications</h4>
-                        <p className="text-xs text-muted-foreground">Updates about new features, tips, and promotions</p>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" value="" className="sr-only peer" />
-                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-muted after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button>Save Preferences</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <EmailNotificationSettings userId={user.id} />
         </TabsContent>
 
         {/* Security Tab */}

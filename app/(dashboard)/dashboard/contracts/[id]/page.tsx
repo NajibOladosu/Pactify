@@ -12,6 +12,8 @@ import { notFound } from 'next/navigation'; // Use Next.js notFound
 import { Database } from "@/types/supabase"; // Import generated types
 import { ContractDetailClientActions } from "@/components/dashboard/contract-detail-client-actions"; // Client component for actions
 import TiptapEditor from '@/components/editor/tiptap-editor'; // Import the Tiptap editor
+import DigitalSignaturePad from '@/components/contracts/digital-signature-pad';
+import PaymentReleaseManager from '@/components/contracts/payment-release-manager';
 
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
@@ -49,6 +51,13 @@ export default async function ContractDetailPage({ params }: { params: { id: str
     .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
     .maybeSingle();
 
+  // Fetch milestones if it's a milestone contract
+  const { data: milestones } = await supabase
+    .from("contract_milestones")
+    .select("*")
+    .eq("contract_id", params.id)
+    .order("order_index", { ascending: true });
+
   if (fetchError) {
     console.error(`Error fetching contract ${params.id}:`, fetchError);
     notFound();
@@ -64,6 +73,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   // Cast to the specific type for easier access
   const contractDetail = contract as ContractDetail;
+
+  // Determine user role for signature workflow
+  let userRole: 'client' | 'freelancer' | 'creator' = 'creator';
+  if (contractDetail.client_id === user.id) {
+    userRole = 'client';
+  } else if (contractDetail.freelancer_id === user.id) {
+    userRole = 'freelancer';
+  }
 
   // Default content structure if contract.content is null/invalid
   const editorContent = contractDetail.content || { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Contract content is empty or invalid." }] }] };
@@ -171,6 +188,43 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               </div>
             </CardContent>
           </Card>
+
+          {/* Digital Signature Section */}
+          {(contractDetail.status === 'draft' || contractDetail.status === 'pending_signatures') && (
+            <DigitalSignaturePad
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractTitle={contractDetail.title}
+              isSigningEnabled={contractDetail.status === 'draft' || contractDetail.status === 'pending_signatures'}
+              onSignatureComplete={() => {
+                // Refresh the page to update status
+                window.location.reload();
+              }}
+            />
+          )}
+
+          {/* Payment Release Section */}
+          {(['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status)) && (
+            <PaymentReleaseManager
+              contractId={contractDetail.id}
+              userId={user.id}
+              userRole={userRole}
+              contractType={contractDetail.type as 'fixed' | 'milestone' | 'hourly'}
+              contractStatus={contractDetail.status}
+              milestones={milestones?.map(m => ({
+                id: m.id,
+                title: m.title,
+                amount: m.amount,
+                status: m.status as any,
+                due_date: m.due_date
+              })) || []}
+              onPaymentReleased={() => {
+                // Refresh the page to update status
+                window.location.reload();
+              }}
+            />
+          )}
         </div>
 
         {/* Sidebar Column */}
