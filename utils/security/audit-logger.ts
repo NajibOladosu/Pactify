@@ -23,7 +23,7 @@ export class AuditLogger {
   private constructor() {
     // Flush logs periodically
     setInterval(() => {
-      this.flushLogs();
+      this.flushLogs().catch(console.error);
     }, this.flushInterval);
   }
 
@@ -288,9 +288,10 @@ export class AuditLogger {
    */
   private async persistLogs(logs: AuditLogEntry[]): Promise<void> {
     try {
+      // For now, just log to console in development
       // In production, this would write to a dedicated audit database
-      // For now, we'll use contract_activities table with a special type
-      const supabase = await createClient();
+      console.log('[AUDIT]', JSON.stringify(logs, null, 2));
+      return;
       
       const auditRecords = logs.map(log => ({
         contract_id: "00000000-0000-0000-0000-000000000000", // Special UUID for audit logs

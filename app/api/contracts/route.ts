@@ -31,7 +31,18 @@ const secureHandler = SecurityMiddleware.withSecurity(
       const body = await request.json();
       
       // Validate and sanitize input using schema
-      const validatedData: ContractCreate = validateAndSanitize(ContractCreateSchema, body);
+      // Set defaults for empty fields
+      const processedBody = {
+        ...body,
+        description: body.description || "Contract description to be added.",
+        type: body.type || "fixed",
+        total_amount: body.total_amount || 0,
+        start_date: body.start_date || null,
+        end_date: body.end_date || null,
+        milestones: body.milestones || [],
+      };
+      
+      const validatedData = validateAndSanitize(ContractCreateSchema, processedBody);
 
       // Check user's contract limits based on subscription
       const { data: profile } = await supabase

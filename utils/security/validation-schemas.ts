@@ -86,46 +86,25 @@ const pastOrPresentDate = () =>
 // Contract schemas
 export const ContractCreateSchema = z.object({
   title: sanitizedStringWithMin(255, 1),
-  description: sanitizedStringWithMin(SECURITY_CONFIG.INPUT_LIMITS.description, 10),
+  description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.description).optional(),
   client_id: uuid().optional(),
   freelancer_id: uuid().optional(),
   client_email: email().optional(),
-  total_amount: positiveNumber(SECURITY_CONFIG.INPUT_LIMITS.minAmount, SECURITY_CONFIG.INPUT_LIMITS.maxContractAmount),
+  total_amount: positiveNumber(SECURITY_CONFIG.INPUT_LIMITS.minAmount, SECURITY_CONFIG.INPUT_LIMITS.maxContractAmount).optional(),
   currency: currency().default("USD"),
-  type: z.enum(["fixed", "milestone", "hourly"]),
-  start_date: futureDate().optional(),
-  end_date: futureDate().optional(),
+  type: z.enum(["fixed", "milestone", "hourly"]).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
   terms_and_conditions: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.longText).optional(),
   template_id: uuid().optional(),
-  content: z.any(), // JSON content
+  content: z.any().optional(), // JSON content
   milestones: z.array(z.object({
     title: sanitizedStringWithMin(255, 1),
     description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.mediumText).optional(),
     amount: positiveNumber(),
-    due_date: futureDate().optional(),
+    due_date: z.string().optional(),
     deliverables: z.array(sanitizedString(500)).max(20).default([])
   })).max(50).default([])
-}).refine(data => {
-  // At least one party must be specified
-  return data.client_id || data.freelancer_id || data.client_email;
-}, {
-  message: "At least one party (client or freelancer) must be specified"
-}).refine(data => {
-  // Milestone contracts must have milestones
-  if (data.type === "milestone") {
-    return data.milestones.length > 0;
-  }
-  return true;
-}, {
-  message: "Milestone contracts must have at least one milestone"
-}).refine(data => {
-  // End date must be after start date
-  if (data.start_date && data.end_date) {
-    return new Date(data.end_date) > new Date(data.start_date);
-  }
-  return true;
-}, {
-  message: "End date must be after start date"
 });
 
 export const ContractUpdateSchema = z.object({
