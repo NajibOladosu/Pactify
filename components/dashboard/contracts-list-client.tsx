@@ -8,7 +8,7 @@ import Link from "next/link";
 import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, CheckCircleIcon, ClockIcon, XCircleIcon, Loader2 } from "lucide-react"; // Import Loader2
 import { useToast } from "@/components/ui/use-toast";
 import { ContractWithTemplate } from "@/app/(dashboard)/dashboard/contracts/page"; // Import the type from the server component
-import { deleteContractAction } from "@/app/actions"; // Import the delete action
+import { deleteContractAction, sendContractAction } from "@/app/actions"; // Import the delete and send actions
 
 interface ContractsListClientProps {
   initialContracts: ContractWithTemplate[];
@@ -23,6 +23,7 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
   const [statusFilter, setStatusFilter] = useState<ContractStatus | null>(null);
   const [isPending, startTransition] = useTransition(); // Add transition state
   const [deletingId, setDeletingId] = useState<string | null>(null); // Track which contract is being deleted
+  const [sendingId, setSendingId] = useState<string | null>(null); // Track which contract is being sent
   const { toast } = useToast();
 
   // Update contracts if initialContracts change (e.g., after revalidation)
@@ -82,18 +83,33 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
     });
   };
 
-  // TODO: Implement handleChangeStatus using a Server Action (Placeholder)
-  const handleChangeStatus = async (id: string, newStatus: ContractStatus) => {
-     // Placeholder: Update locally for now, needs server action
-    console.warn("Status change functionality requires a Server Action.");
-    const updatedContracts = contracts.map(contract =>
-      contract.id === id ? { ...contract, status: newStatus } : contract
-    );
-    setContracts(updatedContracts);
-    toast({
-      title: "Status updated (Locally)",
-      description: `Implement server action to change status to ${newStatus}.`,
-      variant: "default",
+  const handleSendContract = (id: string) => {
+    if (isPending) return; // Prevent multiple sends at once
+    setSendingId(id); // Set loading state for this specific button
+
+    startTransition(async () => {
+      const result = await sendContractAction({ contractId: id });
+      setSendingId(null); // Clear loading state after action completes
+
+      if (result.error) {
+        toast({
+          title: "Error Sending Contract",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else if (result.success) {
+        toast({
+          title: "Contract Sent",
+          description: result.message || "The contract has been sent successfully.",
+        });
+        // No need to manually update state, revalidatePath in action handles it
+      } else {
+         toast({
+          title: "Error",
+          description: "An unexpected error occurred while sending.",
+          variant: "destructive",
+        });
+      }
     });
   };
 
@@ -198,10 +214,15 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                           variant="outline"
                           size="sm"
                           className="text-blue-500 border-blue-200 hover:border-blue-300"
-                          onClick={() => handleChangeStatus(contract.id, "pending")} // Change to pending?
+                          onClick={() => handleSendContract(contract.id)}
+                          disabled={isPending && sendingId === contract.id}
                         >
-                          <ClockIcon className="mr-1 h-4 w-4" />
-                          Send (Action Needed)
+                          {isPending && sendingId === contract.id ? (
+                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          ) : (
+                            <ClockIcon className="mr-1 h-4 w-4" />
+                          )}
+                          {isPending && sendingId === contract.id ? 'Sending...' : 'Send Contract'}
                         </Button>
                       )}
 

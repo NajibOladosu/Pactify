@@ -10,7 +10,8 @@ export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & 
   contract_templates: Pick<Database['public']['Tables']['contract_templates']['Row'], 'name'> | null;
 };
 
-export default async function ContractEditPage({ params }: { params: { id: string } }) {
+export default async function ContractEditPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const supabase = await createClient();
 
   const {
@@ -30,12 +31,12 @@ export default async function ContractEditPage({ params }: { params: { id: strin
       *,
       contract_templates ( name )
     `)
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("creator_id", user.id) // Ensure user owns the contract
     .maybeSingle();
 
   if (fetchError) {
-    console.error(`Error fetching contract ${params.id} for edit:`, fetchError);
+    console.error(`Error fetching contract ${id} for edit:`, fetchError);
     notFound();
   }
 
@@ -46,8 +47,8 @@ export default async function ContractEditPage({ params }: { params: { id: strin
   // Ensure only 'draft' contracts can be edited (or adjust logic as needed)
   if (contract.status !== 'draft') {
       // Redirect to the detail page if not editable
-      console.warn(`Contract ${params.id} is not in draft status (${contract.status}) and cannot be edited.`);
-      return redirect(`/dashboard/contracts/${params.id}`);
+      console.warn(`Contract ${id} is not in draft status (${contract.status}) and cannot be edited.`);
+      return redirect(`/dashboard/contracts/${id}`);
   }
 
   const contractDetail = contract as ContractDetail;

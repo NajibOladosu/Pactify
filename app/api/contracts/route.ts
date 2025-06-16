@@ -70,14 +70,18 @@ const secureHandler = SecurityMiddleware.withSecurity(
       // Create contract data using validated input
       const contractData: ContractInsert = {
         title: validatedData.title,
-        description: validatedData.description,
+        description: validatedData.description || "Contract description to be added.",
         creator_id: user.id,
         client_id: validatedData.client_id || null,
         freelancer_id: validatedData.freelancer_id || null,
         template_id: validatedData.template_id || null,
-        content: validatedData.content || null,
-        type: validatedData.type as "fixed" | "milestone" | "hourly",
-        total_amount: validatedData.total_amount,
+        content: validatedData.content || {
+          template: "default",
+          created_with_wizard: true,
+          sections: []
+        },
+        type: (validatedData.type || "fixed") as "fixed" | "milestone" | "hourly",
+        total_amount: validatedData.total_amount || 0,
         currency: validatedData.currency,
         start_date: validatedData.start_date || null,
         end_date: validatedData.end_date || null,
@@ -111,7 +115,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
       }
 
       // Create milestones if this is a milestone contract
-      if (validatedData.type === "milestone" && validatedData.milestones.length > 0) {
+      if (validatedData.type === "milestone" && validatedData.milestones && validatedData.milestones.length > 0) {
         const milestonesData = validatedData.milestones.map((milestone, index) => ({
           contract_id: contract.id,
           title: milestone.title,
@@ -157,7 +161,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
           contract_type: validatedData.type,
           total_amount: validatedData.total_amount,
           currency: validatedData.currency,
-          milestones_count: validatedData.milestones.length
+          milestones_count: validatedData.milestones ? validatedData.milestones.length : 0
         }
       );
 

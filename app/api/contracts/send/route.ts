@@ -12,7 +12,7 @@ import { z } from 'zod';
 // Schema for contract sending
 const ContractSendSchema = z.object({
   contractId: z.string().uuid(),
-  recipientEmail: z.string().email().toLowerCase()
+  recipientEmail: z.string().email().toLowerCase().optional()
 });
 
 const secureHandler = SecurityMiddleware.withSecurity(
@@ -83,6 +83,16 @@ const secureHandler = SecurityMiddleware.withSecurity(
         );
       }
 
+      // Determine recipient email - use provided email or contract's client email
+      const recipientEmail = validatedData.recipientEmail || contract.client_email;
+      
+      if (!recipientEmail) {
+        return NextResponse.json(
+          { error: "NO_RECIPIENT", message: "No recipient email found. Please specify client email in contract or provide recipient email." },
+          { status: 400 }
+        );
+      }
+
       // Get sender information
       const senderName = contract.profiles?.display_name || user.email?.split('@')[0] || 'Someone';
       
@@ -91,7 +101,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
         contract.id,
         contract.title,
         senderName,
-        validatedData.recipientEmail
+        recipientEmail
       );
       
       // Send the email
@@ -104,7 +114,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
             .from('contracts')
             .update({ 
               status: 'pending_signatures',
-              client_email: validatedData.recipientEmail 
+              client_email: recipientEmail 
             })
             .eq('id', contract.id);
         }

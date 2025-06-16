@@ -484,6 +484,102 @@ export const updateContractContentAction = async (formData: {
 };
 
 // Action to delete a contract
+export const sendContractAction = async (formData: { contractId: string; recipientEmail?: string }) => {
+  const supabase = await createClient();
+
+  // Get current user
+  const {
+    data: { user },
+    error: getUserError,
+  } = await supabase.auth.getUser();
+
+  if (getUserError || !user) {
+    console.error("Send Contract Error: User not found.", getUserError);
+    return { error: "Authentication required" };
+  }
+
+  try {
+    // Get contract details and verify ownership/permissions
+    const { data: contract, error: contractError } = await supabase
+      .from('contracts')
+      .select(`
+        id, title, status, creator_id, client_id, freelancer_id, client_email,
+        profiles!contracts_creator_id_fkey(display_name, email)
+      `)
+      .eq('id', formData.contractId)
+      .single();
+
+    if (contractError || !contract) {
+      return { error: "Contract not found" };
+    }
+
+    // Verify user can send this contract (creator or client)
+    if (contract.creator_id !== user.id && contract.client_id !== user.id) {
+      return { error: "You don't have permission to send this contract" };
+    }
+
+    // Check if contract is in a sendable state
+    if (!['draft', 'pending_signatures'].includes(contract.status)) {
+      return { error: "Contract cannot be sent in its current status" };
+    }
+
+    // Determine recipient email - use provided email or contract's client email
+    const recipientEmail = formData.recipientEmail || contract.client_email;
+    
+    if (!recipientEmail) {
+      return { error: "No recipient email found. Please specify client email in contract." };
+    }
+
+    // Get sender information
+    const profiles = Array.isArray(contract.profiles) ? contract.profiles[0] : contract.profiles;
+    const senderName = profiles?.display_name || user.email?.split('@')[0] || 'Someone';
+    
+    // Import email functions
+    const { sendEmail, getContractInvitationEmail } = await import('@/lib/utils/send-email');
+    
+    // Generate the email options
+    const emailOptions = getContractInvitationEmail(
+      contract.id,
+      contract.title,
+      senderName,
+      recipientEmail
+    );
+    
+    // Send the email
+    const emailSent = await sendEmail(emailOptions);
+    
+    if (emailSent) {
+      // Update contract status if it was draft
+      if (contract.status === 'draft') {
+        await supabase
+          .from('contracts')
+          .update({ 
+            status: 'pending_signatures',
+            client_email: recipientEmail 
+          })
+          .eq('id', contract.id);
+      }
+
+      // Log contract activity
+      await supabase.from("contract_activities").insert({
+        contract_id: contract.id,
+        user_id: user.id,
+        activity_type: "contract_sent",
+        description: `Contract sent to ${recipientEmail}`,
+        metadata: { recipient_email: recipientEmail }
+      });
+
+      revalidatePath('/dashboard/contracts');
+      return { success: true, message: "Contract sent successfully!" };
+    } else {
+      return { error: "Failed to send email. Please try again." };
+    }
+  } catch (error) {
+    console.error('Error sending contract:', error);
+    return { error: 'An unexpected error occurred while sending the contract' };
+  }
+};
+
 export const deleteContractAction = async (formData: { contractId: string }) => {
   const supabase = await createClient();
 

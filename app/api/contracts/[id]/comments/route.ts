@@ -5,11 +5,11 @@ import { auditLogger } from "@/utils/security/audit-logger";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: contractId } = await params;
     const supabase = await createClient();
-    const contractId = params.id;
 
     // Get current user
     const {

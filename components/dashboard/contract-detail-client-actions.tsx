@@ -19,7 +19,7 @@ import {
   FileSignatureIcon
 } from "lucide-react";
 import { ContractDetail } from "@/app/(dashboard)/dashboard/contracts/[id]/page";
-import { deleteContractAction } from "@/app/actions";
+import { deleteContractAction, sendContractAction } from "@/app/actions";
 
 interface ContractDetailClientActionsProps {
   contract: ContractDetail;
@@ -35,48 +35,34 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
   const router = useRouter();
 
   // Send contract via email
-  const handleSendContract = async () => {
-    const email = prompt("Enter client email address:");
-    if (!email) return;
-    
-    setContract({ ...contract, status: 'pending_signatures' });
-    
-    try {
-      const response = await fetch('/api/contracts/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractId: contract.id,
-          recipientEmail: email
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        toast({
-          title: "Contract sent successfully",
-          description: `Contract invitation sent to ${email}`,
-        });
-        // Refresh the page to get updated data
-        window.location.reload();
-      } else {
-        setContract({ ...contract, status: 'draft' }); // Revert status
-        toast({
-          title: "Failed to send contract",
-          description: result.message || "Please try again.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      setContract({ ...contract, status: 'draft' }); // Revert status
-      console.error("Failed to send contract:", error);
+  const handleSendContract = () => {
+    if (!contract.client_email) {
       toast({
-        title: "Error",
-        description: "Failed to send contract. Please try again.",
+        title: "No client email",
+        description: "Please add a client email to the contract before sending.",
         variant: "destructive"
       });
+      return;
     }
+
+    startTransition(async () => {
+      const result = await sendContractAction({ contractId: contract.id });
+
+      if (result.error) {
+        toast({
+          title: "Error Sending Contract",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else if (result.success) {
+        toast({
+          title: "Contract Sent",
+          description: result.message || `Contract sent to ${contract.client_email}`,
+        });
+        // Refresh the page to get updated data
+        router.refresh();
+      }
+    });
   };
 
   // Fund contract via escrow

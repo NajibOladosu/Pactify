@@ -30,7 +30,8 @@ type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'acti
 
 
 // Fetch data server-side
-export default async function ContractDetailPage({ params }: { params: { id: string } }) {
+export default async function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const supabase = await createClient();
 
   const {
@@ -50,7 +51,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       *,
       contract_templates ( name )
     `)
-    .eq("id", params.id)
+    .eq("id", id)
     .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
     .maybeSingle();
 
@@ -58,11 +59,11 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const { data: milestones } = await supabase
     .from("contract_milestones")
     .select("*")
-    .eq("contract_id", params.id)
+    .eq("contract_id", id)
     .order("order_index", { ascending: true });
 
   if (fetchError) {
-    console.error(`Error fetching contract ${params.id}:`, fetchError);
+    console.error(`Error fetching contract ${id}:`, fetchError);
     notFound();
   }
 
@@ -200,10 +201,6 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               userRole={userRole}
               contractTitle={contractDetail.title}
               isSigningEnabled={contractDetail.status === 'draft' || contractDetail.status === 'pending_signatures'}
-              onSignatureComplete={() => {
-                // Refresh the page to update status
-                window.location.reload();
-              }}
             />
           )}
 
@@ -263,10 +260,6 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               totalAmount={contractDetail.total_amount || 0}
               currency={contractDetail.currency || 'USD'}
               escrowStatus="held" // TODO: Fetch actual escrow status
-              onStatusChange={() => {
-                // Refresh the page to update contract status
-                window.location.reload();
-              }}
             />
           )}
         </div>

@@ -3,9 +3,10 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: contractId } = await params;
     const supabase = await createClient();
     
     // Get authenticated user
@@ -16,8 +17,6 @@ export async function POST(
         { status: 401 }
       );
     }
-
-    const contractId = params.id;
     const body = await request.json();
     const { signature_data } = body;
 
@@ -207,9 +206,10 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: contractId } = await params;
     const supabase = await createClient();
     
     // Get authenticated user
@@ -220,8 +220,6 @@ export async function GET(
         { status: 401 }
       );
     }
-
-    const contractId = params.id;
 
     // Get signature status for the contract
     const { data: signatures, error } = await supabase
