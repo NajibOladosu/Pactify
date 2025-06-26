@@ -485,6 +485,10 @@ export const updateContractContentAction = async (formData: {
 
 // Action to delete a contract
 export const sendContractAction = async (formData: { contractId: string; recipientEmail?: string }) => {
+  console.log("=== SEND CONTRACT ACTION DEBUG ===");
+  console.log("Form data:", formData);
+  console.log("Contract ID:", formData.contractId);
+  
   const supabase = await createClient();
 
   // Get current user
@@ -498,20 +502,25 @@ export const sendContractAction = async (formData: { contractId: string; recipie
     return { error: "Authentication required" };
   }
 
+  console.log("User authenticated:", user.id);
+
   try {
     // Get contract details and verify ownership/permissions
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
-      .select(`
-        id, title, status, creator_id, client_id, freelancer_id, client_email,
-        profiles!contracts_creator_id_fkey(display_name, email)
-      `)
+      .select('id, title, status, creator_id, client_id, freelancer_id, client_email')
       .eq('id', formData.contractId)
       .single();
 
+    console.log("Contract query result:", { data: contract, error: contractError });
+    
     if (contractError || !contract) {
+      console.error("Contract lookup failed:", contractError);
+      console.log("Searched for contract ID:", formData.contractId);
       return { error: "Contract not found" };
     }
+
+    console.log("Contract found successfully:", contract.id);
 
     // Verify user can send this contract (creator or client)
     if (contract.creator_id !== user.id && contract.client_id !== user.id) {
@@ -530,9 +539,14 @@ export const sendContractAction = async (formData: { contractId: string; recipie
       return { error: "No recipient email found. Please specify client email in contract." };
     }
 
-    // Get sender information
-    const profiles = Array.isArray(contract.profiles) ? contract.profiles[0] : contract.profiles;
-    const senderName = profiles?.display_name || user.email?.split('@')[0] || 'Someone';
+    // Get sender information from the creator's profile
+    const { data: creatorProfile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', contract.creator_id)
+      .single();
+
+    const senderName = creatorProfile?.display_name || user.email?.split('@')[0] || 'Someone';
     
     // Import email functions
     const { sendEmail, getContractInvitationEmail } = await import('@/lib/utils/send-email');
