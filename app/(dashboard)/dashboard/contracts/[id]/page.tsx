@@ -21,8 +21,8 @@ import RefundCancellationManager from '@/components/contracts/refund-cancellatio
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
   contract_templates: Pick<Database['public']['Tables']['contract_templates']['Row'], 'name'> | null;
-  // TODO: Add contract_parties join later
-  // contract_parties: Array<Database['public']['Tables']['contract_parties']['Row'] & { profiles: Pick<Database['public']['Tables']['profiles']['Row'], 'display_name' | 'email'> | null }> | null; // Example join
+  client_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type' | 'email'> | null;
+  freelancer_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type' | 'email'> | null;
 };
 
 // Updated status type based on new workflow
@@ -74,9 +74,53 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   // Access is already controlled by the query filter above (creator_id = user.id)
   // If we reach here, the user has proper access to view this contract
 
+  // Fetch client profile if client_id exists
+  let clientProfile = null;
+  if (contract.client_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .eq('id', contract.client_id)
+      .single();
+    
+    if (profile) {
+      clientProfile = profile;
+    }
+  }
+
+  // If no client profile found but we have client_email, try to find by email
+  if (!clientProfile && contract.client_email) {
+    const { data: emailProfile } = await supabase
+      .from('profiles')
+      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .eq('email', contract.client_email)
+      .single();
+    
+    if (emailProfile) {
+      clientProfile = emailProfile;
+    }
+  }
+
+  // Fetch freelancer profile if freelancer_id exists
+  let freelancerProfile = null;
+  if (contract.freelancer_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .eq('id', contract.freelancer_id)
+      .single();
+    
+    if (profile) {
+      freelancerProfile = profile;
+    }
+  }
 
   // Cast to the specific type for easier access
-  const contractDetail = contract as ContractDetail;
+  const contractDetail = {
+    ...contract,
+    client_profile: clientProfile,
+    freelancer_profile: freelancerProfile
+  } as ContractDetail;
 
   // Determine user role for signature workflow
   let userRole: 'client' | 'freelancer' | 'creator' = 'creator';
@@ -272,12 +316,96 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* TODO: Fetch and display client info from contract_parties table */}
+                {/* Client Information */}
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-1">Client Info (Placeholder)</h3>
-                  <p className="text-xs text-muted-foreground">Fetch client details from contract_parties table.</p>
-                  {/* Example: Display client name/email if fetched */}
-                  {/* {contractDetail.contract_parties?.find(p => p.role === 'client')?.profiles?.display_name || 'Client details pending'} */}
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Client Details</h3>
+                  {contractDetail.client_profile ? (
+                    <div className="space-y-3">
+                      {/* Client Name and Avatar */}
+                      <div className="flex items-center space-x-3">
+                        {contractDetail.client_profile.avatar_url ? (
+                          <img
+                            src={contractDetail.client_profile.avatar_url}
+                            alt={contractDetail.client_profile.display_name || 'Client'}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {(contractDetail.client_profile.display_name || contractDetail.client_profile.email || 'C').charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {contractDetail.client_profile.display_name || 'Client User'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {contractDetail.client_profile.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Company Information */}
+                      {contractDetail.client_profile.company_name && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Company</p>
+                          <p className="text-sm">{contractDetail.client_profile.company_name}</p>
+                        </div>
+                      )}
+
+                      {/* Website */}
+                      {contractDetail.client_profile.website && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Website</p>
+                          <a 
+                            href={contractDetail.client_profile.website.startsWith('http') ? contractDetail.client_profile.website : `https://${contractDetail.client_profile.website}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline truncate block"
+                          >
+                            {contractDetail.client_profile.website}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* User Type */}
+                      <div>
+                        <p className="text-xs text-muted-foreground">Account Type</p>
+                        <Badge variant="outline" className="text-xs">
+                          {contractDetail.client_profile.user_type === 'both' ? 'Client & Freelancer' : 
+                           contractDetail.client_profile.user_type === 'client' ? 'Client' : 
+                           contractDetail.client_profile.user_type || 'User'}
+                        </Badge>
+                      </div>
+                    </div>
+                  ) : contractDetail.client_email ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {contractDetail.client_email.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">Client (No Account)</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {contractDetail.client_email}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Client will need to create an account to access the contract.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-muted-foreground">No client assigned</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Add a client email to send this contract.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -289,6 +417,88 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                   </div>
                 </div>
                 {/* Actions are handled by the Client Component */}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Freelancer Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Freelancer Information */}
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Freelancer Details</h3>
+                  {contractDetail.freelancer_profile ? (
+                    <div className="space-y-3">
+                      {/* Freelancer Name and Avatar */}
+                      <div className="flex items-center space-x-3">
+                        {contractDetail.freelancer_profile.avatar_url ? (
+                          <img
+                            src={contractDetail.freelancer_profile.avatar_url}
+                            alt={contractDetail.freelancer_profile.display_name || 'Freelancer'}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {(contractDetail.freelancer_profile.display_name || contractDetail.freelancer_profile.email || 'F').charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {contractDetail.freelancer_profile.display_name || 'Freelancer User'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {contractDetail.freelancer_profile.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Company Information */}
+                      {contractDetail.freelancer_profile.company_name && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Company</p>
+                          <p className="text-sm">{contractDetail.freelancer_profile.company_name}</p>
+                        </div>
+                      )}
+
+                      {/* Website */}
+                      {contractDetail.freelancer_profile.website && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Website</p>
+                          <a 
+                            href={contractDetail.freelancer_profile.website.startsWith('http') ? contractDetail.freelancer_profile.website : `https://${contractDetail.freelancer_profile.website}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline truncate block"
+                          >
+                            {contractDetail.freelancer_profile.website}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* User Type */}
+                      <div>
+                        <p className="text-xs text-muted-foreground">Account Type</p>
+                        <Badge variant="outline" className="text-xs">
+                          {contractDetail.freelancer_profile.user_type === 'both' ? 'Client & Freelancer' : 
+                           contractDetail.freelancer_profile.user_type === 'freelancer' ? 'Freelancer' : 
+                           contractDetail.freelancer_profile.user_type || 'User'}
+                        </Badge>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-muted-foreground">No freelancer assigned</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Freelancer will be assigned when contract is accepted.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
