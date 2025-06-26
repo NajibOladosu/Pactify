@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
       milestoneTitle: context?.milestoneTitle,
       dueDate: context?.dueDate,
       recipientName: recipientEmail.split('@')[0],
+      recipientEmail: recipientEmail,
       senderName: senderProfile?.display_name || senderProfile?.email?.split('@')[0] || 'Pactify User',
       additionalInfo: context?.additionalInfo || {}
     };

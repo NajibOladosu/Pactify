@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { 
@@ -16,7 +17,10 @@ import {
   CreditCardIcon,
   DollarSignIcon,
   UserCheckIcon,
-  FileSignatureIcon
+  FileSignatureIcon,
+  MailIcon,
+  EditIcon,
+  SaveIcon
 } from "lucide-react";
 import { ContractDetail } from "@/app/(dashboard)/dashboard/contracts/[id]/page";
 import { deleteContractAction, sendContractAction } from "@/app/actions";
@@ -31,8 +35,48 @@ type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'acti
 export function ContractDetailClientActions({ contract: initialContract }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
   const [isPending, startTransition] = useTransition(); // Add transition state
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [clientEmail, setClientEmail] = useState(contract.client_email || '');
   const { toast } = useToast();
   const router = useRouter();
+
+  // Update client email
+  const handleUpdateClientEmail = async () => {
+    if (!clientEmail.trim()) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_email: clientEmail })
+      });
+
+      if (response.ok) {
+        setContract(prev => ({ ...prev, client_email: clientEmail }));
+        setIsEditingEmail(false);
+        toast({
+          title: "Email Updated",
+          description: "Client email has been updated successfully.",
+        });
+        router.refresh();
+      } else {
+        throw new Error('Failed to update email');
+      }
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update client email. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   // Send contract via email
   const handleSendContract = () => {
@@ -218,6 +262,41 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
         <DownloadIcon className="h-4 w-4 mr-2" />
         Download
       </Button>
+
+      {/* Client Email Management for Draft Contracts */}
+      {contract.status === "draft" && (
+        <div className="w-full flex items-center gap-2 mt-2 mb-2">
+          <MailIcon className="h-4 w-4 text-muted-foreground" />
+          {isEditingEmail ? (
+            <>
+              <Input
+                type="email"
+                value={clientEmail}
+                onChange={(e) => setClientEmail(e.target.value)}
+                placeholder="client@company.com"
+                className="flex-1 max-w-xs"
+              />
+              <Button size="sm" onClick={handleUpdateClientEmail} disabled={isPending}>
+                <SaveIcon className="h-4 w-4 mr-1" />
+                Save
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setIsEditingEmail(false)} disabled={isPending}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-muted-foreground">
+                Client: {contract.client_email || 'No email set'}
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setIsEditingEmail(true)} disabled={isPending}>
+                <EditIcon className="h-4 w-4 mr-1" />
+                {contract.client_email ? 'Edit' : 'Add'} Email
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Workflow Actions */}
       {contract.status === "draft" && (

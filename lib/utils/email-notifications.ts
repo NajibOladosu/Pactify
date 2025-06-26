@@ -17,6 +17,7 @@ export interface NotificationContext {
   milestoneTitle?: string;
   dueDate?: string;
   recipientName?: string;
+  recipientEmail?: string;
   senderName?: string;
   additionalInfo?: Record<string, any>;
 }
@@ -421,7 +422,7 @@ export class EmailNotificationService {
   static async sendContractInvitation(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.contractInvitation(ctx);
     return await sendEmail({
-      to: ctx.recipientName || ctx.clientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -429,7 +430,7 @@ export class EmailNotificationService {
   static async sendContractSigned(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.contractSigned(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -437,7 +438,7 @@ export class EmailNotificationService {
   static async sendPaymentFunded(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.paymentFunded(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -445,7 +446,7 @@ export class EmailNotificationService {
   static async sendMilestoneSubmitted(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.milestoneSubmitted(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -453,7 +454,7 @@ export class EmailNotificationService {
   static async sendPaymentReleased(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.paymentReleased(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -461,7 +462,7 @@ export class EmailNotificationService {
   static async sendContractCompleted(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.contractCompleted(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -469,7 +470,7 @@ export class EmailNotificationService {
   static async sendDeadlineReminder(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.deadlineReminder(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }
@@ -477,7 +478,7 @@ export class EmailNotificationService {
   static async sendDisputeOpened(ctx: NotificationContext): Promise<boolean> {
     const template = EmailTemplates.disputeOpened(ctx);
     return await sendEmail({
-      to: ctx.recipientName || '',
+      to: ctx.recipientEmail || '',
       ...template
     });
   }

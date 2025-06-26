@@ -38,6 +38,19 @@ function getTransporter() {
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
+    // Validate email recipient
+    if (!options.to || options.to.trim() === '') {
+      console.error('Email sending failed: No recipient email provided');
+      return false;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(options.to)) {
+      console.error('Email sending failed: Invalid recipient email format:', options.to);
+      return false;
+    }
+
     const emailTransporter = getTransporter();
     
     if (!emailTransporter) {

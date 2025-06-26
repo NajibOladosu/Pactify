@@ -94,7 +94,8 @@ const secureHandler = SecurityMiddleware.withSecurity(
       }
 
       // Get sender information
-      const senderName = contract.profiles?.display_name || user.email?.split('@')[0] || 'Someone';
+      const profiles = Array.isArray(contract.profiles) ? contract.profiles[0] : contract.profiles;
+      const senderName = profiles?.display_name || user.email?.split('@')[0] || 'Someone';
       
       // Generate the email options
       const emailOptions = getContractInvitationEmail(
