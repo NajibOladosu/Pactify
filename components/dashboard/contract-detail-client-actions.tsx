@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { 
@@ -17,10 +16,7 @@ import {
   CreditCardIcon,
   DollarSignIcon,
   UserCheckIcon,
-  FileSignatureIcon,
-  MailIcon,
-  EditIcon,
-  SaveIcon
+  FileSignatureIcon
 } from "lucide-react";
 import { ContractDetail } from "@/app/(dashboard)/dashboard/contracts/[id]/page";
 import { deleteContractAction, sendContractAction } from "@/app/actions";
@@ -35,55 +31,15 @@ type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'acti
 export function ContractDetailClientActions({ contract: initialContract }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
   const [isPending, startTransition] = useTransition(); // Add transition state
-  const [isEditingEmail, setIsEditingEmail] = useState(false);
-  const [clientEmail, setClientEmail] = useState(contract.client_email || '');
   const { toast } = useToast();
   const router = useRouter();
-
-  // Update client email
-  const handleUpdateClientEmail = async () => {
-    if (!clientEmail.trim()) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/contracts/${contract.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_email: clientEmail })
-      });
-
-      if (response.ok) {
-        setContract(prev => ({ ...prev, client_email: clientEmail }));
-        setIsEditingEmail(false);
-        toast({
-          title: "Email Updated",
-          description: "Client email has been updated successfully.",
-        });
-        router.refresh();
-      } else {
-        throw new Error('Failed to update email');
-      }
-    } catch (error) {
-      toast({
-        title: "Update Failed",
-        description: "Failed to update client email. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
 
   // Send contract via email
   const handleSendContract = () => {
     if (!contract.client_email) {
       toast({
         title: "No client email",
-        description: "Please add a client email to the contract before sending.",
+        description: "Contract is missing client email. This should not happen.",
         variant: "destructive"
       });
       return;
@@ -252,163 +208,142 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
 
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {/* Basic Actions */}
-      <Button variant="outline" size="sm" onClick={() => window.print()} disabled={isPending}>
-        <PrinterIcon className="h-4 w-4 mr-2" />
-        Print
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => alert('Download functionality not implemented.')} disabled={isPending}>
-        <DownloadIcon className="h-4 w-4 mr-2" />
-        Download
-      </Button>
+    <div className="flex flex-wrap items-center gap-2">
+        {/* Primary Actions - Left Side */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status-Specific Primary Actions */}
+          {contract.status === "draft" && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/dashboard/contracts/${contract.id}/edit`)}
+                disabled={isPending}
+              >
+                <PenIcon className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSendContract}
+                disabled={isPending}
+              >
+                <SendIcon className="h-4 w-4 mr-2" />
+                Send Contract
+              </Button>
+            </>
+          )}
 
-      {/* Client Email Management for Draft Contracts */}
-      {contract.status === "draft" && (
-        <div className="w-full flex items-center gap-2 mt-2 mb-2">
-          <MailIcon className="h-4 w-4 text-muted-foreground" />
-          {isEditingEmail ? (
-            <>
-              <Input
-                type="email"
-                value={clientEmail}
-                onChange={(e) => setClientEmail(e.target.value)}
-                placeholder="client@company.com"
-                className="flex-1 max-w-xs"
-              />
-              <Button size="sm" onClick={handleUpdateClientEmail} disabled={isPending}>
-                <SaveIcon className="h-4 w-4 mr-1" />
-                Save
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setIsEditingEmail(false)} disabled={isPending}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <span className="text-sm text-muted-foreground">
-                Client: {contract.client_email || 'No email set'}
-              </span>
-              <Button size="sm" variant="outline" onClick={() => setIsEditingEmail(true)} disabled={isPending}>
-                <EditIcon className="h-4 w-4 mr-1" />
-                {contract.client_email ? 'Edit' : 'Add'} Email
-              </Button>
-            </>
+          {contract.status === "pending_signatures" && (
+            <Button
+              size="sm"
+              onClick={handleSignContract}
+              disabled={isPending}
+            >
+              <FileSignatureIcon className="h-4 w-4 mr-2" />
+              Sign Contract
+            </Button>
+          )}
+
+          {contract.status === "pending_funding" && (
+            <Button
+              size="sm"
+              onClick={handleFundContract}
+              disabled={isPending}
+            >
+              <CreditCardIcon className="h-4 w-4 mr-2" />
+              Fund Escrow
+            </Button>
+          )}
+
+          {(contract.status === "active" || contract.status === "pending_completion") && (
+            <Button
+              size="sm"
+              onClick={handleReleasePayment}
+              disabled={isPending}
+            >
+              <DollarSignIcon className="h-4 w-4 mr-2" />
+              Release Payment
+            </Button>
+          )}
+
+          {contract.status === "completed" && (
+            <Button variant="outline" size="sm" disabled>
+              <CheckCircleIcon className="h-4 w-4 mr-2" />
+              Completed
+            </Button>
+          )}
+
+          {/* Edit Button (locked for non-draft) */}
+          {contract.status !== 'draft' && (
+            <Button variant="outline" size="sm" disabled>
+              <PenIcon className="h-4 w-4 mr-2" />
+              Edit (Locked)
+            </Button>
           )}
         </div>
-      )}
 
-      {/* Workflow Actions */}
-      {contract.status === "draft" && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/dashboard/contracts/${contract.id}/edit`)}
-            disabled={isPending}
-          >
-            <PenIcon className="h-4 w-4 mr-2" />
-            Edit
+        {/* Separator */}
+        <div className="hidden sm:block h-6 w-px bg-border mx-2" />
+
+        {/* Secondary Actions - Center */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.print()} disabled={isPending}>
+            <PrinterIcon className="h-4 w-4 mr-2" />
+            Print
           </Button>
-          <Button
-            size="sm"
-            onClick={handleSendContract}
-            disabled={isPending}
-          >
-            <SendIcon className="h-4 w-4 mr-2" />
-            Send Contract
+          <Button variant="outline" size="sm" onClick={() => alert('Download functionality not implemented.')} disabled={isPending}>
+            <DownloadIcon className="h-4 w-4 mr-2" />
+            Download
           </Button>
-        </>
-      )}
+        </div>
 
-      {contract.status === "pending_signatures" && (
-        <Button
-          size="sm"
-          onClick={handleSignContract}
-          disabled={isPending}
-        >
-          <FileSignatureIcon className="h-4 w-4 mr-2" />
-          Sign Contract
-        </Button>
-      )}
+        {/* Separator */}
+        <div className="hidden sm:block h-6 w-px bg-border mx-2" />
 
-      {contract.status === "pending_funding" && (
-        <Button
-          size="sm"
-          onClick={handleFundContract}
-          disabled={isPending}
-        >
-          <CreditCardIcon className="h-4 w-4 mr-2" />
-          Fund Escrow
-        </Button>
-      )}
-
-      {(contract.status === "active" || contract.status === "pending_completion") && (
-        <Button
-          size="sm"
-          onClick={handleReleasePayment}
-          disabled={isPending}
-        >
-          <DollarSignIcon className="h-4 w-4 mr-2" />
-          Release Payment
-        </Button>
-      )}
-
-      {contract.status === "completed" && (
-        <Button variant="outline" size="sm" disabled>
-          <CheckCircleIcon className="h-4 w-4 mr-2" />
-          Completed
-        </Button>
-      )}
-
-      {/* Edit Button (locked for non-draft) */}
-      {contract.status !== 'draft' && (
-        <Button variant="outline" size="sm" disabled>
-          <PenIcon className="h-4 w-4 mr-2" />
-          Edit (Locked)
-        </Button>
-      )}
-
-      {/* Cancel Button */}
-      {!["cancelled", "completed"].includes(contract.status) && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-red-500 hover:text-red-600"
-          onClick={() => {
-            if (confirm("Are you sure you want to cancel this contract?")) {
-              // TODO: Implement cancel contract API
-              toast({
-                title: "Cancel functionality",
-                description: "Cancel contract functionality not yet implemented.",
-                variant: "destructive"
-              });
-            }
-          }}
-          disabled={isPending}
-        >
-          <XCircleIcon className="h-4 w-4 mr-2" />
-          Cancel
-        </Button>
-      )}
-
-      {/* Delete Button (only for draft contracts) */}
-      {contract.status === 'draft' && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-red-500 hover:text-red-600"
-          onClick={handleDeleteContract}
-          disabled={isPending}
-        >
-          {isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <TrashIcon className="h-4 w-4 mr-2" />
+        {/* Destructive Actions - Right Side */}
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
+          {/* Cancel Button */}
+          {!["cancelled", "completed"].includes(contract.status) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              onClick={() => {
+                if (confirm("Are you sure you want to cancel this contract?")) {
+                  // TODO: Implement cancel contract API
+                  toast({
+                    title: "Cancel functionality",
+                    description: "Cancel contract functionality not yet implemented.",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              disabled={isPending}
+            >
+              <XCircleIcon className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
           )}
-          {isPending ? 'Deleting...' : 'Delete'}
-        </Button>
-      )}
-    </div>
+
+          {/* Delete Button (only for draft contracts) */}
+          {contract.status === 'draft' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              onClick={handleDeleteContract}
+              disabled={isPending}
+            >
+              {isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <TrashIcon className="h-4 w-4 mr-2" />
+              )}
+              {isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
+        </div>
+      </div>
   );
 }

@@ -363,7 +363,7 @@ export const createContractAction = async (formData: {
     total_amount: parseFloat(formData.price) || 0, // Ensure it's a number
     currency: formData.currency || 'USD',
     template_id: templateUuid, // Use the fetched UUID or null
-    // clientEmail is not directly in contracts table, handle invitation separately
+    client_email: formData.clientEmail, // Store client email in the proper column
   };
 
   // 7. Insert the contract

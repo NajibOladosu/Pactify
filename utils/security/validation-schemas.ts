@@ -89,7 +89,7 @@ export const ContractCreateSchema = z.object({
   description: sanitizedString(SECURITY_CONFIG.INPUT_LIMITS.description).optional(),
   client_id: uuid().optional(),
   freelancer_id: uuid().optional(),
-  client_email: email().optional(),
+  client_email: email(),
   total_amount: positiveNumber(SECURITY_CONFIG.INPUT_LIMITS.minAmount, SECURITY_CONFIG.INPUT_LIMITS.maxContractAmount).optional(),
   currency: currency().default("USD"),
   type: z.enum(["fixed", "milestone", "hourly"]).optional(),
