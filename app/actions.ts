@@ -521,6 +521,8 @@ export const sendContractAction = async (formData: { contractId: string; recipie
     }
 
     console.log("Contract found successfully:", contract.id);
+    console.log("Contract status:", contract.status);
+    console.log("Contract status type:", typeof contract.status);
 
     // Verify user can send this contract (creator or client)
     if (contract.creator_id !== user.id && contract.client_id !== user.id) {
@@ -560,18 +562,89 @@ export const sendContractAction = async (formData: { contractId: string; recipie
     );
     
     // Send the email
+    console.log(`=== SENDING EMAIL ===`);
+    console.log(`Recipient: ${recipientEmail}`);
+    console.log(`Contract: ${contract.title} (${contract.id})`);
+    
     const emailSent = await sendEmail(emailOptions);
+    
+    console.log(`Email sent result: ${emailSent}`);
     
     if (emailSent) {
       // Update contract status if it was draft
       if (contract.status === 'draft') {
-        await supabase
-          .from('contracts')
-          .update({ 
-            status: 'pending_signatures',
-            client_email: recipientEmail 
-          })
-          .eq('id', contract.id);
+        console.log(`=== UPDATING CONTRACT STATUS ===`);
+        console.log(`Contract ID: ${contract.id}`);
+        console.log(`Current Status: ${contract.status}`);
+        console.log(`New Status: pending_signatures`);
+        
+        // Try multiple approaches to update the status
+        let updateError = null;
+        
+        // Approach 1: Try direct update (might work if it's just text)
+        console.log('=== TRYING DIRECT UPDATE ===');
+        try {
+          const { error } = await supabase
+            .from('contracts')
+            .update({ 
+              status: 'pending_signatures',
+              client_email: recipientEmail,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', contract.id);
+          updateError = error;
+          if (error) {
+            console.log('Direct update failed:', error);
+          } else {
+            console.log('Direct update succeeded!');
+          }
+        } catch (err) {
+          console.log('Direct update threw exception:', err);
+          updateError = err;
+        }
+        
+        // Approach 2: If that fails, try RPC function (now available)
+        if (updateError) {
+          console.log('=== TRYING RPC FUNCTION ===');
+          try {
+            const { data, error } = await supabase
+              .rpc('update_contract_status_simple', {
+                p_contract_id: contract.id,
+                p_new_status: 'pending_signatures'
+              });
+            
+            if (error) {
+              console.log('RPC function failed:', error);
+              updateError = error;
+            } else if (data && !data.success) {
+              console.log('RPC function returned error:', data.error);
+              updateError = new Error(data.error);
+            } else {
+              console.log('RPC function succeeded!');
+              updateError = null; // Success!
+            }
+          } catch (err) {
+            console.log('RPC function threw exception:', err);
+            updateError = err;
+          }
+        }
+          
+        if (updateError) {
+          console.error('Failed to update contract status:', updateError);
+        } else {
+          console.log('Contract status updated successfully');
+          
+          // Verify the update worked
+          const { data: updatedContract } = await supabase
+            .from('contracts')
+            .select('status')
+            .eq('id', contract.id)
+            .single();
+          
+          console.log('Contract status after update:', updatedContract?.status);
+        }
+      } else {
+        console.log('Contract status is not draft, skipping status update. Current status:', contract.status);
       }
 
       // Log contract activity
@@ -584,6 +657,7 @@ export const sendContractAction = async (formData: { contractId: string; recipie
       });
 
       revalidatePath('/dashboard/contracts');
+      revalidatePath(`/dashboard/contracts/${contract.id}`);
       return { success: true, message: "Contract sent successfully!" };
     } else {
       return { error: "Failed to send email. Please try again." };

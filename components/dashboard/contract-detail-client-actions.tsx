@@ -59,8 +59,8 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
           title: "Contract Sent",
           description: result.message || `Contract sent to ${contract.client_email}`,
         });
-        // Refresh the page to get updated data
-        router.refresh();
+        // Force a full page reload to get updated data
+        window.location.reload();
       }
     });
   };

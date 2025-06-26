@@ -58,7 +58,6 @@ interface DisputeResolutionProps {
   userId: string;
   userRole: 'client' | 'freelancer' | 'creator';
   contractTitle: string;
-  onDisputeStatusChange?: () => void;
 }
 
 const DISPUTE_TYPES = [
@@ -98,8 +97,7 @@ export default function DisputeResolution({
   contractId, 
   userId, 
   userRole, 
-  contractTitle,
-  onDisputeStatusChange 
+  contractTitle 
 }: DisputeResolutionProps) {
   const { toast } = useToast();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -198,7 +196,7 @@ export default function DisputeResolution({
         // Refresh data and switch to overview
         fetchDisputeData();
         setActiveTab('overview');
-        onDisputeStatusChange?.();
+        window.location.reload();
       } else {
         throw new Error('Failed to create dispute');
       }
@@ -261,7 +259,7 @@ export default function DisputeResolution({
           description: "Dispute resolved successfully",
         });
         fetchDisputeData();
-        onDisputeStatusChange?.();
+        window.location.reload();
       } else {
         throw new Error('Failed to resolve dispute');
       }

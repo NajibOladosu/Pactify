@@ -139,7 +139,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   };
 
   const getStatusBadge = (status: string | null) => {
-    switch (status) {
+    switch (status?.toString().trim()) {
       case "draft":
         return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">Draft</Badge>;
       case "pending_signatures":
@@ -263,10 +263,6 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                 status: m.status as any,
                 due_date: m.due_date
               })) || []}
-              onPaymentReleased={() => {
-                // Refresh the page to update status
-                window.location.reload();
-              }}
             />
           )}
 
@@ -287,10 +283,6 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
               userId={user.id}
               userRole={userRole}
               contractTitle={contractDetail.title}
-              onDisputeStatusChange={() => {
-                // Refresh the page to update contract status
-                window.location.reload();
-              }}
             />
           )}
 

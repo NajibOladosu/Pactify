@@ -31,7 +31,7 @@ interface RecentContractsProps {
 }
 
 const getStatusBadge = (status: string | null) => {
-  switch (status as ContractStatus) {
+  switch (status?.toString().trim() as ContractStatus) {
     case "draft":
       return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-200">Draft</Badge>;
     case "pending_signatures":

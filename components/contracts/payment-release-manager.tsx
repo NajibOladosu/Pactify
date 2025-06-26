@@ -70,7 +70,6 @@ interface PaymentReleaseManagerProps {
   contractType: 'fixed' | 'milestone' | 'hourly';
   contractStatus: string;
   milestones?: Milestone[];
-  onPaymentReleased?: () => void;
 }
 
 const formatCurrency = (amount: number, currency: string = 'USD') => {
@@ -96,8 +95,7 @@ export default function PaymentReleaseManager({
   userRole,
   contractType,
   contractStatus,
-  milestones = [],
-  onPaymentReleased
+  milestones = []
 }: PaymentReleaseManagerProps) {
   const { toast } = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -172,9 +170,8 @@ export default function PaymentReleaseManager({
         // Refresh payment data
         await fetchPaymentData();
         
-        if (onPaymentReleased) {
-          onPaymentReleased();
-        }
+        // Refresh the page to update contract status
+        window.location.reload();
       } else {
         toast({
           title: "Payment Release Failed",
