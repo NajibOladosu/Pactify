@@ -67,7 +67,7 @@ const calculateRefundDetails = (
   // Use the actual funded amount, not the total contract amount
   let eligibleAmount = fundedAmount;
   let platformFeeRefund = 0;
-  let processingFee = 2.99; // Fixed processing fee
+  const processingFee = 2.99; // Fixed processing fee
   
   // Calculate based on contract status and user role
   switch (contractStatus) {
