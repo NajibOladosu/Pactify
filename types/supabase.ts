@@ -144,6 +144,134 @@ export type Database = {
           },
         ]
       }
+      contract_deliverables: {
+        Row: {
+          contract_id: string
+          created_at: string | null
+          description: string | null
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          is_final: boolean | null
+          milestone_id: string | null
+          uploaded_by: string
+          version: number | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string | null
+          description?: string | null
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          is_final?: boolean | null
+          milestone_id?: string | null
+          uploaded_by: string
+          version?: number | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string | null
+          description?: string | null
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          is_final?: boolean | null
+          milestone_id?: string | null
+          uploaded_by?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_deliverables_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_deliverables_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "contract_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_deliverables_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_disputes: {
+        Row: {
+          contract_id: string
+          created_at: string | null
+          description: string
+          dispute_type: string
+          id: string
+          initiated_by: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string | null
+          description: string
+          dispute_type: string
+          id?: string
+          initiated_by: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string | null
+          description?: string
+          dispute_type?: string
+          id?: string
+          initiated_by?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_disputes_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_disputes_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_disputes_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_escrows: {
         Row: {
           contract_id: string
@@ -211,6 +339,119 @@ export type Database = {
             columns: ["released_to"]
             isOneToOne: false
             referencedRelation: "user_public_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_milestones: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          contract_id: string
+          created_at: string | null
+          deliverables: string[] | null
+          description: string | null
+          due_date: string | null
+          id: string
+          order_index: number
+          status:
+            | Database["public"]["Enums"]["milestone_status_enhanced"]
+            | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          contract_id: string
+          created_at?: string | null
+          deliverables?: string[] | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          order_index: number
+          status?:
+            | Database["public"]["Enums"]["milestone_status_enhanced"]
+            | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          contract_id?: string
+          created_at?: string | null
+          deliverables?: string[] | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          order_index?: number
+          status?:
+            | Database["public"]["Enums"]["milestone_status_enhanced"]
+            | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_milestones_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_notifications: {
+        Row: {
+          action_url: string | null
+          contract_id: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          metadata: Json | null
+          notification_type: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          action_url?: string | null
+          contract_id: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          metadata?: Json | null
+          notification_type: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          action_url?: string | null
+          contract_id?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          metadata?: Json | null
+          notification_type?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_notifications_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -328,6 +569,64 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_public_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_reviews: {
+        Row: {
+          contract_id: string
+          created_at: string | null
+          feedback: string | null
+          id: string
+          milestone_id: string | null
+          rating: number | null
+          review_type: string
+          reviewer_id: string
+          revision_notes: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          milestone_id?: string | null
+          rating?: number | null
+          review_type: string
+          reviewer_id: string
+          revision_notes?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string | null
+          feedback?: string | null
+          id?: string
+          milestone_id?: string | null
+          rating?: number | null
+          review_type?: string
+          reviewer_id?: string
+          revision_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_reviews_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_reviews_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "contract_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -465,6 +764,7 @@ export type Database = {
           description: string | null
           end_date: string | null
           escrow_status: string | null
+          freelancer_email: string | null
           freelancer_id: string | null
           freelancer_signed_at: string | null
           id: string
@@ -500,6 +800,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           escrow_status?: string | null
+          freelancer_email?: string | null
           freelancer_id?: string | null
           freelancer_signed_at?: string | null
           id?: string
@@ -535,6 +836,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           escrow_status?: string | null
+          freelancer_email?: string | null
           freelancer_id?: string | null
           freelancer_signed_at?: string | null
           id?: string
@@ -582,6 +884,75 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "contract_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escrow_payments: {
+        Row: {
+          amount: number
+          contract_id: string
+          created_at: string | null
+          funded_at: string | null
+          id: string
+          milestone_id: string | null
+          platform_fee: number
+          refunded_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status_enhanced"] | null
+          stripe_fee: number
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+          total_charged: number
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          contract_id: string
+          created_at?: string | null
+          funded_at?: string | null
+          id?: string
+          milestone_id?: string | null
+          platform_fee: number
+          refunded_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status_enhanced"] | null
+          stripe_fee?: number
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          total_charged: number
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          contract_id?: string
+          created_at?: string | null
+          funded_at?: string | null
+          id?: string
+          milestone_id?: string | null
+          platform_fee?: number
+          refunded_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status_enhanced"] | null
+          stripe_fee?: number
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          total_charged?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escrow_payments_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escrow_payments_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "contract_milestones"
             referencedColumns: ["id"]
           },
         ]
@@ -1241,9 +1612,36 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      calculate_platform_fee: {
+        Args: { user_id: string; amount: number }
+        Returns: number
+      }
+      check_kyc_requirements: {
+        Args: { p_user_id: string; p_amount: number }
+        Returns: {
+          is_compliant: boolean
+          required_level: string
+          current_level: string
+          verification_url: string
+        }[]
+      }
       check_user_exists: {
         Args: { email: string }
         Returns: boolean
+      }
+      create_contract_notification: {
+        Args: {
+          p_contract_id: string
+          p_user_id: string
+          p_notification_type: string
+          p_title: string
+          p_message: string
+        }
+        Returns: string
+      }
+      create_escrow_payment: {
+        Args: { p_contract_id: string; p_amount: number }
+        Returns: string
       }
       debug_auth_context: {
         Args: Record<PropertyKey, never>
@@ -1307,6 +1705,10 @@ export type Database = {
         Args: { user_id: string }
         Returns: Json
       }
+      link_user_contracts: {
+        Args: { p_user_id: string; p_user_email: string }
+        Returns: undefined
+      }
       migrate_contract_parties: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1319,9 +1721,25 @@ export type Database = {
         Args: { contract_id: string; freelancer_email: string }
         Returns: undefined
       }
+      update_contract_status_simple: {
+        Args: { p_contract_id: string; p_new_status: string }
+        Returns: Json
+      }
     }
     Enums: {
       contract_status:
+        | "draft"
+        | "pending_signatures"
+        | "pending_funding"
+        | "active"
+        | "pending_delivery"
+        | "in_review"
+        | "revision_requested"
+        | "pending_completion"
+        | "completed"
+        | "cancelled"
+        | "disputed"
+      contract_status_enhanced:
         | "draft"
         | "pending_signatures"
         | "pending_funding"
@@ -1341,6 +1759,13 @@ export type Database = {
         | "approved"
         | "rejected"
         | "requires_action"
+      kyc_status_enhanced:
+        | "not_started"
+        | "in_progress"
+        | "pending_review"
+        | "approved"
+        | "rejected"
+        | "requires_action"
       milestone_status:
         | "pending"
         | "in_progress"
@@ -1348,7 +1773,21 @@ export type Database = {
         | "approved"
         | "revision_requested"
         | "completed"
+      milestone_status_enhanced:
+        | "pending"
+        | "in_progress"
+        | "submitted"
+        | "approved"
+        | "revision_requested"
+        | "completed"
       payment_status:
+        | "pending"
+        | "funded"
+        | "held"
+        | "released"
+        | "refunded"
+        | "disputed"
+      payment_status_enhanced:
         | "pending"
         | "funded"
         | "held"
@@ -1483,8 +1922,29 @@ export const Constants = {
         "cancelled",
         "disputed",
       ],
+      contract_status_enhanced: [
+        "draft",
+        "pending_signatures",
+        "pending_funding",
+        "active",
+        "pending_delivery",
+        "in_review",
+        "revision_requested",
+        "pending_completion",
+        "completed",
+        "cancelled",
+        "disputed",
+      ],
       contract_type: ["fixed", "milestone", "hourly"],
       kyc_status: [
+        "not_started",
+        "in_progress",
+        "pending_review",
+        "approved",
+        "rejected",
+        "requires_action",
+      ],
+      kyc_status_enhanced: [
         "not_started",
         "in_progress",
         "pending_review",
@@ -1500,7 +1960,23 @@ export const Constants = {
         "revision_requested",
         "completed",
       ],
+      milestone_status_enhanced: [
+        "pending",
+        "in_progress",
+        "submitted",
+        "approved",
+        "revision_requested",
+        "completed",
+      ],
       payment_status: [
+        "pending",
+        "funded",
+        "held",
+        "released",
+        "refunded",
+        "disputed",
+      ],
+      payment_status_enhanced: [
         "pending",
         "funded",
         "held",

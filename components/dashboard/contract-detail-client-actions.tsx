@@ -304,7 +304,7 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
         {/* Destructive Actions - Right Side */}
         <div className="flex flex-wrap items-center gap-2 ml-auto">
           {/* Cancel Button */}
-          {!["cancelled", "completed"].includes(contract.status) && (
+          {!["cancelled", "completed"].includes(contract.status || '') && (
             <Button
               variant="outline"
               size="sm"

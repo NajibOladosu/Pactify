@@ -1,7 +1,7 @@
 // Remove "use client" - Fetch data server-side
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
@@ -21,12 +21,9 @@ import RefundCancellationManager from '@/components/contracts/refund-cancellatio
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
   contract_templates: Pick<Database['public']['Tables']['contract_templates']['Row'], 'name'> | null;
-  client_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type' | 'email'> | null;
-  freelancer_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type' | 'email'> | null;
+  client_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type'> | null;
+  freelancer_profile: Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'display_name' | 'company_name' | 'website' | 'avatar_url' | 'user_type'> | null;
 };
-
-// Updated status type based on new workflow
-type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
 
 // Fetch data server-side
@@ -98,7 +95,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   if (contract.client_id) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .select('id, display_name, company_name, website, avatar_url, user_type')
       .eq('id', contract.client_id)
       .single();
     
@@ -111,7 +108,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   if (!clientProfile && contract.client_email) {
     const { data: emailProfile } = await supabase
       .from('profiles')
-      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .select('id, display_name, company_name, website, avatar_url, user_type')
       .eq('email', contract.client_email)
       .single();
     
@@ -125,7 +122,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   if (contract.freelancer_id) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, display_name, company_name, website, avatar_url, user_type, email')
+      .select('id, display_name, company_name, website, avatar_url, user_type')
       .eq('id', contract.freelancer_id)
       .single();
     
@@ -153,7 +150,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   const editorContent = contractDetail.content || { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Contract content is empty or invalid." }] }] };
 
   // Dummy function for read-only editor - required by the component prop
-  const handleContentChangeDummy = (content: any) => {
+  const handleContentChangeDummy = () => {
     // Do nothing in read-only mode
   };
 
@@ -248,7 +245,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                    {/* Use the TiptapEditor component in read-only mode */}
                     <TiptapEditor
                      initialContent={editorContent}
-                     // No onContentChange needed for read-only
+                     onContentChange={handleContentChangeDummy} // Required prop for read-only
                      editable={false} // Set to read-only
                    />
                 </div>
@@ -268,35 +265,35 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
           )}
 
           {/* Payment Release Section */}
-          {(['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status)) && (
+          {(['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status || '')) && (
             <PaymentReleaseManager
               contractId={contractDetail.id}
               userId={user.id}
               userRole={userRole}
-              contractType={contractDetail.type as 'fixed' | 'milestone' | 'hourly'}
-              contractStatus={contractDetail.status}
+              contractType={(contractDetail.type || 'fixed') as 'fixed' | 'milestone' | 'hourly'}
+              contractStatus={contractDetail.status || 'draft'}
               milestones={milestones?.map(m => ({
                 id: m.id,
                 title: m.title,
                 amount: m.amount,
-                status: m.status as any,
+                status: m.status as 'pending' | 'in_progress' | 'submitted' | 'approved' | 'revision_requested' | 'completed',
                 due_date: m.due_date
               })) || []}
             />
           )}
 
           {/* Contract Collaboration Section */}
-          {(['draft', 'pending_signatures', 'pending_funding'].includes(contractDetail.status)) && (
+          {(['draft', 'pending_signatures', 'pending_funding'].includes(contractDetail.status || '')) && (
             <ContractCollaboration
               contractId={contractDetail.id}
               currentUserId={user.id}
-              userType={userRole}
+              userType={userRole === 'creator' ? 'both' : userRole}
               initialContract={contractDetail}
             />
           )}
 
           {/* Dispute Resolution Section */}
-          {(contractDetail.status === 'disputed' || ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractDetail.status)) && (
+          {((contractDetail.status === 'disputed') || ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractDetail.status || '')) && (
             <DisputeResolution
               contractId={contractDetail.id}
               userId={user.id}
@@ -306,12 +303,12 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
           )}
 
           {/* Refund & Cancellation Section */}
-          {!['completed', 'cancelled'].includes(contractDetail.status) && (
+          {!['completed', 'cancelled'].includes(contractDetail.status || '') && (
             <RefundCancellationManager
               contractId={contractDetail.id}
               userId={user.id}
               userRole={userRole}
-              contractStatus={contractDetail.status}
+              contractStatus={contractDetail.status || 'draft'}
               totalAmount={contractDetail.total_amount || 0}
               currency={contractDetail.currency || 'USD'}
               escrowStatus={escrowStatus}
@@ -344,7 +341,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                         ) : (
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                             <span className="text-sm font-medium text-muted-foreground">
-                              {(contractDetail.client_profile.display_name || contractDetail.client_profile.email || 'C').charAt(0).toUpperCase()}
+                              {(contractDetail.client_profile.display_name || 'C').charAt(0).toUpperCase()}
                             </span>
                           </div>
                         )}
@@ -353,7 +350,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                             {contractDetail.client_profile.display_name || 'Client User'}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {contractDetail.client_profile.email}
+                            Client
                           </p>
                         </div>
                       </div>
@@ -455,7 +452,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                         ) : (
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                             <span className="text-sm font-medium text-muted-foreground">
-                              {(contractDetail.freelancer_profile.display_name || contractDetail.freelancer_profile.email || 'F').charAt(0).toUpperCase()}
+                              {(contractDetail.freelancer_profile.display_name || 'F').charAt(0).toUpperCase()}
                             </span>
                           </div>
                         )}
@@ -464,7 +461,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                             {contractDetail.freelancer_profile.display_name || 'Freelancer User'}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {contractDetail.freelancer_profile.email}
+                            Freelancer
                           </p>
                         </div>
                       </div>
