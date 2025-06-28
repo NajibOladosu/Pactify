@@ -13,7 +13,6 @@ export class InputSanitizer {
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'
       ],
       ALLOWED_ATTR: ['class'],
-      FORBID_SCRIPT: true,
       FORBID_TAGS: ['script', 'object', 'embed', 'link', 'style', 'iframe'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'style']
     });
@@ -235,7 +234,7 @@ export class InputSanitizer {
   /**
    * Recursively sanitize object properties
    */
-  private static sanitizeJsonObject(obj: any): any {
+  static sanitizeJsonObject(obj: any): any {
     if (obj === null || obj === undefined) {
       return obj;
     }

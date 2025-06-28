@@ -220,7 +220,7 @@ export function getKycRequiredLevel(amount: number, currency: string = "USD"): k
 }
 
 export function getAllowedFileTypes(category: keyof typeof SECURITY_CONFIG.ALLOWED_FILE_TYPES): string[] {
-  return SECURITY_CONFIG.ALLOWED_FILE_TYPES[category] || [];
+  return [...(SECURITY_CONFIG.ALLOWED_FILE_TYPES[category] || [])] as string[];
 }
 
 export function getEnvironmentConfig() {

@@ -311,6 +311,7 @@ export class AuditLogger {
         created_at: log.timestamp
       }));
 
+      const supabase = await createClient();
       const { error } = await supabase
         .from('contract_activities')
         .insert(auditRecords);

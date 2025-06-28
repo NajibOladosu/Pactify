@@ -101,10 +101,12 @@ export async function setupSecurity(): Promise<void> {
   
   try {
     // Validate environment variables
+    const { ErrorHandler } = await import('./error-handling');
     ErrorHandler.validateEnvironment();
     console.log('✅ Environment variables validated');
 
     // Initialize audit logger
+    const { AuditLogger } = await import('./audit-logger');
     const logger = AuditLogger.getInstance();
     await logger.logSecurityEvent({
       action: 'security_system_initialized',
@@ -157,6 +159,7 @@ export async function securityHealthCheck(): Promise<{
 
   // Check environment variables
   try {
+    const { ErrorHandler } = await import('./error-handling');
     ErrorHandler.validateEnvironment();
   } catch (error) {
     checks[0].status = false;
@@ -166,6 +169,7 @@ export async function securityHealthCheck(): Promise<{
 
   // Check rate limiting configuration
   try {
+    const { SECURITY_CONFIG } = await import('./config');
     const authLimit = SECURITY_CONFIG.RATE_LIMITS.auth;
     const defaultLimit = SECURITY_CONFIG.RATE_LIMITS.default;
     if (authLimit.requests >= defaultLimit.requests) {
@@ -181,6 +185,7 @@ export async function securityHealthCheck(): Promise<{
 
   // Check security headers
   try {
+    const { SECURITY_CONFIG } = await import('./config');
     const requiredHeaders = ['X-Content-Type-Options', 'X-Frame-Options', 'X-XSS-Protection'];
     const headers = SECURITY_CONFIG.SECURITY_HEADERS;
     for (const header of requiredHeaders) {
@@ -199,6 +204,7 @@ export async function securityHealthCheck(): Promise<{
 
   // Check input validation
   try {
+    const { validateSchema, ContractCreateSchema } = await import('./validation-schemas');
     const testData = { title: "Test", description: "Test description", total_amount: 100 };
     const result = validateSchema(ContractCreateSchema, testData);
     if (result.success) {

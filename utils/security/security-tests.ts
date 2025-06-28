@@ -270,7 +270,7 @@ export class SecurityTestSuite {
     // Test allowed file
     const allowedFile = "document.pdf";
     const extension = allowedFile.split('.').pop()?.toLowerCase();
-    if (!extension || !allowedTypes.includes(extension)) {
+    if (!extension || !(allowedTypes as readonly string[]).includes(extension)) {
       return {
         success: false,
         error: `Allowed file type ${extension} was rejected`
@@ -280,7 +280,7 @@ export class SecurityTestSuite {
     // Test disallowed file
     const disallowedFile = "malicious.exe";
     const badExtension = disallowedFile.split('.').pop()?.toLowerCase();
-    if (badExtension && allowedTypes.includes(badExtension)) {
+    if (badExtension && (allowedTypes as readonly string[]).includes(badExtension)) {
       return {
         success: false,
         error: `Disallowed file type ${badExtension} was accepted`

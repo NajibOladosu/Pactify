@@ -301,7 +301,7 @@ export const FileUploadSchema = z.object({
 }).refine(data => {
   const allowedTypes = SECURITY_CONFIG.ALLOWED_FILE_TYPES[data.category];
   const extension = data.filename.split('.').pop()?.toLowerCase();
-  return extension && allowedTypes.includes(extension);
+  return extension && (allowedTypes as readonly string[]).includes(extension);
 }, {
   message: "File type not allowed for this category"
 });

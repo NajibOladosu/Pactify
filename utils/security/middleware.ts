@@ -149,7 +149,8 @@ export class SecurityMiddleware {
     const windowStart = now - config.windowMs;
 
     // Clean up expired entries
-    for (const [key, value] of this.rateLimitStore.entries()) {
+    const entries = Array.from(this.rateLimitStore.entries());
+    for (const [key, value] of entries) {
       if (value.resetTime < now) {
         this.rateLimitStore.delete(key);
       }
@@ -172,7 +173,7 @@ export class SecurityMiddleware {
       ErrorHandler.logSecurityEvent(
         'RATE_LIMIT_EXCEEDED',
         undefined,
-        { identifier, ip: request.ip },
+        { identifier, ip: this.getClientIP(request) },
         'medium'
       );
 
@@ -205,11 +206,20 @@ export class SecurityMiddleware {
   }
 
   /**
+   * Get client IP address
+   */
+  private static getClientIP(request: NextRequest): string {
+    return request.headers.get('x-forwarded-for') || 
+           request.headers.get('x-real-ip') || 
+           'unknown';
+  }
+
+  /**
    * Get client identifier for rate limiting
    */
   private static getClientIdentifier(request: NextRequest): string {
     // Use IP address and User-Agent for identification
-    const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = this.getClientIP(request);
     const userAgent = request.headers.get('user-agent') || 'unknown';
     
     // Create a hash of IP + User-Agent for privacy
@@ -273,7 +283,7 @@ export class SecurityMiddleware {
     const statusCode = response.status;
     const method = request.method;
     const url = request.url;
-    const ip = request.ip || request.headers.get('x-forwarded-for');
+    const ip = this.getClientIP(request);
     const userAgent = request.headers.get('user-agent');
 
     // Log suspicious activity
@@ -391,8 +401,8 @@ export class SecurityMiddleware {
 /**
  * Helper function to apply security to any handler
  */
-export function withSecureHandler<T extends any[]>(
-  handler: (request: NextRequest, ...args: T) => Promise<NextResponse>,
+export function withSecureHandler(
+  handler: (request: NextRequest, context?: any) => Promise<NextResponse>,
   config?: SecurityConfig
 ) {
   return SecurityMiddleware.withSecurity(handler, config);
