@@ -151,8 +151,8 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
 
         // Sort by due date and take upcoming ones
         const upcoming = allMilestones
-          .filter(m => m.days_remaining !== null && m.days_remaining >= 0)
-          .sort((a, b) => (a.days_remaining || 0) - (b.days_remaining || 0))
+          .filter((m: any) => m.days_remaining !== null && m.days_remaining >= 0)
+          .sort((a: any, b: any) => (a.days_remaining || 0) - (b.days_remaining || 0))
           .slice(0, 10);
         
         setUpcomingMilestones(upcoming);

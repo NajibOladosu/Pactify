@@ -100,13 +100,13 @@ export async function GET(request: NextRequest) {
     
     // Calculate revenue from escrow payments
     const totalRevenue = contracts?.reduce((sum, contract) => {
-      const contractPayments = contract.escrow_payments?.filter(p => p.status === 'released') || [];
-      return sum + contractPayments.reduce((paymentSum, payment) => paymentSum + (payment.amount || 0), 0);
+      const contractPayments = contract.escrow_payments?.filter((p: any) => p.status === 'released') || [];
+      return sum + contractPayments.reduce((paymentSum: number, payment: any) => paymentSum + (payment.amount || 0), 0);
     }, 0) || 0;
 
     const pendingPayments = contracts?.reduce((sum, contract) => {
-      const contractPayments = contract.escrow_payments?.filter(p => p.status === 'funded') || [];
-      return sum + contractPayments.reduce((paymentSum, payment) => paymentSum + (payment.amount || 0), 0);
+      const contractPayments = contract.escrow_payments?.filter((p: any) => p.status === 'funded') || [];
+      return sum + contractPayments.reduce((paymentSum: number, payment: any) => paymentSum + (payment.amount || 0), 0);
     }, 0) || 0;
 
     const averageContractValue = totalContracts > 0 ? 
@@ -125,16 +125,16 @@ export async function GET(request: NextRequest) {
     const currentPeriodRevenue = contracts?.filter(c => 
       new Date(c.created_at) >= startDate
     ).reduce((sum, contract) => {
-      const contractPayments = contract.escrow_payments?.filter(p => p.status === 'released') || [];
-      return sum + contractPayments.reduce((paymentSum, payment) => paymentSum + (payment.amount || 0), 0);
+      const contractPayments = contract.escrow_payments?.filter((p: any) => p.status === 'released') || [];
+      return sum + contractPayments.reduce((paymentSum: number, payment: any) => paymentSum + (payment.amount || 0), 0);
     }, 0) || 0;
 
     const previousPeriodRevenue = contracts?.filter(c => {
       const createdAt = new Date(c.created_at);
       return createdAt >= previousPeriodStart && createdAt < startDate;
     }).reduce((sum, contract) => {
-      const contractPayments = contract.escrow_payments?.filter(p => p.status === 'released') || [];
-      return sum + contractPayments.reduce((paymentSum, payment) => paymentSum + (payment.amount || 0), 0);
+      const contractPayments = contract.escrow_payments?.filter((p: any) => p.status === 'released') || [];
+      return sum + contractPayments.reduce((paymentSum: number, payment: any) => paymentSum + (payment.amount || 0), 0);
     }, 0) || 0;
 
     // Calculate client satisfaction (average rating)
@@ -163,18 +163,18 @@ export async function GET(request: NextRequest) {
 
     const contractsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
       status,
-      count,
-      percentage: totalContracts > 0 ? (count / totalContracts) * 100 : 0,
+      count: count as number,
+      percentage: totalContracts > 0 ? ((count as number) / totalContracts) * 100 : 0,
       color: getStatusColor(status)
     }));
 
     // Get upcoming deadlines
     const upcomingDeadlines = contracts?.flatMap(contract => 
-      contract.contract_milestones?.filter(milestone => 
+      contract.contract_milestones?.filter((milestone: any) => 
         milestone.due_date && 
         new Date(milestone.due_date) > now &&
         milestone.status !== 'completed'
-      ).map(milestone => ({
+      ).map((milestone: any) => ({
         id: milestone.id,
         contract_number: contract.contract_number || `CON-${contract.id.slice(0, 8)}`,
         title: contract.title,

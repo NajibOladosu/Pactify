@@ -405,13 +405,13 @@ export default function KycStatusDashboard({ kycVerification, profile }: KycStat
 
               <Button
                 onClick={() => handleStartVerification('business')}
-                disabled={isPending || currentLevel === 'basic' || (kycVerification != null && ['under_review', 'approved'].includes(currentStatus) && currentLevel === 'business')}
+                disabled={isPending || currentLevel === 'basic' || (kycVerification != null && ['under_review', 'approved'].includes(currentStatus) && (currentLevel as string) === 'business')}
                 variant="outline"
                 className="w-full"
               >
                 {currentLevel === 'basic' ? 'Complete Enhanced First' :
-                 (currentStatus === 'under_review' && currentLevel === 'business') ? 'Under Review' :
-                 (currentStatus === 'approved' && currentLevel === 'business') ? 'Already Verified' :
+                 (currentStatus === 'under_review' && (currentLevel as string) === 'business') ? 'Under Review' :
+                 (currentStatus === 'approved' && (currentLevel as string) === 'business') ? 'Already Verified' :
                  'Start Business Verification'}
               </Button>
             </CardContent>
