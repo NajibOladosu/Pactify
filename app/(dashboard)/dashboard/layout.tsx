@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardLayoutWrapper } from "@/components/dashboard/layout-wrapper";
-import { ensureUserProfile } from "@/utils/profile-helpers";
+import { ensureUserProfile, linkUserContracts } from "@/utils/profile-helpers";
 
 export default async function DashboardLayout({
   children,
@@ -60,6 +60,12 @@ export default async function DashboardLayout({
   const userInitial = displayName[0].toUpperCase();
   // Get the subscription tier from the profile, default to 'free' if somehow missing
   const currentPlan = profile.subscription_tier || "free";
+
+  // Link any contracts waiting for this user (for existing users)
+  // This is safe to call multiple times as it only links unlinked contracts
+  if (user.email) {
+    await linkUserContracts(user.id, user.email);
+  }
 
   return (
     <DashboardLayoutWrapper

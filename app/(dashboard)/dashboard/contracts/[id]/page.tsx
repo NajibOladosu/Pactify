@@ -62,6 +62,25 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     .eq("contract_id", id)
     .order("order_index", { ascending: true });
 
+  // Fetch payment information to determine funding status
+  const { data: payments } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("contract_id", id);
+
+  // Calculate funded amount and escrow status
+  const fundedAmount = payments?.reduce((total, payment) => {
+    if (payment.status === 'in_escrow' || payment.status === 'released') {
+      return total + Number(payment.amount);
+    }
+    return total;
+  }, 0) || 0;
+
+  const escrowStatus: 'pending' | 'held' | 'released' | 'refunded' = 
+    payments?.some(p => p.status === 'released') ? 'released' :
+    payments?.some(p => p.status === 'refunded') ? 'refunded' :
+    payments?.some(p => p.status === 'in_escrow') ? 'held' : 'pending';
+
   if (fetchError) {
     console.error(`Error fetching contract ${id}:`, fetchError);
     notFound();
@@ -295,7 +314,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
               contractStatus={contractDetail.status}
               totalAmount={contractDetail.total_amount || 0}
               currency={contractDetail.currency || 'USD'}
-              escrowStatus="held" // TODO: Fetch actual escrow status
+              escrowStatus={escrowStatus}
+              fundedAmount={fundedAmount}
             />
           )}
         </div>

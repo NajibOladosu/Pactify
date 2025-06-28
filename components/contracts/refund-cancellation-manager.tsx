@@ -29,6 +29,7 @@ interface RefundCancellationManagerProps {
   totalAmount: number;
   currency: string;
   escrowStatus?: 'pending' | 'held' | 'released' | 'refunded';
+  fundedAmount?: number; // Actual amount that has been funded into escrow
   onStatusChange?: () => void;
 }
 
@@ -59,10 +60,12 @@ const formatCurrency = (amount: number, currency: string = 'USD') => {
 
 const calculateRefundDetails = (
   totalAmount: number, 
+  fundedAmount: number,
   contractStatus: string, 
   userRole: string
 ): RefundDetails => {
-  let eligibleAmount = totalAmount;
+  // Use the actual funded amount, not the total contract amount
+  let eligibleAmount = fundedAmount;
   let platformFeeRefund = 0;
   let processingFee = 2.99; // Fixed processing fee
   
@@ -71,18 +74,18 @@ const calculateRefundDetails = (
     case 'pending_funding':
     case 'pending_signatures':
       // Full refund if work hasn't started
-      eligibleAmount = totalAmount;
-      platformFeeRefund = totalAmount * 0.05; // Assume 5% platform fee
+      eligibleAmount = fundedAmount;
+      platformFeeRefund = fundedAmount * 0.05; // Assume 5% platform fee
       break;
     case 'active':
       // Partial refund based on progress
-      eligibleAmount = totalAmount * 0.8; // 80% refund
+      eligibleAmount = fundedAmount * 0.8; // 80% refund
       platformFeeRefund = eligibleAmount * 0.03; // Reduced platform fee refund
       break;
     case 'pending_delivery':
     case 'in_review':
       // Limited refund as work is mostly complete
-      eligibleAmount = totalAmount * 0.3; // 30% refund
+      eligibleAmount = fundedAmount * 0.3; // 30% refund
       platformFeeRefund = 0; // No platform fee refund
       break;
     default:
@@ -169,6 +172,7 @@ export default function RefundCancellationManager({
   totalAmount,
   currency,
   escrowStatus = 'pending',
+  fundedAmount = 0,
   onStatusChange 
 }: RefundCancellationManagerProps) {
   const { toast } = useToast();
@@ -177,11 +181,12 @@ export default function RefundCancellationManager({
   const [refundReason, setRefundReason] = useState('');
   const [cancellationReason, setCancellationReason] = useState('');
 
-  const refundDetails = calculateRefundDetails(totalAmount, contractStatus, userRole);
+  const refundDetails = calculateRefundDetails(totalAmount, fundedAmount, contractStatus, userRole);
   const cancellationFees = calculateCancellationFees(totalAmount, contractStatus, userRole);
 
   const canRequestRefund = ['pending_funding', 'active', 'pending_delivery', 'in_review'].includes(contractStatus) && 
                           escrowStatus === 'held' && 
+                          fundedAmount > 0 && // Only show refund if there's actually funded money
                           userRole === 'client';
 
   const canCancelContract = ['pending_signatures', 'pending_funding', 'active'].includes(contractStatus);
@@ -319,6 +324,13 @@ export default function RefundCancellationManager({
                   </div>
                   
                   <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Funded Amount</span>
+                    <span className="font-medium text-blue-600">
+                      {formatCurrency(fundedAmount, currency)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Eligible Refund</span>
                     <span className="font-medium text-green-600">
                       {formatCurrency(refundDetails.eligibleAmount, currency)}
@@ -352,6 +364,14 @@ export default function RefundCancellationManager({
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-700">{refundDetails.reason}</p>
                 </div>
+
+                {fundedAmount === 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-700">
+                      No funds have been deposited into escrow yet. Refunds are only available after the contract has been funded.
+                    </p>
+                  </div>
+                )}
 
                 {canRequestRefund && (
                   <Button 

@@ -87,7 +87,8 @@ const secureHandler = SecurityMiddleware.withSecurity(
         end_date: validatedData.end_date || null,
         terms_and_conditions: validatedData.terms_and_conditions || null,
         status: "draft",
-        client_email: validatedData.client_email || null
+        client_email: validatedData.client_email || null,
+        freelancer_email: validatedData.freelancer_email || null
       };
 
       // Insert contract
@@ -274,7 +275,7 @@ const secureGetHandler = SecurityMiddleware.withSecurity(
             profiles(display_name)
           )
         `)
-        .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
+        .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id},client_email.eq.${user.email},freelancer_email.eq.${user.email}`)
         .order("created_at", { ascending: false })
         .range(queryData.offset, queryData.offset + queryData.limit - 1);
 

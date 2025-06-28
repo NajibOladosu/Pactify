@@ -28,14 +28,14 @@ export default async function ContractsPage() {
   }
 
   // Fetch contracts from the database for the current user
-  // Join with templates to get the name if needed
+  // Include contracts where user is creator OR client (by ID or email)
   const { data: contracts, error: fetchError } = await supabase
     .from("contracts")
     .select(`
       *,
       contract_templates ( name ) 
     `)
-    .eq("creator_id", user.id)
+    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id},client_email.eq.${user.email},freelancer_email.eq.${user.email}`)
     .order("created_at", { ascending: false }); // Order by creation date
 
   let fetchedContracts: ContractWithTemplate[] = []; // Use let to allow reassignment

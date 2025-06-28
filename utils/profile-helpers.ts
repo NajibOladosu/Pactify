@@ -42,6 +42,9 @@ export async function ensureUserProfile(userId: string) {
       throw new Error(`Failed to create profile: ${createError.message}`);
     }
 
+    // After creating profile, link any contracts waiting for this user
+    await linkUserContracts(userId, user.email || '');
+
     return newProfile;
   }
 
@@ -95,5 +98,25 @@ export async function createMissingProfiles() {
     } catch (err) {
       console.error(`Error creating profile for user ${user.id}:`, err);
     }
+  }
+}
+
+export async function linkUserContracts(userId: string, userEmail: string) {
+  const supabase = await createClient();
+  
+  try {
+    // Call the database function to link contracts
+    const { error } = await supabase.rpc('link_user_contracts', {
+      p_user_id: userId,
+      p_user_email: userEmail
+    });
+
+    if (error) {
+      console.error('Error linking user contracts:', error);
+    } else {
+      console.log(`Successfully linked contracts for user ${userId} with email ${userEmail}`);
+    }
+  } catch (err) {
+    console.error('Error calling link_user_contracts function:', err);
   }
 }

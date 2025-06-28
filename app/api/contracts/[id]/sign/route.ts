@@ -51,7 +51,9 @@ export async function POST(
     const canSign = 
       contract.creator_id === user.id ||
       contract.client_id === user.id ||
-      contract.freelancer_id === user.id;
+      contract.freelancer_id === user.id ||
+      contract.client_email === user.email ||
+      contract.freelancer_email === user.email;
 
     if (!canSign) {
       return NextResponse.json(
@@ -72,15 +74,15 @@ export async function POST(
     let signatureField: string;
     let signatureTimestampField: string;
     
-    if (contract.client_id === user.id) {
+    if (contract.client_id === user.id || contract.client_email === user.email) {
       signatureField = "client_signed_at";
       signatureTimestampField = "client_signed_at";
-    } else if (contract.freelancer_id === user.id) {
+    } else if (contract.freelancer_id === user.id || contract.freelancer_email === user.email) {
       signatureField = "freelancer_signed_at";
       signatureTimestampField = "freelancer_signed_at";
     } else {
       // Creator signing - determine role based on context
-      if (!contract.client_id && !contract.freelancer_id) {
+      if (!contract.client_id && !contract.freelancer_id && !contract.client_email && !contract.freelancer_email) {
         // Need to set role first
         return NextResponse.json(
           { error: "VALIDATION_ERROR", message: "Contract parties must be defined before signing" },
@@ -125,11 +127,19 @@ export async function POST(
       );
     }
 
-    // Update contract with signature timestamp
+    // Update contract with signature timestamp and assign user if signing by email
     const updateData: any = {
       [signatureField]: now,
       updated_at: now
     };
+
+    // If user is signing via email match, assign them to the contract
+    if (contract.client_email === user.email && !contract.client_id) {
+      updateData.client_id = user.id;
+    }
+    if (contract.freelancer_email === user.email && !contract.freelancer_id) {
+      updateData.freelancer_id = user.id;
+    }
 
     // Check if both parties have now signed
     const bothSigned = 
@@ -156,6 +166,31 @@ export async function POST(
         { error: "DATABASE_ERROR", message: "Failed to update contract" },
         { status: 500 }
       );
+    }
+
+    // Create contract_parties record if user was assigned via email
+    if ((contract.client_email === user.email && !contract.client_id) || 
+        (contract.freelancer_email === user.email && !contract.freelancer_id)) {
+      const role = contract.client_email === user.email ? 'client' : 'freelancer';
+      
+      // Check if record doesn't already exist
+      const { data: existingParty } = await supabase
+        .from("contract_parties")
+        .select("id")
+        .eq("contract_id", contractId)
+        .eq("user_id", user.id)
+        .eq("role", role)
+        .single();
+
+      if (!existingParty) {
+        await supabase.from("contract_parties").insert({
+          contract_id: contractId,
+          user_id: user.id,
+          role,
+          status: 'signed',
+          signature_date: now
+        });
+      }
     }
 
     // Log the signing activity
@@ -241,7 +276,7 @@ export async function GET(
     // Get contract details for access control
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
-      .select("creator_id, client_id, freelancer_id, client_signed_at, freelancer_signed_at, status")
+      .select("creator_id, client_id, freelancer_id, client_email, freelancer_email, client_signed_at, freelancer_signed_at, status")
       .eq("id", contractId)
       .single();
 
@@ -256,7 +291,9 @@ export async function GET(
     const hasAccess = 
       contract.creator_id === user.id ||
       contract.client_id === user.id ||
-      contract.freelancer_id === user.id;
+      contract.freelancer_id === user.id ||
+      contract.client_email === user.email ||
+      contract.freelancer_email === user.email;
 
     if (!hasAccess) {
       return NextResponse.json(
