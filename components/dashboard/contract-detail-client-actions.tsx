@@ -23,12 +23,13 @@ import { deleteContractAction, sendContractAction } from "@/app/actions";
 
 interface ContractDetailClientActionsProps {
   contract: ContractDetail;
+  userRole: 'client' | 'freelancer' | 'creator';
 }
 
 // Updated status type based on new workflow
 type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
-export function ContractDetailClientActions({ contract: initialContract }: ContractDetailClientActionsProps) {
+export function ContractDetailClientActions({ contract: initialContract, userRole }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
   const [isPending, startTransition] = useTransition(); // Add transition state
   const { toast } = useToast();
@@ -65,7 +66,7 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
     });
   };
 
-  // Fund contract via escrow
+  // Fund contract project
   const handleFundContract = async () => {
     try {
       const response = await fetch(`/api/contracts/${contract.id}/fund`, {
@@ -245,14 +246,14 @@ export function ContractDetailClientActions({ contract: initialContract }: Contr
             </Button>
           )}
 
-          {contract.status === "pending_funding" && (
+          {contract.status === "pending_funding" && userRole === "client" && (
             <Button
               size="sm"
               onClick={handleFundContract}
               disabled={isPending}
             >
               <CreditCardIcon className="h-4 w-4 mr-2" />
-              Fund Escrow
+              Fund Project
             </Button>
           )}
 

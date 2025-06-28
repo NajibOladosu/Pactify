@@ -214,7 +214,7 @@ export async function POST(
           user_id: contract.client_id,
           type: "contract_ready_for_funding",
           title: "Contract Ready for Funding",
-          message: `Contract "${contract.title}" has been signed by all parties. Please fund the escrow to activate the contract.`,
+          message: `Contract "${contract.title}" has been signed by all parties. Please fund the project to activate the contract.`,
           related_entity_type: "contract",
           related_entity_id: contractId
         });

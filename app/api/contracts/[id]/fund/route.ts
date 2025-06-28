@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function POST(
       );
     }
 
-    const contractId = params.id;
+    const { id: contractId } = await params;
     const body = await request.json();
     const { payment_method_id, return_url } = body;
 
@@ -59,7 +59,7 @@ export async function POST(
 
     // Check if contract is already funded
     const { data: existingPayment } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
       .eq("status", "funded")
@@ -72,39 +72,8 @@ export async function POST(
       );
     }
 
-    // Verify KYC requirements
-    const kycCheckResponse = await fetch(`${request.nextUrl.origin}/api/kyc/check-requirements`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Pass along auth headers
-      },
-      body: JSON.stringify({
-        contract_amount: contract.total_amount,
-        currency: contract.currency || "USD",
-        contract_id: contractId
-      })
-    });
-
-    if (!kycCheckResponse.ok) {
-      return NextResponse.json(
-        { error: "KYC_CHECK_FAILED", message: "Failed to verify KYC requirements" },
-        { status: 500 }
-      );
-    }
-
-    const kycCheck = await kycCheckResponse.json();
-    if (!kycCheck.eligible) {
-      return NextResponse.json(
-        { 
-          error: "INSUFFICIENT_KYC", 
-          message: "KYC verification required before funding",
-          kyc_requirements: kycCheck.action_plan,
-          required_verification: kycCheck.required_verification
-        },
-        { status: 403 }
-      );
-    }
+    // KYC verification will be required only when withdrawing funds
+    // For funding projects, we allow users to proceed without KYC verification
 
     // Calculate fees
     const contractAmount = parseFloat(contract.total_amount.toString());
@@ -115,16 +84,21 @@ export async function POST(
 
     // Create payment record
     const { data: payment, error: paymentError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .insert({
         contract_id: contractId,
         amount: contractAmount,
-        fee: platformFee,
-        net_amount: contractAmount, // Amount that will go to freelancer
-        payer_id: user.id,
-        payee_id: contract.freelancer_id,
+        user_id: user.id, // Required for RLS policy
         currency: contract.currency || "USD",
-        status: "pending"
+        status: "pending",
+        payment_type: "funding",
+        metadata: {
+          platform_fee: platformFee,
+          stripe_fee: stripeFee,
+          total_charge: totalToCharge,
+          payer_id: user.id,
+          payee_id: contract.freelancer_id
+        }
       })
       .select()
       .single();
@@ -155,10 +129,13 @@ export async function POST(
 
     // Update payment with Stripe payment intent ID
     await supabase
-      .from("payments")
+      .from("contract_payments")
       .update({
-        stripe_payment_intent_id: mockPaymentIntent.id,
-        updated_at: new Date().toISOString()
+        stripe_payment_id: mockPaymentIntent.id,
+        metadata: {
+          ...payment.metadata,
+          payment_intent_id: mockPaymentIntent.id
+        }
       })
       .eq("id", payment.id);
 
@@ -190,7 +167,7 @@ export async function POST(
       message: "Payment intent created successfully",
       next_steps: {
         action: "confirm_payment",
-        description: "Complete payment to fund the escrow",
+        description: "Complete payment to fund the project",
         client_secret: mockPaymentIntent.client_secret
       }
     });
@@ -206,7 +183,7 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -220,7 +197,7 @@ export async function GET(
       );
     }
 
-    const contractId = params.id;
+    const { id: contractId } = await params;
 
     // Fetch contract details
     const { data: contract, error: contractError } = await supabase
@@ -251,7 +228,7 @@ export async function GET(
 
     // Get payment records for this contract
     const { data: payments, error: paymentsError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
       .order("created_at", { ascending: false });

@@ -127,7 +127,7 @@ Hello ${ctx.recipientName || ''},
 Great news! The contract "${ctx.contractTitle}" has been signed by all parties.
 
 Next Steps:
-${ctx.senderName === ctx.clientName ? '- Please fund the escrow to activate the contract' : '- Waiting for the client to fund the escrow'}
+${ctx.senderName === ctx.clientName ? '- Please fund the project to activate the contract' : '- Waiting for the client to fund the project'}
 
 You can view the contract details at:
 ${contractUrl}
@@ -144,8 +144,8 @@ The Pactify Team
           <h3 style="margin: 0 0 10px 0; color: #065f46;">Next Steps</h3>
           <p style="margin: 0; color: #064e3b;">
             ${ctx.senderName === ctx.clientName ? 
-              '• Please fund the escrow to activate the contract' : 
-              '• Waiting for the client to fund the escrow'
+              '• Please fund the project to activate the contract' : 
+              '• Waiting for the client to fund the project'
             }
           </p>
         </div>

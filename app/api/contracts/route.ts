@@ -67,13 +67,19 @@ const secureHandler = SecurityMiddleware.withSecurity(
         );
       }
 
+      // Determine user role and set appropriate fields
+      const userRole = body.user_role || 'freelancer'; // Default to freelancer for backward compatibility
+      
       // Create contract data using validated input
       const contractData: ContractInsert = {
         title: validatedData.title,
         description: validatedData.description || "Contract description to be added.",
         creator_id: user.id,
-        client_id: validatedData.client_id || null,
-        freelancer_id: validatedData.freelancer_id || null,
+        // Set client/freelancer fields based on user role
+        client_id: userRole === 'client' ? user.id : null,
+        freelancer_id: userRole === 'freelancer' ? user.id : null,
+        client_email: userRole === 'freelancer' ? (validatedData.client_email || body.client_email) : null,
+        freelancer_email: userRole === 'client' ? (validatedData.client_email || body.client_email) : null,
         template_id: validatedData.template_id || null,
         content: validatedData.content || {
           template: "default",
@@ -86,9 +92,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
         start_date: validatedData.start_date || null,
         end_date: validatedData.end_date || null,
         terms_and_conditions: validatedData.terms_and_conditions || null,
-        status: "draft",
-        client_email: validatedData.client_email || null,
-        freelancer_email: validatedData.freelancer_email || null
+        status: "draft"
       };
 
       // Insert contract

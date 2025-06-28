@@ -61,7 +61,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   // Fetch payment information to determine funding status
   const { data: payments } = await supabase
-    .from("payments")
+    .from("contract_payments")
     .select("*")
     .eq("contract_id", id);
 
@@ -149,11 +149,6 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   // Default content structure if contract.content is null/invalid
   const editorContent = contractDetail.content || { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Contract content is empty or invalid." }] }] };
 
-  // Dummy function for read-only editor - required by the component prop
-  const handleContentChangeDummy = () => {
-    // Do nothing in read-only mode
-  };
-
   const getStatusBadge = (status: string | null) => {
     switch (status?.toString().trim()) {
       case "draft":
@@ -201,7 +196,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
         </div>
 
         {/* Client Actions Component - This will handle action visibility based on user role/status */}
-        <ContractDetailClientActions contract={contractDetail} />
+        <ContractDetailClientActions contract={contractDetail} userRole={userRole} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -245,7 +240,6 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                    {/* Use the TiptapEditor component in read-only mode */}
                     <TiptapEditor
                      initialContent={editorContent}
-                     onContentChange={handleContentChangeDummy} // Required prop for read-only
                      editable={false} // Set to read-only
                    />
                 </div>

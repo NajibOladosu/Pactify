@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache"; // Import revalidatePath
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
-  const userType = formData.get("userType")?.toString() || "both";
+  const userType = "both"; // Default all users to 'both' since they can be either freelancer or client
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 

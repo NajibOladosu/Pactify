@@ -44,6 +44,7 @@ interface ContractFormData {
   terms_and_conditions: string;
   template_id: string | null;
   milestones: Milestone[];
+  user_role: 'freelancer' | 'client';
 }
 
 const TEMPLATES = [
@@ -116,7 +117,7 @@ const TEMPLATES = [
 
 const STEP_NAMES = [
   'Template',
-  'Basic Info',
+  'Basic Info & Role',
   'Payment & Type',
   'Milestones',
   'Terms & Timeline',
@@ -140,7 +141,8 @@ export default function EnhancedContractWizard() {
     end_date: '',
     terms_and_conditions: '',
     template_id: null,
-    milestones: []
+    milestones: [],
+    user_role: 'freelancer'
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -160,8 +162,11 @@ export default function EnhancedContractWizard() {
         if (!formData.description.trim()) {
           newErrors.description = 'Description is required';
         }
+        if (!formData.user_role) {
+          newErrors.user_role = 'Please select your role in this contract';
+        }
         if (!formData.client_email.trim()) {
-          newErrors.client_email = 'Client email is required';
+          newErrors.client_email = formData.user_role === 'freelancer' ? 'Client email is required' : 'Freelancer email is required';
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.client_email)) {
           newErrors.client_email = 'Please enter a valid email address';
         }
@@ -347,11 +352,52 @@ export default function EnhancedContractWizard() {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-2">Contract Information</h3>
-              <p className="text-muted-foreground">Provide the basic details for your contract.</p>
+              <h3 className="text-lg font-semibold mb-2">Contract Information & Your Role</h3>
+              <p className="text-muted-foreground">Provide the basic details and specify your role in this contract.</p>
             </div>
 
             <div className="space-y-4">
+              {/* Role Selection */}
+              <div>
+                <Label className="text-sm font-medium">I am the... *</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  {[
+                    { 
+                      value: 'freelancer', 
+                      label: 'Freelancer', 
+                      desc: 'I am providing services to a client',
+                      icon: '👨‍💻'
+                    },
+                    { 
+                      value: 'client', 
+                      label: 'Client', 
+                      desc: 'I am hiring a freelancer for services',
+                      icon: '🏢'
+                    }
+                  ].map(role => (
+                    <Card 
+                      key={role.value}
+                      className={cn(
+                        "cursor-pointer transition-all hover:border-primary p-4 relative",
+                        formData.user_role === role.value ? "border-primary bg-primary/5" : "",
+                        errors.user_role ? "border-destructive" : ""
+                      )}
+                      onClick={() => setFormData(prev => ({ ...prev, user_role: role.value as any }))}
+                    >
+                      <div className="text-center">
+                        <div className="text-2xl mb-2">{role.icon}</div>
+                        <h4 className="font-medium">{role.label}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{role.desc}</p>
+                      </div>
+                      {formData.user_role === role.value && (
+                        <CheckCircleIcon className="h-4 w-4 text-primary absolute top-2 right-2" />
+                      )}
+                    </Card>
+                  ))}
+                </div>
+                {errors.user_role && <p className="text-sm text-destructive mt-1">{errors.user_role}</p>}
+              </div>
+
               <div>
                 <Label htmlFor="title">Contract Title *</Label>
                 <Input
@@ -378,17 +424,22 @@ export default function EnhancedContractWizard() {
               </div>
 
               <div>
-                <Label htmlFor="client_email">Client Email Address *</Label>
+                <Label htmlFor="client_email">
+                  {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
+                </Label>
                 <Input
                   id="client_email"
                   type="email"
                   value={formData.client_email}
                   onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
-                  placeholder="client@company.com"
+                  placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
                   className={errors.client_email ? "border-destructive" : ""}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  The client will receive an invitation to review and sign the contract.
+                  {formData.user_role === 'freelancer' 
+                    ? 'The client will receive an invitation to review and sign the contract.'
+                    : 'The freelancer will receive an invitation to review and sign the contract.'
+                  }
                 </p>
                 {errors.client_email && <p className="text-sm text-destructive mt-1">{errors.client_email}</p>}
               </div>

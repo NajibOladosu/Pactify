@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function POST(
       );
     }
 
-    const contractId = params.id;
+    const { id: contractId } = await params;
     const body = await request.json();
     const { milestone_id = null, release_amount = null } = body;
 
@@ -61,7 +61,7 @@ export async function POST(
 
     // Get the funded payment record
     const { data: fundedPayment, error: paymentError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
       .eq("status", "funded")
@@ -86,7 +86,7 @@ export async function POST(
     let milestoneAmount = null;
     if (milestone_id) {
       const { data: milestone, error: milestoneError } = await supabase
-        .from("milestones")
+        .from("contract_milestones")
         .select("*")
         .eq("id", milestone_id)
         .eq("contract_id", contractId)
@@ -118,6 +118,35 @@ export async function POST(
         { error: "INSUFFICIENT_FUNDS", message: "Release amount exceeds available funds" },
         { status: 400 }
       );
+    }
+
+    // Verify freelancer KYC requirements for receiving payments
+    const freelancerKycCheckResponse = await fetch(`${request.nextUrl.origin}/api/kyc/check-requirements`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: contract.freelancer_id,
+        contract_amount: amountToRelease,
+        currency: contract.currency || "USD",
+        action: "withdrawal"
+      })
+    });
+
+    if (freelancerKycCheckResponse.ok) {
+      const freelancerKycCheck = await freelancerKycCheckResponse.json();
+      if (!freelancerKycCheck.eligible) {
+        return NextResponse.json(
+          { 
+            error: "FREELANCER_KYC_REQUIRED", 
+            message: "Freelancer must complete KYC verification before receiving payments",
+            kyc_requirements: freelancerKycCheck.action_plan,
+            required_verification: freelancerKycCheck.required_verification
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Get freelancer's Stripe Connect account
@@ -152,19 +181,24 @@ export async function POST(
 
     // Create new payment record for the release
     const { data: releasePayment, error: releaseError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .insert({
         contract_id: contractId,
-        milestone_id,
+        user_id: contract.freelancer_id, // Required for RLS policy
         amount: amountToRelease,
-        fee: 0, // No additional fee on release
-        net_amount: amountToRelease,
-        payer_id: contract.client_id,
-        payee_id: contract.freelancer_id,
         currency: fundedPayment.currency,
         status: "released",
-        stripe_transfer_id: mockStripeTransfer.id,
-        released_at: now
+        payment_type: "release",
+        stripe_payment_id: mockStripeTransfer.id,
+        metadata: {
+          milestone_id,
+          payer_id: contract.client_id,
+          payee_id: contract.freelancer_id,
+          fee: 0,
+          net_amount: amountToRelease,
+          stripe_transfer_id: mockStripeTransfer.id,
+          released_at: now
+        }
       })
       .select()
       .single();
@@ -178,27 +212,31 @@ export async function POST(
     }
 
     // Update original payment record
-    const remainingAmount = fundedPayment.net_amount - amountToRelease;
+    const fundedNetAmount = fundedPayment.metadata?.net_amount || fundedPayment.amount;
+    const remainingAmount = fundedNetAmount - amountToRelease;
     const paymentUpdateData: any = {
-      net_amount: remainingAmount,
-      updated_at: now
+      metadata: {
+        ...fundedPayment.metadata,
+        net_amount: remainingAmount,
+        updated_at: now
+      }
     };
 
     // If full amount released, mark as released
     if (remainingAmount <= 0) {
       paymentUpdateData.status = "released";
-      paymentUpdateData.released_at = now;
+      paymentUpdateData.metadata.released_at = now;
     }
 
     await supabase
-      .from("payments")
+      .from("contract_payments")
       .update(paymentUpdateData)
       .eq("id", fundedPayment.id);
 
     // Update milestone status if applicable
     if (milestone_id) {
       await supabase
-        .from("milestones")
+        .from("contract_milestones")
         .update({
           status: "completed",
           completed_at: now,
@@ -212,7 +250,7 @@ export async function POST(
     if (contract.type === "milestone") {
       // Check if all milestones are completed
       const { data: allMilestones } = await supabase
-        .from("milestones")
+        .from("contract_milestones")
         .select("status")
         .eq("contract_id", contractId);
 
@@ -322,7 +360,7 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -336,7 +374,7 @@ export async function GET(
       );
     }
 
-    const contractId = params.id;
+    const { id: contractId } = await params;
 
     // Verify access to contract
     const { data: contract, error: contractError } = await supabase
@@ -366,7 +404,7 @@ export async function GET(
 
     // Get all payment records for this contract
     const { data: payments, error: paymentsError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
       .order("created_at", { ascending: false });

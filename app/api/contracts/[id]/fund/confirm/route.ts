@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function POST(
       );
     }
 
-    const contractId = params.id;
+    const { id: contractId } = await params;
     const body = await request.json();
     const { payment_intent_id, payment_method_id } = body;
 
@@ -52,10 +52,10 @@ export async function POST(
 
     // Get the payment record
     const { data: payment, error: paymentError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
-      .eq("stripe_payment_intent_id", payment_intent_id)
+      .eq("stripe_payment_id", payment_intent_id)
       .single();
 
     if (paymentError) {
@@ -95,11 +95,14 @@ export async function POST(
 
     // Update payment status
     const { error: updatePaymentError } = await supabase
-      .from("payments")
+      .from("contract_payments")
       .update({
         status: "funded",
-        funded_at: now,
-        updated_at: now
+        metadata: {
+          ...payment.metadata,
+          funded_at: now,
+          updated_at: now
+        }
       })
       .eq("id", payment.id);
 
@@ -161,7 +164,7 @@ export async function POST(
     // If this is a milestone contract, activate the first milestone
     if (contract.type === "milestone") {
       const { data: firstMilestone } = await supabase
-        .from("milestones")
+        .from("contract_milestones")
         .select("*")
         .eq("contract_id", contractId)
         .eq("order_index", 1)
@@ -169,7 +172,7 @@ export async function POST(
 
       if (firstMilestone) {
         await supabase
-          .from("milestones")
+          .from("contract_milestones")
           .update({
             status: "in_progress",
             updated_at: now

@@ -333,9 +333,6 @@ export default async function SettingsPage() {
                 <div className="flex-1">
                   <h3 className="font-medium text-lg">{displayName}</h3>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
-                  <p className="text-sm mt-1">
-                    <Badge>{userType === 'both' ? 'Freelancer & Client' : userType === 'freelancer' ? 'Freelancer' : 'Client'}</Badge>
-                  </p>
                 </div>
                 <div>
                   <Button variant="outline">Change Avatar</Button>
