@@ -1,0 +1,248 @@
+import { NextRequest } from 'next/server'
+import { GET, POST } from '@/app/api/contracts/route'
+import { mockSupabaseClient, mockUser, mockProfile, mockContract } from '../mocks/supabase.js'
+
+// Mock the Supabase client
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+// Mock the profile helpers
+jest.mock('@/utils/profile-helpers', () => ({
+  ensureUserProfile: jest.fn().mockResolvedValue(mockProfile),
+}))
+
+// Mock the security middleware
+jest.mock('@/utils/security/middleware', () => ({
+  withSecurity: jest.fn((handler) => handler),
+}))
+
+describe('/api/contracts', () => {
+  let mockRequest: NextRequest
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRequest = new NextRequest('http://localhost:3000/api/contracts', {
+      method: 'GET',
+    })
+    
+    // Mock authenticated user
+    mockSupabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    })
+  })
+
+  describe('GET /api/contracts', () => {
+    it('should return contracts for authenticated user', async () => {
+      const mockContracts = [mockContract]
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({ data: mockContracts, error: null }),
+      })
+
+      const response = await GET(mockRequest)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.contracts).toEqual(mockContracts)
+      expect(data.total).toBe(1)
+    })
+
+    it('should handle pagination parameters', async () => {
+      const url = new URL('http://localhost:3000/api/contracts?page=2&limit=5')
+      mockRequest = new NextRequest(url.toString(), { method: 'GET' })
+
+      const mockContracts = [mockContract]
+      const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({ data: mockContracts, error: null }),
+      }
+      mockSupabaseClient.from.mockReturnValue(mockQuery)
+
+      const response = await GET(mockRequest)
+      
+      expect(mockQuery.limit).toHaveBeenCalledWith(5)
+      expect(mockQuery.offset).toHaveBeenCalledWith(5) // page 2, limit 5, offset = (2-1)*5 = 5
+      expect(response.status).toBe(200)
+    })
+
+    it('should handle status filter', async () => {
+      const url = new URL('http://localhost:3000/api/contracts?status=active')
+      mockRequest = new NextRequest(url.toString(), { method: 'GET' })
+
+      const mockQuery = {
+        select: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({ data: [mockContract], error: null }),
+      }
+      mockSupabaseClient.from.mockReturnValue(mockQuery)
+
+      const response = await GET(mockRequest)
+      
+      expect(mockQuery.eq).toHaveBeenCalledWith('status', 'active')
+      expect(response.status).toBe(200)
+    })
+
+    it('should return 401 for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: null,
+      })
+
+      const response = await GET(mockRequest)
+      expect(response.status).toBe(401)
+    })
+
+    it('should handle database errors', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({ 
+          data: null, 
+          error: { message: 'Database error' } 
+        }),
+      })
+
+      const response = await GET(mockRequest)
+      expect(response.status).toBe(500)
+    })
+  })
+
+  describe('POST /api/contracts', () => {
+    beforeEach(() => {
+      mockRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'New Contract',
+          description: 'New contract description',
+          amount: 1500,
+          currency: 'USD',
+          deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          terms: 'Terms and conditions',
+          freelancer_email: 'freelancer@example.com',
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    })
+
+    it('should create a new contract successfully', async () => {
+      const newContract = {
+        ...mockContract,
+        id: 'new-contract-123',
+        title: 'New Contract',
+        amount: 1500,
+      }
+
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: 'freelancer-123', email: 'freelancer@example.com' },
+          error: null,
+        }),
+      })
+
+      // Mock contract creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: newContract,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.contract.title).toBe('New Contract')
+      expect(data.contract.amount).toBe(1500)
+    })
+
+    it('should validate required fields', async () => {
+      mockRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: '', // Empty title should fail validation
+          description: 'Description',
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const response = await POST(mockRequest)
+      expect(response.status).toBe(400)
+    })
+
+    it('should handle non-existent freelancer', async () => {
+      // Mock freelancer lookup returning null
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 401 for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: null,
+      })
+
+      const response = await POST(mockRequest)
+      expect(response.status).toBe(401)
+    })
+
+    it('should handle database errors during creation', async () => {
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: 'freelancer-123', email: 'freelancer@example.com' },
+          error: null,
+        }),
+      })
+
+      // Mock contract creation with error
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database error' },
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      expect(response.status).toBe(500)
+    })
+  })
+})

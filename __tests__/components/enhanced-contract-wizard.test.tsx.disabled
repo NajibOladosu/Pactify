@@ -1,0 +1,581 @@
+// Mock userEvent for React 19 compatibility
+const mockUserEvent = {
+  setup: () => ({
+    click: jest.fn(),
+    type: jest.fn(),
+  }),
+}
+
+const mockRender = jest.fn()
+const mockScreen = {
+  getByText: jest.fn(),
+  getByLabelText: jest.fn(),
+  getByDisplayValue: jest.fn(),
+  queryByText: jest.fn(),
+  getByRole: jest.fn(),
+}
+const mockFireEvent = {
+  click: jest.fn(),
+}
+const mockWaitFor = jest.fn()
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/use-toast'
+import EnhancedContractWizard from '@/components/contracts/enhanced-contract-wizard'
+
+// Mock dependencies
+jest.mock('next/navigation', () => ({
+  useRouter: jest.fn(),
+}))
+
+jest.mock('@/components/ui/use-toast', () => ({
+  useToast: jest.fn(),
+}))
+
+const mockRouter = {
+  push: jest.fn(),
+  replace: jest.fn(),
+  refresh: jest.fn(),
+  back: jest.fn(),
+  forward: jest.fn(),
+}
+
+const mockToast = jest.fn()
+
+describe('EnhancedContractWizard', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
+    ;(useToast as jest.Mock).mockReturnValue({ toast: mockToast })
+    
+    // Mock fetch
+    global.fetch = jest.fn()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  describe('Initial Render', () => {
+    it('should render the wizard with first step (Template Selection)', () => {
+      render(<EnhancedContractWizard />)
+      
+      expect(screen.getByText('Create New Contract')).toBeInTheDocument()
+      expect(screen.getByText('Choose Your Contract Template')).toBeInTheDocument()
+      expect(screen.getByText('Web Development Contract')).toBeInTheDocument()
+      expect(screen.getByText('Graphic Design Contract')).toBeInTheDocument()
+      expect(screen.getByText('Content Writing Contract')).toBeInTheDocument()
+      expect(screen.getByText('Consulting Agreement')).toBeInTheDocument()
+      expect(screen.getByText('Custom Contract')).toBeInTheDocument()
+    })
+
+    it('should show correct step navigation', () => {
+      render(<EnhancedContractWizard />)
+      
+      // Check step indicators
+      expect(screen.getByText('Template')).toBeInTheDocument()
+      expect(screen.getByText('Basic Info & Role')).toBeInTheDocument()
+      expect(screen.getByText('Payment & Type')).toBeInTheDocument()
+      expect(screen.getByText('Terms & Timeline')).toBeInTheDocument()
+      expect(screen.getByText('Review')).toBeInTheDocument()
+      
+      // First step should be active
+      const activeStep = screen.getByText('1')
+      expect(activeStep).toBeInTheDocument()
+      
+      // Back button should be disabled on first step
+      expect(screen.getByText('Back')).toBeDisabled()
+    })
+  })
+
+  describe('Step 1: Template Selection', () => {
+    it('should allow selecting a template', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Click on web development template
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      
+      // Check if template is selected (should show checkmark)
+      expect(screen.getByTestId('check-circle') || screen.getByText('✓')).toBeInTheDocument()
+    })
+
+    it('should show validation error when no template is selected', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Try to go to next step without selecting template
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Please select a template')).toBeInTheDocument()
+    })
+
+    it('should advance to next step when template is selected', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Select a template
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      
+      // Click next
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Should be on step 2
+      expect(screen.getByText('Contract Information & Your Role')).toBeInTheDocument()
+    })
+  })
+
+  describe('Step 2: Basic Info & Role', () => {
+    beforeEach(async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to step 2
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+    })
+
+    it('should show role selection options', () => {
+      expect(screen.getByText('I am the...')).toBeInTheDocument()
+      expect(screen.getByText('Freelancer')).toBeInTheDocument()
+      expect(screen.getByText('Client')).toBeInTheDocument()
+    })
+
+    it('should allow role selection', async () => {
+      const user = userEvent.setup()
+      
+      // Select freelancer role
+      const freelancerRole = screen.getByText('Freelancer')
+      await user.click(freelancerRole)
+      
+      // Check if client email field updates
+      expect(screen.getByLabelText(/Client Email Address/)).toBeInTheDocument()
+    })
+
+    it('should validate required fields', async () => {
+      const user = userEvent.setup()
+      
+      // Try to advance without filling required fields
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Contract title is required')).toBeInTheDocument()
+      expect(screen.getByText('Description is required')).toBeInTheDocument()
+      expect(screen.getByText('Please select your role in this contract')).toBeInTheDocument()
+    })
+
+    it('should validate email format', async () => {
+      const user = userEvent.setup()
+      
+      // Fill in basic info
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'invalid-email')
+      
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument()
+    })
+
+    it('should advance to next step when all fields are valid', async () => {
+      const user = userEvent.setup()
+      
+      // Fill in valid data
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'client@example.com')
+      
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Payment Structure')).toBeInTheDocument()
+    })
+  })
+
+  describe('Step 3: Payment & Type', () => {
+    beforeEach(async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to step 3
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      let nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 2
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'client@example.com')
+      
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+    })
+
+    it('should show payment type options', () => {
+      expect(screen.getByText('Payment Structure')).toBeInTheDocument()
+      expect(screen.getByText('Fixed Price')).toBeInTheDocument()
+      expect(screen.getByText('Milestone-based')).toBeInTheDocument()
+      expect(screen.getByText('Hourly Rate')).toBeInTheDocument()
+    })
+
+    it('should allow selecting payment type', async () => {
+      const user = userEvent.setup()
+      
+      // Select milestone-based payment
+      const milestoneType = screen.getByText('Milestone-based')
+      await user.click(milestoneType)
+      
+      // Should show milestone explanation
+      expect(screen.getByText('Milestone-based Contract')).toBeInTheDocument()
+    })
+
+    it('should validate amount field', async () => {
+      const user = userEvent.setup()
+      
+      // Try to advance without amount
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Amount must be greater than 0')).toBeInTheDocument()
+    })
+
+    it('should show hourly rate label for hourly contracts', async () => {
+      const user = userEvent.setup()
+      
+      // Select hourly rate
+      const hourlyType = screen.getByText('Hourly Rate')
+      await user.click(hourlyType)
+      
+      expect(screen.getByLabelText(/Hourly Rate/)).toBeInTheDocument()
+    })
+
+    it('should advance to milestone step for milestone contracts', async () => {
+      const user = userEvent.setup()
+      
+      // Select milestone-based payment
+      const milestoneType = screen.getByText('Milestone-based')
+      await user.click(milestoneType)
+      
+      // Enter amount
+      const amountInput = screen.getByLabelText(/Total Amount/)
+      await user.type(amountInput, '5000')
+      
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Project Milestones')).toBeInTheDocument()
+    })
+
+    it('should skip milestone step for fixed price contracts', async () => {
+      const user = userEvent.setup()
+      
+      // Select fixed price (should be default)
+      const fixedType = screen.getByText('Fixed Price')
+      await user.click(fixedType)
+      
+      // Enter amount
+      const amountInput = screen.getByLabelText(/Total Amount/)
+      await user.type(amountInput, '5000')
+      
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Should skip to terms & timeline step
+      expect(screen.getByText('Contract Terms & Timeline')).toBeInTheDocument()
+    })
+  })
+
+  describe('Step 4: Milestones (for milestone contracts)', () => {
+    beforeEach(async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to milestone step
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      let nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 2
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'client@example.com')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 3 - select milestone
+      const milestoneType = screen.getByText('Milestone-based')
+      await user.click(milestoneType)
+      const amountInput = screen.getByLabelText(/Total Amount/)
+      await user.type(amountInput, '5000')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+    })
+
+    it('should show milestone management interface', () => {
+      expect(screen.getByText('Project Milestones')).toBeInTheDocument()
+      expect(screen.getByText('Add Milestone')).toBeInTheDocument()
+      expect(screen.getByText('Total Contract Amount:')).toBeInTheDocument()
+      expect(screen.getByText('$5000.00')).toBeInTheDocument()
+    })
+
+    it('should allow adding milestones', async () => {
+      const user = userEvent.setup()
+      
+      // Add milestone
+      const addButton = screen.getByText('Add Milestone')
+      await user.click(addButton)
+      
+      expect(screen.getByText('Milestone 1')).toBeInTheDocument()
+      expect(screen.getByLabelText(/Milestone Title/)).toBeInTheDocument()
+      expect(screen.getByLabelText(/Amount/)).toBeInTheDocument()
+    })
+
+    it('should validate milestone amounts match total', async () => {
+      const user = userEvent.setup()
+      
+      // Add milestone with wrong amount
+      const addButton = screen.getByText('Add Milestone')
+      await user.click(addButton)
+      
+      const titleInput = screen.getByLabelText(/Milestone Title/)
+      await user.type(titleInput, 'Test Milestone')
+      
+      const amountInput = screen.getByLabelText(/Amount/)
+      await user.type(amountInput, '3000') // Less than total
+      
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Total milestone amount must equal contract amount')).toBeInTheDocument()
+    })
+
+    it('should allow removing milestones', async () => {
+      const user = userEvent.setup()
+      
+      // Add milestone
+      const addButton = screen.getByText('Add Milestone')
+      await user.click(addButton)
+      
+      // Remove milestone
+      const removeButton = screen.getByRole('button', { name: /remove/i })
+      await user.click(removeButton)
+      
+      expect(screen.queryByText('Milestone 1')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Contract Submission', () => {
+    beforeEach(async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate through all steps
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      let nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 2
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'client@example.com')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 3
+      const fixedType = screen.getByText('Fixed Price')
+      await user.click(fixedType)
+      const amountInput = screen.getByLabelText(/Total Amount/)
+      await user.type(amountInput, '5000')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 4 (terms)
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+    })
+
+    it('should show review step with all details', () => {
+      expect(screen.getByText('Review Your Contract')).toBeInTheDocument()
+      expect(screen.getByText('Contract Overview')).toBeInTheDocument()
+      expect(screen.getByText('Test Contract')).toBeInTheDocument()
+      expect(screen.getByText('client@example.com')).toBeInTheDocument()
+      expect(screen.getByText('USD $5000.00')).toBeInTheDocument()
+    })
+
+    it('should submit contract successfully', async () => {
+      const user = userEvent.setup()
+      
+      // Mock successful API response
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          contract: { id: 'contract-123', title: 'Test Contract' }
+        })
+      })
+      
+      const createButton = screen.getByText('Create Contract')
+      await user.click(createButton)
+      
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Contract Created Successfully!',
+          description: 'Your contract has been created and saved as a draft.',
+        })
+      })
+      
+      expect(mockRouter.push).toHaveBeenCalledWith('/dashboard/contracts/contract-123')
+    })
+
+    it('should handle API errors', async () => {
+      const user = userEvent.setup()
+      
+      // Mock API error
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: 'Validation failed'
+        })
+      })
+      
+      const createButton = screen.getByText('Create Contract')
+      await user.click(createButton)
+      
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: 'Error Creating Contract',
+          description: 'Validation failed',
+          variant: 'destructive',
+        })
+      })
+    })
+
+    it('should show loading state during submission', async () => {
+      const user = userEvent.setup()
+      
+      // Mock delayed API response
+      ;(global.fetch as jest.Mock).mockImplementationOnce(
+        () => new Promise(resolve => setTimeout(() => resolve({
+          ok: true,
+          json: async () => ({ contract: { id: 'contract-123' } })
+        }), 100))
+      )
+      
+      const createButton = screen.getByText('Create Contract')
+      await user.click(createButton)
+      
+      expect(screen.getByText('Creating Contract...')).toBeInTheDocument()
+      expect(screen.getByText('Creating Contract...')).toBeDisabled()
+    })
+  })
+
+  describe('Navigation', () => {
+    it('should allow going back to previous steps', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to step 2
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Go back to step 1
+      const backButton = screen.getByText('Back')
+      await user.click(backButton)
+      
+      expect(screen.getByText('Choose Your Contract Template')).toBeInTheDocument()
+    })
+
+    it('should preserve form data when navigating back and forth', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to step 2 and fill data
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      let nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      await user.type(screen.getByLabelText(/Contract Title/), 'Preserved Title')
+      
+      // Go back and forward
+      const backButton = screen.getByText('Back')
+      await user.click(backButton)
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Check if data is preserved
+      expect(screen.getByDisplayValue('Preserved Title')).toBeInTheDocument()
+    })
+  })
+
+  describe('Form Validation', () => {
+    it('should clear validation errors when fixing issues', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Try to advance without template selection
+      const nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('Please select a template')).toBeInTheDocument()
+      
+      // Select template
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      
+      // Error should be cleared
+      expect(screen.queryByText('Please select a template')).not.toBeInTheDocument()
+    })
+
+    it('should validate date ranges', async () => {
+      const user = userEvent.setup()
+      render(<EnhancedContractWizard />)
+      
+      // Navigate to terms step
+      const webDevTemplate = screen.getByText('Web Development Contract')
+      await user.click(webDevTemplate)
+      let nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 2
+      await user.type(screen.getByLabelText(/Contract Title/), 'Test Contract')
+      await user.type(screen.getByLabelText(/Project Description/), 'Test Description')
+      await user.click(screen.getByText('Freelancer'))
+      await user.type(screen.getByLabelText(/Client Email Address/), 'client@example.com')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Fill step 3
+      const fixedType = screen.getByText('Fixed Price')
+      await user.click(fixedType)
+      const amountInput = screen.getByLabelText(/Total Amount/)
+      await user.type(amountInput, '5000')
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      // Set invalid date range
+      await user.type(screen.getByLabelText(/Project Start Date/), '2024-12-31')
+      await user.type(screen.getByLabelText(/Expected Completion Date/), '2024-01-01')
+      
+      nextButton = screen.getByText('Next')
+      await user.click(nextButton)
+      
+      expect(screen.getByText('End date must be after start date')).toBeInTheDocument()
+    })
+  })
+})

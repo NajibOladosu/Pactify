@@ -21,6 +21,7 @@
 # project-info
 .mcp.json
 CLAUDE.md
+.md
 pactify_contract_workflow.md
 IMPLEMENTATION_TASKS.md
 
@@ -46,3 +47,5 @@ yarn-error.log*
 next-env.d.ts
 /venv/
 DEPLOYMENT.md
+TEST_SUMMARY.md
+TESTING.md

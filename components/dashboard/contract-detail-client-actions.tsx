@@ -79,9 +79,9 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
       
       const result = await response.json();
       
-      if (result.success && result.checkout_url) {
-        // Redirect to Stripe checkout
-        window.location.href = result.checkout_url;
+      if (result.success && result.checkout_session?.url) {
+        // Redirect directly to Stripe Checkout page
+        window.location.href = result.checkout_session.url;
       } else {
         toast({
           title: "Failed to initiate funding",

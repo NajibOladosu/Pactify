@@ -1,0 +1,686 @@
+import { SecurityValidator, SecurityValidationError, createSecurityValidator, withSecurityValidation } from '@/utils/security/validations'
+import { mockSupabaseClient, mockUser, mockContract, mockProfile } from '../../mocks/supabase.js'
+
+// Mock the Supabase client
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+describe('SecurityValidator', () => {
+  let validator: SecurityValidator
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    validator = new SecurityValidator(mockSupabaseClient, mockUser.id)
+  })
+
+  describe('Contract Access Validation', () => {
+    it('should validate contract access for creator', async () => {
+      const contract = {
+        ...mockContract,
+        creator_id: mockUser.id,
+        client_id: 'other-user',
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validateContractAccess('contract-123')
+      expect(result).toEqual(contract)
+    })
+
+    it('should validate contract access for client', async () => {
+      const contract = {
+        ...mockContract,
+        creator_id: 'other-user',
+        client_id: mockUser.id,
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validateContractAccess('contract-123')
+      expect(result).toEqual(contract)
+    })
+
+    it('should validate contract access for freelancer', async () => {
+      const contract = {
+        ...mockContract,
+        creator_id: 'other-user',
+        client_id: 'another-user',
+        freelancer_id: mockUser.id,
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validateContractAccess('contract-123')
+      expect(result).toEqual(contract)
+    })
+
+    it('should throw error for non-existent contract', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateContractAccess('non-existent'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateContractAccess('non-existent'))
+        .rejects.toMatchObject({
+          code: 'CONTRACT_NOT_FOUND',
+          statusCode: 404,
+        })
+    })
+
+    it('should throw error for unauthorized access', async () => {
+      const contract = {
+        ...mockContract,
+        creator_id: 'other-user',
+        client_id: 'another-user',
+        freelancer_id: 'third-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateContractAccess('contract-123'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateContractAccess('contract-123'))
+        .rejects.toMatchObject({
+          code: 'CONTRACT_ACCESS_DENIED',
+          statusCode: 403,
+        })
+    })
+
+    it('should validate specific role requirements', async () => {
+      const contract = {
+        ...mockContract,
+        creator_id: mockUser.id,
+        client_id: 'other-user',
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      // Should pass for creator role
+      const result = await validator.validateContractAccess('contract-123', 'creator')
+      expect(result).toEqual(contract)
+
+      // Should fail for client role
+      await expect(validator.validateContractAccess('contract-123', 'client'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateContractAccess('contract-123', 'client'))
+        .rejects.toMatchObject({
+          code: 'INVALID_ROLE_CLIENT',
+        })
+    })
+  })
+
+  describe('Status Transition Validation', () => {
+    it('should allow valid contract status transitions', () => {
+      // Valid transitions
+      expect(() => validator.validateContractStatusTransition('draft', 'pending_signatures')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('pending_signatures', 'pending_funding')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('pending_funding', 'active')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('active', 'pending_delivery')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('pending_delivery', 'in_review')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('in_review', 'pending_completion')).not.toThrow()
+      expect(() => validator.validateContractStatusTransition('pending_completion', 'completed')).not.toThrow()
+    })
+
+    it('should reject invalid contract status transitions', () => {
+      // Invalid transitions
+      expect(() => validator.validateContractStatusTransition('draft', 'completed'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateContractStatusTransition('completed', 'draft'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateContractStatusTransition('cancelled', 'active'))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should throw proper error for invalid status transitions', () => {
+      try {
+        validator.validateContractStatusTransition('draft', 'completed')
+      } catch (error) {
+        expect(error).toBeInstanceOf(SecurityValidationError)
+        expect(error.code).toBe('INVALID_STATUS_TRANSITION')
+        expect(error.statusCode).toBe(400)
+      }
+    })
+
+    it('should allow valid milestone status transitions', () => {
+      expect(() => validator.validateMilestoneStatusTransition('pending', 'in_progress')).not.toThrow()
+      expect(() => validator.validateMilestoneStatusTransition('in_progress', 'submitted')).not.toThrow()
+      expect(() => validator.validateMilestoneStatusTransition('submitted', 'approved')).not.toThrow()
+      expect(() => validator.validateMilestoneStatusTransition('approved', 'completed')).not.toThrow()
+      expect(() => validator.validateMilestoneStatusTransition('submitted', 'revision_requested')).not.toThrow()
+      expect(() => validator.validateMilestoneStatusTransition('revision_requested', 'in_progress')).not.toThrow()
+    })
+
+    it('should reject invalid milestone status transitions', () => {
+      expect(() => validator.validateMilestoneStatusTransition('pending', 'completed'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateMilestoneStatusTransition('completed', 'pending'))
+        .toThrow(SecurityValidationError)
+    })
+  })
+
+  describe('Milestone Access Validation', () => {
+    it('should validate milestone access for authorized user', async () => {
+      const milestone = {
+        id: 'milestone-123',
+        contract_id: 'contract-123',
+        title: 'Test Milestone',
+        amount: 1000,
+        status: 'pending',
+      }
+
+      const contract = {
+        ...mockContract,
+        client_id: mockUser.id,
+      }
+
+      // Mock milestone lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: milestone,
+          error: null,
+        }),
+      })
+
+      // Mock contract access validation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validateMilestoneAccess('milestone-123', 'contract-123')
+      expect(result).toEqual(milestone)
+    })
+
+    it('should throw error for non-existent milestone', async () => {
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateMilestoneAccess('non-existent', 'contract-123'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateMilestoneAccess('non-existent', 'contract-123'))
+        .rejects.toMatchObject({
+          code: 'MILESTONE_NOT_FOUND',
+          statusCode: 404,
+        })
+    })
+  })
+
+  describe('Payment Access Validation', () => {
+    it('should validate payment access for payer', async () => {
+      const payment = {
+        id: 'payment-123',
+        contract_id: 'contract-123',
+        payer_id: mockUser.id,
+        payee_id: 'other-user',
+        amount: 1000,
+        status: 'pending',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: payment,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validatePaymentAccess('payment-123')
+      expect(result).toEqual(payment)
+    })
+
+    it('should validate payment access for payee', async () => {
+      const payment = {
+        id: 'payment-123',
+        contract_id: 'contract-123',
+        payer_id: 'other-user',
+        payee_id: mockUser.id,
+        amount: 1000,
+        status: 'pending',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: payment,
+          error: null,
+        }),
+      })
+
+      const result = await validator.validatePaymentAccess('payment-123')
+      expect(result).toEqual(payment)
+    })
+
+    it('should throw error for non-existent payment', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validatePaymentAccess('non-existent'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validatePaymentAccess('non-existent'))
+        .rejects.toMatchObject({
+          code: 'PAYMENT_NOT_FOUND',
+          statusCode: 404,
+        })
+    })
+  })
+
+  describe('KYC Requirements Validation', () => {
+    it('should pass validation for approved KYC with sufficient level', async () => {
+      const profile = {
+        ...mockProfile,
+        kyc_status: 'approved',
+        verification_level: 'basic',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: profile,
+          error: null,
+        }),
+      })
+
+      // Basic verification for amounts <= $500
+      await expect(validator.validateKycRequirements(500, 'USD')).resolves.not.toThrow()
+    })
+
+    it('should throw error for non-approved KYC', async () => {
+      const profile = {
+        ...mockProfile,
+        kyc_status: 'pending',
+        verification_level: 'basic',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: profile,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateKycRequirements(500, 'USD'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateKycRequirements(500, 'USD'))
+        .rejects.toMatchObject({
+          code: 'KYC_NOT_APPROVED',
+          statusCode: 403,
+        })
+    })
+
+    it('should throw error for insufficient KYC level', async () => {
+      const profile = {
+        ...mockProfile,
+        kyc_status: 'approved',
+        verification_level: 'basic',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: profile,
+          error: null,
+        }),
+      })
+
+      // Enhanced verification required for amounts > $500
+      await expect(validator.validateKycRequirements(1000, 'USD'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateKycRequirements(1000, 'USD'))
+        .rejects.toMatchObject({
+          code: 'INSUFFICIENT_KYC_LEVEL',
+          statusCode: 403,
+        })
+    })
+  })
+
+  describe('Rate Limiting Validation', () => {
+    it('should pass validation when under rate limit', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: [], // No recent activities
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateRateLimit('create_contract', 5)).resolves.not.toThrow()
+    })
+
+    it('should throw error when rate limit exceeded', async () => {
+      const recentActivities = new Array(5).fill({ id: 'activity-123' })
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: recentActivities,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateRateLimit('create_contract', 5))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateRateLimit('create_contract', 5))
+        .rejects.toMatchObject({
+          code: 'RATE_LIMIT_EXCEEDED',
+          statusCode: 429,
+        })
+    })
+  })
+
+  describe('Amount Validation', () => {
+    it('should validate amounts within range', () => {
+      expect(() => validator.validateAmount(100)).not.toThrow()
+      expect(() => validator.validateAmount(1000)).not.toThrow()
+      expect(() => validator.validateAmount(50000)).not.toThrow()
+    })
+
+    it('should throw error for amounts too low', () => {
+      expect(() => validator.validateAmount(0))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateAmount(-100))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should throw error for amounts too high', () => {
+      expect(() => validator.validateAmount(1000001))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should use custom min/max amounts', () => {
+      expect(() => validator.validateAmount(5, 10, 100))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateAmount(150, 10, 100))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateAmount(50, 10, 100))
+        .not.toThrow()
+    })
+  })
+
+  describe('File Upload Validation', () => {
+    it('should validate proper HTTPS URLs', () => {
+      expect(() => validator.validateFileUpload('https://example.com/file.pdf')).not.toThrow()
+    })
+
+    it('should reject non-HTTPS URLs', () => {
+      expect(() => validator.validateFileUpload('http://example.com/file.pdf'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateFileUpload('ftp://example.com/file.pdf'))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should validate file types when specified', () => {
+      expect(() => validator.validateFileUpload('https://example.com/file.pdf', ['pdf', 'doc']))
+        .not.toThrow()
+      expect(() => validator.validateFileUpload('https://example.com/file.exe', ['pdf', 'doc']))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should reject invalid file URLs', () => {
+      expect(() => validator.validateFileUpload(''))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateFileUpload('not-a-url'))
+        .toThrow(SecurityValidationError)
+    })
+  })
+
+  describe('Email Validation', () => {
+    it('should validate proper email formats', () => {
+      expect(() => validator.validateEmail('test@example.com')).not.toThrow()
+      expect(() => validator.validateEmail('user.name+tag@domain.co.uk')).not.toThrow()
+    })
+
+    it('should reject invalid email formats', () => {
+      expect(() => validator.validateEmail('invalid-email'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateEmail('test@'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateEmail('@example.com'))
+        .toThrow(SecurityValidationError)
+    })
+  })
+
+  describe('Text Input Validation', () => {
+    it('should validate and clean normal text', () => {
+      const result = validator.validateTextInput('Hello world!')
+      expect(result).toBe('Hello world!')
+    })
+
+    it('should strip HTML tags', () => {
+      const result = validator.validateTextInput('Hello <script>alert("xss")</script> world!')
+      expect(result).toBe('Hello alert("xss") world!')
+    })
+
+    it('should reject text that is too long', () => {
+      const longText = 'a'.repeat(10001)
+      expect(() => validator.validateTextInput(longText))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput(longText))
+        .toThrow('TEXT_TOO_LONG')
+    })
+
+    it('should reject SQL injection attempts', () => {
+      expect(() => validator.validateTextInput('SELECT * FROM users'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput("'; DROP TABLE users; --"))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput('1 OR 1=1'))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should reject malicious content', () => {
+      expect(() => validator.validateTextInput('test/* malicious comment */'))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput('UNION SELECT password FROM users'))
+        .toThrow(SecurityValidationError)
+    })
+
+    it('should handle empty or invalid inputs', () => {
+      expect(() => validator.validateTextInput(''))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput(null as any))
+        .toThrow(SecurityValidationError)
+      expect(() => validator.validateTextInput(123 as any))
+        .toThrow(SecurityValidationError)
+    })
+  })
+
+  describe('Subscription Limits Validation', () => {
+    it('should pass validation for users with available contracts', async () => {
+      const profile = {
+        ...mockProfile,
+        subscription_tier: 'free',
+        available_contracts: 5,
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: profile,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateSubscriptionLimits('create_contract')).resolves.not.toThrow()
+    })
+
+    it('should throw error for free users with no available contracts', async () => {
+      const profile = {
+        ...mockProfile,
+        subscription_tier: 'free',
+        available_contracts: 0,
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: profile,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateSubscriptionLimits('create_contract'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateSubscriptionLimits('create_contract'))
+        .rejects.toMatchObject({
+          code: 'SUBSCRIPTION_LIMIT_REACHED',
+          statusCode: 403,
+        })
+    })
+
+    it('should throw error for missing profile', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      await expect(validator.validateSubscriptionLimits('create_contract'))
+        .rejects.toThrow(SecurityValidationError)
+      await expect(validator.validateSubscriptionLimits('create_contract'))
+        .rejects.toMatchObject({
+          code: 'PROFILE_NOT_FOUND',
+          statusCode: 404,
+        })
+    })
+  })
+})
+
+describe('createSecurityValidator', () => {
+  it('should create validator for authenticated user', async () => {
+    mockSupabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    })
+
+    const validator = await createSecurityValidator()
+    expect(validator).toBeInstanceOf(SecurityValidator)
+  })
+
+  it('should throw error for unauthenticated user', async () => {
+    mockSupabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    })
+
+    await expect(createSecurityValidator())
+      .rejects.toThrow(SecurityValidationError)
+    await expect(createSecurityValidator())
+      .rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+        statusCode: 401,
+      })
+  })
+})
+
+describe('withSecurityValidation', () => {
+  it('should pass through successful handler results', async () => {
+    const mockHandler = jest.fn().mockResolvedValue('success')
+    const wrappedHandler = withSecurityValidation(mockHandler)
+
+    const result = await wrappedHandler('arg1', 'arg2')
+    expect(result).toBe('success')
+    expect(mockHandler).toHaveBeenCalledWith('arg1', 'arg2')
+  })
+
+  it('should re-throw SecurityValidationError as-is', async () => {
+    const mockHandler = jest.fn().mockRejectedValue(
+      new SecurityValidationError('Test error', 'TEST_ERROR', 400)
+    )
+    const wrappedHandler = withSecurityValidation(mockHandler)
+
+    await expect(wrappedHandler()).rejects.toThrow(SecurityValidationError)
+    await expect(wrappedHandler()).rejects.toMatchObject({
+      code: 'TEST_ERROR',
+      statusCode: 400,
+    })
+  })
+
+  it('should wrap unexpected errors in SecurityValidationError', async () => {
+    const mockHandler = jest.fn().mockRejectedValue(new Error('Unexpected error'))
+    const wrappedHandler = withSecurityValidation(mockHandler)
+
+    await expect(wrappedHandler()).rejects.toThrow(SecurityValidationError)
+    await expect(wrappedHandler()).rejects.toMatchObject({
+      code: 'INTERNAL_SECURITY_ERROR',
+      statusCode: 500,
+    })
+  })
+})

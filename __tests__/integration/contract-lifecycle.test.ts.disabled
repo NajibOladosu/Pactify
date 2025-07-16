@@ -1,0 +1,646 @@
+import { NextRequest } from 'next/server'
+import { POST as createContract } from '@/app/api/contracts/route'
+import { POST as signContract } from '@/app/api/contracts/[id]/sign/route'
+import { POST as fundContract } from '@/app/api/contracts/[id]/fund/route'
+import { POST as confirmFunding } from '@/app/api/contracts/[id]/fund/confirm/route'
+import { POST as releasePayment } from '@/app/api/contracts/[id]/release-payment/route'
+import { mockSupabaseClient, mockUser, mockProfile } from '../mocks/supabase.js'
+import { mockStripe, mockCheckoutSession, mockPaymentIntent } from '../mocks/stripe.js'
+
+// Mock dependencies
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+jest.mock('@/utils/profile-helpers', () => ({
+  ensureUserProfile: jest.fn().mockResolvedValue(mockProfile),
+}))
+
+jest.mock('@/utils/security/middleware', () => ({
+  withSecurity: jest.fn((handler) => handler),
+}))
+
+jest.mock('stripe', () => ({
+  __esModule: true,
+  default: jest.fn(() => mockStripe),
+}))
+
+describe('Contract Lifecycle Integration Tests', () => {
+  const clientUser = {
+    ...mockUser,
+    id: 'client-123',
+    email: 'client@example.com',
+  }
+
+  const freelancerUser = {
+    ...mockUser,
+    id: 'freelancer-123',
+    email: 'freelancer@example.com',
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  describe('Full Contract Lifecycle', () => {
+    it('should complete full contract lifecycle from creation to payment release', async () => {
+      // Step 1: Create contract
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: freelancerUser,
+          error: null,
+        }),
+      })
+
+      // Mock contract creation
+      const newContract = {
+        id: 'contract-123',
+        title: 'Integration Test Contract',
+        description: 'Test contract for integration testing',
+        amount: 1000,
+        currency: 'USD',
+        status: 'draft',
+        client_id: clientUser.id,
+        freelancer_id: freelancerUser.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: newContract,
+          error: null,
+        }),
+      })
+
+      const createRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Integration Test Contract',
+          description: 'Test contract for integration testing',
+          amount: 1000,
+          currency: 'USD',
+          freelancer_email: freelancerUser.email,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createResponse = await createContract(createRequest)
+      const createData = await createResponse.json()
+
+      expect(createResponse.status).toBe(201)
+      expect(createData.contract.id).toBe('contract-123')
+      expect(createData.contract.status).toBe('draft')
+
+      // Step 2: Sign contract (freelancer)
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: freelancerUser },
+        error: null,
+      })
+
+      const contractForSigning = {
+        ...newContract,
+        status: 'pending_signatures',
+        freelancer_signed_at: null,
+        client_signed_at: null,
+      }
+
+      // Mock contract lookup for signing
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contractForSigning,
+          error: null,
+        }),
+      })
+
+      // Mock contract update with signature
+      const signedContract = {
+        ...contractForSigning,
+        freelancer_signed_at: new Date().toISOString(),
+        status: 'pending_signatures', // Still pending client signature
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: signedContract,
+          error: null,
+        }),
+      })
+
+      const signRequest = new NextRequest(`http://localhost:3000/api/contracts/${newContract.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          signature_data: 'base64-signature-data',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const signResponse = await signContract(signRequest, { params: { id: newContract.id } })
+      const signData = await signResponse.json()
+
+      expect(signResponse.status).toBe(200)
+      expect(signData.contract.freelancer_signed_at).toBeTruthy()
+
+      // Step 3: Sign contract (client)
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock contract lookup for client signing
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: signedContract,
+          error: null,
+        }),
+      })
+
+      const fullySignedContract = {
+        ...signedContract,
+        client_signed_at: new Date().toISOString(),
+        status: 'pending_funding',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fullySignedContract,
+          error: null,
+        }),
+      })
+
+      const clientSignResponse = await signContract(signRequest, { params: { id: newContract.id } })
+      const clientSignData = await clientSignResponse.json()
+
+      expect(clientSignResponse.status).toBe(200)
+      expect(clientSignData.contract.status).toBe('pending_funding')
+
+      // Step 4: Fund contract (escrow)
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock contract lookup for funding
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fullySignedContract,
+          error: null,
+        }),
+      })
+
+      // Mock Stripe checkout session creation
+      mockStripe.checkout.sessions.create.mockResolvedValue(mockCheckoutSession)
+
+      // Mock escrow payment record creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: 'escrow-123', status: 'pending' },
+          error: null,
+        }),
+      })
+
+      const fundRequest = new NextRequest(`http://localhost:3000/api/contracts/${newContract.id}/fund`, {
+        method: 'POST',
+        body: JSON.stringify({
+          success_url: 'http://localhost:3000/success',
+          cancel_url: 'http://localhost:3000/cancel',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const fundResponse = await fundContract(fundRequest, { params: { id: newContract.id } })
+      const fundData = await fundResponse.json()
+
+      expect(fundResponse.status).toBe(200)
+      expect(fundData.checkout_url).toBe(mockCheckoutSession.url)
+
+      // Step 5: Confirm funding (webhook simulation)
+      const fundedContract = {
+        ...fullySignedContract,
+        status: 'active',
+        escrow_funded: true,
+      }
+
+      // Mock contract lookup for funding confirmation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundedContract,
+          error: null,
+        }),
+      })
+
+      // Mock contract update to active status
+      mockSupabaseClient.from.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundedContract,
+          error: null,
+        }),
+      })
+
+      const confirmRequest = new NextRequest(`http://localhost:3000/api/contracts/${newContract.id}/fund/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          payment_intent_id: 'pi_123',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const confirmResponse = await confirmFunding(confirmRequest, { params: { id: newContract.id } })
+      const confirmData = await confirmResponse.json()
+
+      expect(confirmResponse.status).toBe(200)
+      expect(confirmData.contract.status).toBe('active')
+      expect(confirmData.contract.escrow_funded).toBe(true)
+
+      // Step 6: Release payment (after work completion)
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      const completedContract = {
+        ...fundedContract,
+        status: 'pending_completion',
+      }
+
+      // Mock contract lookup for payment release
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: completedContract,
+          error: null,
+        }),
+      })
+
+      // Mock payment release to freelancer
+      mockStripe.paymentIntents.create.mockResolvedValue(mockPaymentIntent)
+
+      // Mock contract update to completed status
+      const finalContract = {
+        ...completedContract,
+        status: 'completed',
+        payment_released_at: new Date().toISOString(),
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: finalContract,
+          error: null,
+        }),
+      })
+
+      const releaseRequest = new NextRequest(`http://localhost:3000/api/contracts/${newContract.id}/release-payment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: 1000,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const releaseResponse = await releasePayment(releaseRequest, { params: { id: newContract.id } })
+      const releaseData = await releaseResponse.json()
+
+      expect(releaseResponse.status).toBe(200)
+      expect(releaseData.contract.status).toBe('completed')
+      expect(releaseData.contract.payment_released_at).toBeTruthy()
+
+      // Verify the complete workflow
+      expect(mockStripe.checkout.sessions.create).toHaveBeenCalled()
+      expect(mockStripe.paymentIntents.create).toHaveBeenCalled()
+    })
+  })
+
+  describe('Contract Creation with Milestones', () => {
+    it('should create contract with milestones and handle milestone payments', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: freelancerUser,
+          error: null,
+        }),
+      })
+
+      const contractWithMilestones = {
+        id: 'contract-456',
+        title: 'Milestone Contract',
+        description: 'Contract with milestones',
+        amount: 5000,
+        currency: 'USD',
+        status: 'draft',
+        client_id: clientUser.id,
+        freelancer_id: freelancerUser.id,
+        type: 'milestone',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      // Mock contract creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contractWithMilestones,
+          error: null,
+        }),
+      })
+
+      // Mock milestone creation
+      const milestones = [
+        { id: 'milestone-1', title: 'Design Phase', amount: 2000, status: 'pending' },
+        { id: 'milestone-2', title: 'Development Phase', amount: 3000, status: 'pending' },
+      ]
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: milestones,
+          error: null,
+        }),
+      })
+
+      const createRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Milestone Contract',
+          description: 'Contract with milestones',
+          amount: 5000,
+          currency: 'USD',
+          type: 'milestone',
+          freelancer_email: freelancerUser.email,
+          milestones: [
+            { title: 'Design Phase', amount: 2000, description: 'UI/UX Design' },
+            { title: 'Development Phase', amount: 3000, description: 'Code Implementation' },
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createResponse = await createContract(createRequest)
+      const createData = await createResponse.json()
+
+      expect(createResponse.status).toBe(201)
+      expect(createData.contract.type).toBe('milestone')
+      expect(createData.contract.amount).toBe(5000)
+    })
+  })
+
+  describe('Error Handling in Contract Flow', () => {
+    it('should handle contract creation errors gracefully', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock freelancer lookup failure
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const createRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Test Contract',
+          description: 'Test description',
+          amount: 1000,
+          currency: 'USD',
+          freelancer_email: 'nonexistent@example.com',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createResponse = await createContract(createRequest)
+      expect(createResponse.status).toBe(404)
+    })
+
+    it('should handle unauthorized signing attempts', async () => {
+      const unauthorizedUser = {
+        ...mockUser,
+        id: 'unauthorized-user',
+        email: 'unauthorized@example.com',
+      }
+
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: unauthorizedUser },
+        error: null,
+      })
+
+      const contract = {
+        id: 'contract-123',
+        client_id: clientUser.id,
+        freelancer_id: freelancerUser.id,
+        status: 'pending_signatures',
+      }
+
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const signRequest = new NextRequest(`http://localhost:3000/api/contracts/${contract.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          signature_data: 'base64-signature-data',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const signResponse = await signContract(signRequest, { params: { id: contract.id } })
+      expect(signResponse.status).toBe(403)
+    })
+
+    it('should handle funding attempts on wrong contract status', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      const draftContract = {
+        id: 'contract-123',
+        client_id: clientUser.id,
+        freelancer_id: freelancerUser.id,
+        status: 'draft', // Wrong status for funding
+        escrow_funded: false,
+      }
+
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: draftContract,
+          error: null,
+        }),
+      })
+
+      const fundRequest = new NextRequest(`http://localhost:3000/api/contracts/${draftContract.id}/fund`, {
+        method: 'POST',
+        body: JSON.stringify({
+          success_url: 'http://localhost:3000/success',
+          cancel_url: 'http://localhost:3000/cancel',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const fundResponse = await fundContract(fundRequest, { params: { id: draftContract.id } })
+      expect(fundResponse.status).toBe(400)
+    })
+
+    it('should handle payment release by non-client user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: freelancerUser }, // Freelancer trying to release payment
+        error: null,
+      })
+
+      const contract = {
+        id: 'contract-123',
+        client_id: clientUser.id,
+        freelancer_id: freelancerUser.id,
+        status: 'pending_completion',
+        escrow_funded: true,
+      }
+
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contract,
+          error: null,
+        }),
+      })
+
+      const releaseRequest = new NextRequest(`http://localhost:3000/api/contracts/${contract.id}/release-payment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: 1000,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const releaseResponse = await releasePayment(releaseRequest, { params: { id: contract.id } })
+      expect(releaseResponse.status).toBe(403)
+    })
+  })
+
+  describe('Data Validation Throughout Flow', () => {
+    it('should validate contract data consistency', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: freelancerUser,
+          error: null,
+        }),
+      })
+
+      const createRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: '', // Empty title should fail validation
+          description: 'Test description',
+          amount: 1000,
+          currency: 'USD',
+          freelancer_email: freelancerUser.email,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createResponse = await createContract(createRequest)
+      expect(createResponse.status).toBe(400)
+    })
+
+    it('should validate milestone amounts sum to contract total', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: clientUser },
+        error: null,
+      })
+
+      // Mock freelancer lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: freelancerUser,
+          error: null,
+        }),
+      })
+
+      const createRequest = new NextRequest('http://localhost:3000/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Milestone Contract',
+          description: 'Test milestone validation',
+          amount: 5000,
+          currency: 'USD',
+          type: 'milestone',
+          freelancer_email: freelancerUser.email,
+          milestones: [
+            { title: 'Phase 1', amount: 2000, description: 'First phase' },
+            { title: 'Phase 2', amount: 2500, description: 'Second phase' }, // Total 4500, not 5000
+          ],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createResponse = await createContract(createRequest)
+      expect(createResponse.status).toBe(400)
+    })
+  })
+})

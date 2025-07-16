@@ -1,5 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-03-31.basil",
+  typescript: true,
+});
+
+// Get base URL for redirects
+const getURL = () => {
+  // Prioritize NEXT_PUBLIC_SITE_URL based on user's Vercel config
+  let url =
+    process?.env?.NEXT_PUBLIC_SITE_URL ?? // Use the variable set in Vercel
+    process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Fallback to Vercel system variable
+    'http://localhost:3000/'; // Default for local dev
+  // Make sure to include `https://` when not localhost.
+  url = url.includes('http') ? url : `https://${url}`;
+  // Make sure to include a trailing `/`.
+  url = url.charAt(url.length - 1) === '/' ? url : `${url}/`;
+  return url;
+}
 
 export async function POST(
   request: NextRequest,
@@ -82,16 +102,16 @@ export async function POST(
     const platformFee = contractAmount * platformFeeRate;
     const totalToCharge = contractAmount + stripeFee + platformFee;
 
-    // Create payment record
+    // Create payment record (RLS policy now allows contract participants)
     const { data: payment, error: paymentError } = await supabase
       .from("contract_payments")
       .insert({
         contract_id: contractId,
         amount: contractAmount,
-        user_id: user.id, // Required for RLS policy
+        user_id: user.id,
         currency: contract.currency || "USD",
         status: "pending",
-        payment_type: "funding",
+        payment_type: "escrow",
         metadata: {
           platform_fee: platformFee,
           stripe_fee: stripeFee,
@@ -111,30 +131,83 @@ export async function POST(
       );
     }
 
-    // In a real implementation, this would create a Stripe Payment Intent
-    const mockPaymentIntent = {
-      id: `pi_${Date.now()}_${contractId.slice(0, 8)}`,
-      amount: Math.round(totalToCharge * 100), // Stripe uses cents
-      currency: (contract.currency || "USD").toLowerCase(),
-      client_secret: `pi_${Date.now()}_secret_${contractId.slice(0, 8)}`,
-      status: "requires_payment_method",
-      payment_method: payment_method_id || null,
+    const baseUrl = getURL();
+    const successUrl = `${baseUrl}dashboard/contracts/${contractId}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}dashboard/contracts/${contractId}?payment=cancelled`;
+
+    console.log('[Contract Funding] Base URL:', baseUrl);
+    console.log('[Contract Funding] Success URL:', successUrl);
+    console.log('[Contract Funding] Cancel URL:', cancelUrl);
+
+    // Create Stripe Checkout Session (like subscription flow)
+    const checkoutSession = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: (contract.currency || "USD").toLowerCase(),
+            product_data: {
+              name: `Contract Funding: ${contract.title}`,
+              description: `Escrow payment for contract with ${contract.freelancer_name || 'freelancer'}`,
+            },
+            unit_amount: Math.round(contractAmount * 100), // Contract amount
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: (contract.currency || "USD").toLowerCase(),
+            product_data: {
+              name: 'Platform Fee',
+              description: 'Pactify platform fee (2.5%)',
+            },
+            unit_amount: Math.round(platformFee * 100), // Platform fee
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: (contract.currency || "USD").toLowerCase(),
+            product_data: {
+              name: 'Processing Fee',
+              description: 'Payment processing fee',
+            },
+            unit_amount: Math.round(stripeFee * 100), // Processing fee
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         contract_id: contractId,
         payment_id: payment.id,
         platform_fee: platformFee.toFixed(2),
-        stripe_fee: stripeFee.toFixed(2)
-      }
-    };
+        stripe_fee: stripeFee.toFixed(2),
+        contract_amount: contractAmount.toFixed(2),
+        payment_type: 'contract_funding'
+      },
+      customer_email: user.email || undefined,
+    });
 
-    // Update payment with Stripe payment intent ID
+    if (!checkoutSession.url) {
+      console.error("Stripe session creation failed, no URL returned.");
+      return NextResponse.json(
+        { error: 'STRIPE_ERROR', message: 'Could not create checkout session' }, 
+        { status: 500 }
+      );
+    }
+
+    // Update payment with Stripe checkout session ID
     await supabase
       .from("contract_payments")
       .update({
-        stripe_payment_id: mockPaymentIntent.id,
+        stripe_payment_id: checkoutSession.id,
         metadata: {
           ...payment.metadata,
-          payment_intent_id: mockPaymentIntent.id
+          checkout_session_id: checkoutSession.id,
+          checkout_url: checkoutSession.url
         }
       })
       .eq("id", payment.id);
@@ -146,7 +219,7 @@ export async function POST(
       activity_type: "funding_initiated",
       description: `Escrow funding initiated for ${contractAmount} ${contract.currency}`,
       metadata: {
-        payment_intent_id: mockPaymentIntent.id,
+        checkout_session_id: checkoutSession.id,
         amount: contractAmount,
         platform_fee: platformFee,
         stripe_fee: stripeFee,
@@ -156,7 +229,12 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      payment_intent: mockPaymentIntent,
+      checkout_session: {
+        id: checkoutSession.id,
+        url: checkoutSession.url,
+        amount_total: checkoutSession.amount_total,
+        currency: checkoutSession.currency
+      },
       payment_id: payment.id,
       amount_breakdown: {
         contract_amount: contractAmount,
@@ -164,11 +242,11 @@ export async function POST(
         stripe_fee: stripeFee,
         total_to_charge: totalToCharge
       },
-      message: "Payment intent created successfully",
+      message: "Checkout session created successfully. Redirecting to Stripe Checkout.",
       next_steps: {
-        action: "confirm_payment",
-        description: "Complete payment to fund the project",
-        client_secret: mockPaymentIntent.client_secret
+        action: "redirect_to_stripe",
+        description: "Redirect user to Stripe Checkout page",
+        checkout_url: checkoutSession.url
       }
     });
 
@@ -241,22 +319,36 @@ export async function GET(
       );
     }
 
+    // Calculate amounts for display
+    const contractAmount = parseFloat(contract.total_amount?.toString() || "0");
+    const platformFeeRate = 0.025; // 2.5%
+    const stripeFee = (contractAmount * 0.029) + 0.30;
+    const platformFee = contractAmount * platformFeeRate;
+    const totalToCharge = contractAmount + stripeFee + platformFee;
+
     // Determine funding status
-    const fundedPayment = payments?.find(p => p.status === "funded");
+    const fundedPayment = payments?.find(p => p.status === "completed");
     const pendingPayment = payments?.find(p => p.status === "pending");
     
     const fundingStatus = {
       is_funded: !!fundedPayment,
       funding_amount: fundedPayment?.amount || null,
-      funded_at: fundedPayment?.funded_at || null,
+      funded_at: fundedPayment?.metadata?.funded_at || null,
       pending_payment: pendingPayment ? {
         id: pendingPayment.id,
         amount: pendingPayment.amount,
-        stripe_payment_intent_id: pendingPayment.stripe_payment_intent_id,
+        stripe_payment_id: pendingPayment.stripe_payment_id,
         created_at: pendingPayment.created_at
       } : null,
       can_fund: contract.client_id === user.id && contract.status === "pending_funding" && !fundedPayment,
       payments: payments || []
+    };
+
+    const amountBreakdown = {
+      contract_amount: contractAmount,
+      platform_fee: platformFee,
+      stripe_fee: stripeFee,
+      total_to_charge: totalToCharge
     };
 
     return NextResponse.json({
@@ -265,7 +357,8 @@ export async function GET(
       funding_status: fundingStatus,
       contract_status: contract.status,
       contract_amount: contract.total_amount,
-      currency: contract.currency || "USD"
+      currency: contract.currency || "USD",
+      amount_breakdown: amountBreakdown
     });
 
   } catch (error) {

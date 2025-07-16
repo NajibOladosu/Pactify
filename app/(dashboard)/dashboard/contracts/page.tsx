@@ -28,14 +28,10 @@ export default async function ContractsPage() {
   }
 
   // Fetch contracts from the database for the current user
-  // Include contracts where user is creator OR client (by ID or email)
+  // Simplified query without joins to avoid RLS issues
   const { data: contracts, error: fetchError } = await supabase
     .from("contracts")
-    .select(`
-      *,
-      contract_templates ( name ) 
-    `)
-    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id},client_email.eq.${user.email},freelancer_email.eq.${user.email}`)
+    .select("*")
     .order("created_at", { ascending: false }); // Order by creation date
 
   let fetchedContracts: ContractWithTemplate[] = []; // Use let to allow reassignment
@@ -43,9 +39,40 @@ export default async function ContractsPage() {
     console.error("Error fetching contracts:", fetchError);
     // Handle error display appropriately, maybe show a message on the page
     // fetchedContracts remains an empty array
-  } else {
-    // Ensure contracts is an array even if fetch returns null/undefined
-    fetchedContracts = Array.isArray(contracts) ? contracts : [];
+  } else if (contracts) {
+    // Filter contracts client-side based on user access
+    const userContracts = contracts.filter(contract => 
+      contract.creator_id === user.id ||
+      contract.client_id === user.id ||
+      contract.freelancer_id === user.id ||
+      contract.client_email === user.email ||
+      contract.freelancer_email === user.email
+    );
+
+    // Fetch contract templates for the filtered contracts
+    const contractsWithTemplates: ContractWithTemplate[] = await Promise.all(
+      userContracts.map(async (contract) => {
+        let contractTemplate = null;
+        if (contract.template_id) {
+          const { data: template } = await supabase
+            .from("contract_templates")
+            .select("name")
+            .eq("id", contract.template_id)
+            .single();
+          
+          if (template) {
+            contractTemplate = template;
+          }
+        }
+        
+        return {
+          ...contract,
+          contract_templates: contractTemplate
+        } as ContractWithTemplate;
+      })
+    );
+
+    fetchedContracts = contractsWithTemplates;
   }
 
   // Use the fetchedContracts variable

@@ -1,0 +1,467 @@
+import { test, expect } from '@playwright/test'
+
+// Mock user authentication helper
+async function mockAuth(page, userType = 'freelancer') {
+  await page.route('**/api/auth/**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: {
+          id: `${userType}-123`,
+          email: `${userType}@example.com`,
+          user_metadata: { user_type: userType },
+        },
+      }),
+    })
+  })
+}
+
+// Mock API routes
+async function mockContractAPI(page) {
+  await page.route('**/api/contracts', (route) => {
+    if (route.request().method() === 'POST') {
+      route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          contract: {
+            id: 'contract-123',
+            title: 'Test Contract',
+            status: 'draft',
+            amount: 1000,
+            currency: 'USD',
+          },
+        }),
+      })
+    } else {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          contracts: [],
+          total: 0,
+        }),
+      })
+    }
+  })
+}
+
+test.describe('Contract Creation E2E Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock authentication and API calls
+    await mockAuth(page, 'freelancer')
+    await mockContractAPI(page)
+    
+    // Navigate to the application
+    await page.goto('/')
+  })
+
+  test('should create a new contract using the wizard', async ({ page }) => {
+    // Navigate to contract creation
+    await page.click('text=Create Contract')
+    
+    // Should be on the contract wizard page
+    await expect(page.locator('h1')).toContainText('Create New Contract')
+    
+    // Step 1: Select template
+    await expect(page.locator('h3')).toContainText('Choose Your Contract Template')
+    await page.click('text=Web Development Contract')
+    
+    // Verify template is selected
+    await expect(page.locator('[data-testid="check-circle"]')).toBeVisible()
+    
+    // Go to next step
+    await page.click('text=Next')
+    
+    // Step 2: Basic info and role
+    await expect(page.locator('h3')).toContainText('Contract Information & Your Role')
+    
+    // Select freelancer role
+    await page.click('text=Freelancer')
+    
+    // Fill in basic information
+    await page.fill('input[id="title"]', 'E2E Test Contract')
+    await page.fill('textarea[id="description"]', 'This is a contract created through E2E testing')
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    
+    // Go to next step
+    await page.click('text=Next')
+    
+    // Step 3: Payment structure
+    await expect(page.locator('h3')).toContainText('Payment Structure')
+    
+    // Select fixed price
+    await page.click('text=Fixed Price')
+    
+    // Enter amount
+    await page.fill('input[id="total_amount"]', '1500')
+    
+    // Go to next step
+    await page.click('text=Next')
+    
+    // Step 4: Terms and timeline (skipped milestone step for fixed price)
+    await expect(page.locator('h3')).toContainText('Contract Terms & Timeline')
+    
+    // Terms should be pre-filled from template
+    await expect(page.locator('textarea[id="terms_and_conditions"]')).toHaveValue(/.+/)
+    
+    // Optionally set dates
+    await page.fill('input[id="start_date"]', '2024-01-01')
+    await page.fill('input[id="end_date"]', '2024-02-01')
+    
+    // Go to next step
+    await page.click('text=Next')
+    
+    // Step 5: Review
+    await expect(page.locator('h3')).toContainText('Review Your Contract')
+    
+    // Verify contract details
+    await expect(page.locator('text=E2E Test Contract')).toBeVisible()
+    await expect(page.locator('text=client@example.com')).toBeVisible()
+    await expect(page.locator('text=USD $1500.00')).toBeVisible()
+    await expect(page.locator('text=Fixed Price')).toBeVisible()
+    
+    // Create the contract
+    await page.click('text=Create Contract')
+    
+    // Should show loading state
+    await expect(page.locator('text=Creating Contract...')).toBeVisible()
+    
+    // Wait for redirect to contract details
+    await page.waitForURL('**/dashboard/contracts/contract-123')
+    
+    // Verify we're on the contract details page
+    await expect(page.locator('h1')).toContainText('Test Contract')
+  })
+
+  test('should validate required fields in contract wizard', async ({ page }) => {
+    await page.click('text=Create Contract')
+    
+    // Try to proceed without selecting template
+    await page.click('text=Next')
+    
+    // Should show validation error
+    await expect(page.locator('text=Please select a template')).toBeVisible()
+    
+    // Select template and proceed
+    await page.click('text=Web Development Contract')
+    await page.click('text=Next')
+    
+    // Try to proceed without filling required fields
+    await page.click('text=Next')
+    
+    // Should show validation errors
+    await expect(page.locator('text=Contract title is required')).toBeVisible()
+    await expect(page.locator('text=Description is required')).toBeVisible()
+    await expect(page.locator('text=Please select your role')).toBeVisible()
+    
+    // Fill in valid data
+    await page.click('text=Freelancer')
+    await page.fill('input[id="title"]', 'Valid Contract')
+    await page.fill('textarea[id="description"]', 'Valid description')
+    await page.fill('input[id="client_email"]', 'invalid-email')
+    
+    await page.click('text=Next')
+    
+    // Should show email validation error
+    await expect(page.locator('text=Please enter a valid email address')).toBeVisible()
+    
+    // Fix email and proceed
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    await page.click('text=Next')
+    
+    // Should proceed to payment step
+    await expect(page.locator('h3')).toContainText('Payment Structure')
+  })
+
+  test('should handle milestone-based contract creation', async ({ page }) => {
+    await page.click('text=Create Contract')
+    
+    // Select template and proceed through basic info
+    await page.click('text=Web Development Contract')
+    await page.click('text=Next')
+    
+    await page.click('text=Freelancer')
+    await page.fill('input[id="title"]', 'Milestone Contract')
+    await page.fill('textarea[id="description"]', 'Contract with milestones')
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    await page.click('text=Next')
+    
+    // Select milestone-based payment
+    await page.click('text=Milestone-based')
+    await page.fill('input[id="total_amount"]', '5000')
+    await page.click('text=Next')
+    
+    // Should be on milestone step
+    await expect(page.locator('h3')).toContainText('Project Milestones')
+    
+    // Add first milestone
+    await page.click('text=Add Milestone')
+    await page.fill('input[id="milestone-title-milestone-1"]', 'Design Phase')
+    await page.fill('input[id="milestone-amount-milestone-1"]', '2000')
+    await page.fill('textarea[id="milestone-description-milestone-1"]', 'UI/UX Design')
+    
+    // Add second milestone
+    await page.click('text=Add Milestone')
+    await page.fill('input[id="milestone-title-milestone-2"]', 'Development Phase')
+    await page.fill('input[id="milestone-amount-milestone-2"]', '3000')
+    await page.fill('textarea[id="milestone-description-milestone-2"]', 'Code Implementation')
+    
+    // Verify milestone totals
+    await expect(page.locator('text=$5000.00')).toBeVisible() // Total contract
+    await expect(page.locator('text=$5000.00')).toBeVisible() // Milestones total
+    await expect(page.locator('text=$0.00')).toBeVisible()    // Remaining
+    
+    // Proceed to next step
+    await page.click('text=Next')
+    
+    // Should be on terms step
+    await expect(page.locator('h3')).toContainText('Contract Terms & Timeline')
+  })
+
+  test('should validate milestone amounts', async ({ page }) => {
+    await page.click('text=Create Contract')
+    
+    // Navigate to milestone step
+    await page.click('text=Web Development Contract')
+    await page.click('text=Next')
+    
+    await page.click('text=Freelancer')
+    await page.fill('input[id="title"]', 'Milestone Contract')
+    await page.fill('textarea[id="description"]', 'Contract with milestones')
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    await page.click('text=Next')
+    
+    await page.click('text=Milestone-based')
+    await page.fill('input[id="total_amount"]', '5000')
+    await page.click('text=Next')
+    
+    // Add milestone with incorrect amount
+    await page.click('text=Add Milestone')
+    await page.fill('input[id="milestone-title-milestone-1"]', 'Design Phase')
+    await page.fill('input[id="milestone-amount-milestone-1"]', '3000') // Less than total
+    
+    // Try to proceed
+    await page.click('text=Next')
+    
+    // Should show validation error
+    await expect(page.locator('text=Total milestone amount must equal contract amount')).toBeVisible()
+    
+    // Fix the amount
+    await page.fill('input[id="milestone-amount-milestone-1"]', '5000')
+    
+    // Should now be able to proceed
+    await page.click('text=Next')
+    await expect(page.locator('h3')).toContainText('Contract Terms & Timeline')
+  })
+
+  test('should allow navigation between wizard steps', async ({ page }) => {
+    await page.click('text=Create Contract')
+    
+    // Navigate through steps
+    await page.click('text=Web Development Contract')
+    await page.click('text=Next')
+    
+    await page.click('text=Freelancer')
+    await page.fill('input[id="title"]', 'Navigation Test')
+    await page.fill('textarea[id="description"]', 'Testing navigation')
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    await page.click('text=Next')
+    
+    await page.fill('input[id="total_amount"]', '1000')
+    await page.click('text=Next')
+    
+    // Should be on terms step
+    await expect(page.locator('h3')).toContainText('Contract Terms & Timeline')
+    
+    // Go back to payment step
+    await page.click('text=Back')
+    await expect(page.locator('h3')).toContainText('Payment Structure')
+    
+    // Go back to basic info step
+    await page.click('text=Back')
+    await expect(page.locator('h3')).toContainText('Contract Information & Your Role')
+    
+    // Verify data is preserved
+    await expect(page.locator('input[id="title"]')).toHaveValue('Navigation Test')
+    await expect(page.locator('textarea[id="description"]')).toHaveValue('Testing navigation')
+    await expect(page.locator('input[id="client_email"]')).toHaveValue('client@example.com')
+    
+    // Navigate forward again
+    await page.click('text=Next')
+    await page.click('text=Next')
+    
+    // Should be back on terms step
+    await expect(page.locator('h3')).toContainText('Contract Terms & Timeline')
+  })
+
+  test('should handle API errors gracefully', async ({ page }) => {
+    // Mock API error
+    await page.route('**/api/contracts', (route) => {
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'Internal server error',
+        }),
+      })
+    })
+    
+    await page.click('text=Create Contract')
+    
+    // Complete the wizard
+    await page.click('text=Web Development Contract')
+    await page.click('text=Next')
+    
+    await page.click('text=Freelancer')
+    await page.fill('input[id="title"]', 'Error Test Contract')
+    await page.fill('textarea[id="description"]', 'Testing error handling')
+    await page.fill('input[id="client_email"]', 'client@example.com')
+    await page.click('text=Next')
+    
+    await page.fill('input[id="total_amount"]', '1000')
+    await page.click('text=Next')
+    
+    await page.click('text=Next')
+    
+    // Try to create contract
+    await page.click('text=Create Contract')
+    
+    // Should show error message
+    await expect(page.locator('text=Error Creating Contract')).toBeVisible()
+    await expect(page.locator('text=Internal server error')).toBeVisible()
+    
+    // Should remain on the same page
+    await expect(page.locator('h3')).toContainText('Review Your Contract')
+  })
+})
+
+test.describe('Contract Management E2E Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAuth(page, 'freelancer')
+    
+    // Mock contracts list API
+    await page.route('**/api/contracts', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          contracts: [
+            {
+              id: 'contract-1',
+              title: 'Web Development Project',
+              status: 'draft',
+              amount: 2500,
+              currency: 'USD',
+              client_email: 'client1@example.com',
+              created_at: '2024-01-15T10:00:00Z',
+            },
+            {
+              id: 'contract-2',
+              title: 'Mobile App Design',
+              status: 'active',
+              amount: 1800,
+              currency: 'USD',
+              client_email: 'client2@example.com',
+              created_at: '2024-01-10T14:30:00Z',
+            },
+          ],
+          total: 2,
+        }),
+      })
+    })
+    
+    await page.goto('/dashboard/contracts')
+  })
+
+  test('should display contracts list', async ({ page }) => {
+    // Should show page title
+    await expect(page.locator('h1')).toContainText('Contracts')
+    
+    // Should show contracts
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    await expect(page.locator('text=Mobile App Design')).toBeVisible()
+    
+    // Should show contract status
+    await expect(page.locator('text=Draft')).toBeVisible()
+    await expect(page.locator('text=Active')).toBeVisible()
+    
+    // Should show amounts
+    await expect(page.locator('text=$2,500.00')).toBeVisible()
+    await expect(page.locator('text=$1,800.00')).toBeVisible()
+  })
+
+  test('should filter contracts by status', async ({ page }) => {
+    // Wait for contracts to load
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    
+    // Filter by active status
+    await page.selectOption('select[name="status"]', 'active')
+    
+    // Should only show active contracts
+    await expect(page.locator('text=Mobile App Design')).toBeVisible()
+    await expect(page.locator('text=Web Development Project')).not.toBeVisible()
+    
+    // Clear filter
+    await page.selectOption('select[name="status"]', 'all')
+    
+    // Should show all contracts again
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    await expect(page.locator('text=Mobile App Design')).toBeVisible()
+  })
+
+  test('should search contracts', async ({ page }) => {
+    // Wait for contracts to load
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    
+    // Search for specific contract
+    await page.fill('input[placeholder="Search contracts..."]', 'Web Development')
+    
+    // Should filter results
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    await expect(page.locator('text=Mobile App Design')).not.toBeVisible()
+    
+    // Clear search
+    await page.fill('input[placeholder="Search contracts..."]', '')
+    
+    // Should show all contracts again
+    await expect(page.locator('text=Web Development Project')).toBeVisible()
+    await expect(page.locator('text=Mobile App Design')).toBeVisible()
+  })
+
+  test('should navigate to contract details', async ({ page }) => {
+    // Mock contract details API
+    await page.route('**/api/contracts/contract-1', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          contract: {
+            id: 'contract-1',
+            title: 'Web Development Project',
+            description: 'Build a responsive website',
+            status: 'draft',
+            amount: 2500,
+            currency: 'USD',
+            client_email: 'client1@example.com',
+            created_at: '2024-01-15T10:00:00Z',
+            milestones: [],
+            deliverables: [],
+          },
+        }),
+      })
+    })
+    
+    // Click on contract to view details
+    await page.click('text=Web Development Project')
+    
+    // Should navigate to contract details
+    await page.waitForURL('**/dashboard/contracts/contract-1')
+    
+    // Should show contract details
+    await expect(page.locator('h1')).toContainText('Web Development Project')
+    await expect(page.locator('text=Build a responsive website')).toBeVisible()
+    await expect(page.locator('text=Draft')).toBeVisible()
+  })
+})

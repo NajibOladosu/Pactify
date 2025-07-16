@@ -64,7 +64,7 @@ export async function POST(
       .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)
-      .eq("status", "funded")
+      .eq("status", "completed")
       .single();
 
     if (paymentError) {
@@ -184,7 +184,7 @@ export async function POST(
       .from("contract_payments")
       .insert({
         contract_id: contractId,
-        user_id: contract.freelancer_id, // Required for RLS policy
+        user_id: user.id, // Current user (client) creating the release record
         amount: amountToRelease,
         currency: fundedPayment.currency,
         status: "released",
@@ -418,7 +418,7 @@ export async function GET(
     }
 
     // Calculate payment summary
-    const fundedPayments = payments?.filter(p => p.status === "funded") || [];
+    const fundedPayments = payments?.filter(p => p.status === "completed") || [];
     const releasedPayments = payments?.filter(p => p.status === "released") || [];
     
     const totalFunded = fundedPayments.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);

@@ -1,0 +1,451 @@
+import { ensureUserProfile, createMissingProfiles, linkUserContracts } from '@/utils/profile-helpers'
+import { mockSupabaseClient, mockUser, mockProfile } from '../mocks/supabase.js'
+
+// Mock the Supabase client
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+describe('Profile Helpers', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  describe('ensureUserProfile', () => {
+    it('should return existing profile if found', async () => {
+      // Mock authenticated user
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      })
+
+      // Mock existing profile
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockProfile,
+          error: null,
+        }),
+      })
+
+      const result = await ensureUserProfile(mockUser.id)
+      expect(result).toEqual(mockProfile)
+    })
+
+    it('should create new profile if not found', async () => {
+      const newProfile = {
+        ...mockProfile,
+        id: mockUser.id,
+        display_name: 'testuser',
+        user_type: 'both',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      }
+
+      // Mock authenticated user
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      })
+
+      // Mock profile not found
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'PGRST116' }, // Not found error
+        }),
+      })
+
+      // Mock profile creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: newProfile,
+          error: null,
+        }),
+      })
+
+      // Mock RPC call for linking contracts
+      mockSupabaseClient.rpc.mockResolvedValue({ error: null })
+
+      const result = await ensureUserProfile(mockUser.id)
+      expect(result).toEqual(newProfile)
+      expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('link_user_contracts', {
+        p_user_id: mockUser.id,
+        p_user_email: mockUser.email,
+      })
+    })
+
+    it('should use user metadata for profile creation', async () => {
+      const userWithMetadata = {
+        ...mockUser,
+        user_metadata: {
+          full_name: 'John Doe',
+          user_type: 'freelancer',
+        },
+      }
+
+      // Mock authenticated user with metadata
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: userWithMetadata },
+        error: null,
+      })
+
+      // Mock profile not found
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'PGRST116' },
+        }),
+      })
+
+      // Mock profile creation
+      const insertMock = jest.fn().mockReturnThis()
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: insertMock,
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: mockUser.id },
+          error: null,
+        }),
+      })
+
+      mockSupabaseClient.rpc.mockResolvedValue({ error: null })
+
+      await ensureUserProfile(mockUser.id)
+
+      expect(insertMock).toHaveBeenCalledWith({
+        id: mockUser.id,
+        display_name: 'John Doe',
+        user_type: 'freelancer',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      })
+    })
+
+    it('should handle user without email', async () => {
+      const userWithoutEmail = {
+        ...mockUser,
+        email: null,
+      }
+
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: userWithoutEmail },
+        error: null,
+      })
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'PGRST116' },
+        }),
+      })
+
+      const insertMock = jest.fn().mockReturnThis()
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: insertMock,
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: mockUser.id },
+          error: null,
+        }),
+      })
+
+      mockSupabaseClient.rpc.mockResolvedValue({ error: null })
+
+      await ensureUserProfile(mockUser.id)
+
+      expect(insertMock).toHaveBeenCalledWith({
+        id: mockUser.id,
+        display_name: 'User',
+        user_type: 'both',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      })
+    })
+
+    it('should throw error for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: new Error('Not authenticated'),
+      })
+
+      await expect(ensureUserProfile(mockUser.id))
+        .rejects.toThrow('User not authenticated')
+    })
+
+    it('should throw error for profile creation failure', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      })
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'PGRST116' },
+        }),
+      })
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Insert failed' },
+        }),
+      })
+
+      await expect(ensureUserProfile(mockUser.id))
+        .rejects.toThrow('Failed to create profile: Insert failed')
+    })
+
+    it('should throw error for database errors', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: mockUser },
+        error: null,
+      })
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database connection failed' },
+        }),
+      })
+
+      await expect(ensureUserProfile(mockUser.id))
+        .rejects.toThrow('Database error: Database connection failed')
+    })
+  })
+
+  describe('createMissingProfiles', () => {
+    it('should create profiles for users without them', async () => {
+      const usersWithoutProfiles = [
+        {
+          id: 'user-1',
+          email: 'user1@example.com',
+          created_at: new Date().toISOString(),
+          profiles: null,
+        },
+        {
+          id: 'user-2',
+          email: 'user2@example.com',
+          created_at: new Date().toISOString(),
+          profiles: null,
+        },
+      ]
+
+      // Mock finding users without profiles
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: usersWithoutProfiles,
+          error: null,
+        }),
+      })
+
+      // Mock profile creation for each user
+      const insertMock = jest.fn().mockResolvedValue({ error: null })
+      mockSupabaseClient.from.mockReturnValue({
+        insert: insertMock,
+      })
+
+      await createMissingProfiles()
+
+      expect(insertMock).toHaveBeenCalledTimes(2)
+      expect(insertMock).toHaveBeenCalledWith({
+        id: 'user-1',
+        display_name: 'user1',
+        user_type: 'both',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      })
+      expect(insertMock).toHaveBeenCalledWith({
+        id: 'user-2',
+        display_name: 'user2',
+        user_type: 'both',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      })
+    })
+
+    it('should handle case when all users have profiles', async () => {
+      // Mock empty result
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: [],
+          error: null,
+        }),
+      })
+
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation()
+
+      await createMissingProfiles()
+
+      expect(consoleLogSpy).toHaveBeenCalledWith('All users have profiles')
+      consoleLogSpy.mockRestore()
+    })
+
+    it('should handle database errors gracefully', async () => {
+      // Mock database error
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database error' },
+        }),
+      })
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+
+      await createMissingProfiles()
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error finding users without profiles:',
+        { message: 'Database error' }
+      )
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should handle profile creation errors for individual users', async () => {
+      const usersWithoutProfiles = [
+        {
+          id: 'user-1',
+          email: 'user1@example.com',
+          created_at: new Date().toISOString(),
+          profiles: null,
+        },
+      ]
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: usersWithoutProfiles,
+          error: null,
+        }),
+      })
+
+      // Mock profile creation error
+      mockSupabaseClient.from.mockReturnValue({
+        insert: jest.fn().mockResolvedValue({
+          error: { message: 'Insert failed' },
+        }),
+      })
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+
+      await createMissingProfiles()
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to create profile for user user-1:',
+        { message: 'Insert failed' }
+      )
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should handle users without email addresses', async () => {
+      const usersWithoutProfiles = [
+        {
+          id: 'user-1',
+          email: null,
+          created_at: new Date().toISOString(),
+          profiles: null,
+        },
+      ]
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: usersWithoutProfiles,
+          error: null,
+        }),
+      })
+
+      const insertMock = jest.fn().mockResolvedValue({ error: null })
+      mockSupabaseClient.from.mockReturnValue({
+        insert: insertMock,
+      })
+
+      await createMissingProfiles()
+
+      expect(insertMock).toHaveBeenCalledWith({
+        id: 'user-1',
+        display_name: 'User',
+        user_type: 'both',
+        subscription_tier: 'free',
+        available_contracts: 3,
+      })
+    })
+  })
+
+  describe('linkUserContracts', () => {
+    it('should successfully link user contracts', async () => {
+      mockSupabaseClient.rpc.mockResolvedValue({ error: null })
+
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation()
+
+      await linkUserContracts(mockUser.id, mockUser.email!)
+
+      expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('link_user_contracts', {
+        p_user_id: mockUser.id,
+        p_user_email: mockUser.email,
+      })
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        `Successfully linked contracts for user ${mockUser.id} with email ${mockUser.email}`
+      )
+
+      consoleLogSpy.mockRestore()
+    })
+
+    it('should handle RPC errors', async () => {
+      mockSupabaseClient.rpc.mockResolvedValue({
+        error: { message: 'RPC function failed' },
+      })
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+
+      await linkUserContracts(mockUser.id, mockUser.email!)
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error linking user contracts:',
+        { message: 'RPC function failed' }
+      )
+
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should handle exceptions during RPC call', async () => {
+      mockSupabaseClient.rpc.mockRejectedValue(new Error('Connection failed'))
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+
+      await linkUserContracts(mockUser.id, mockUser.email!)
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error calling link_user_contracts function:',
+        new Error('Connection failed')
+      )
+
+      consoleErrorSpy.mockRestore()
+    })
+  })
+})

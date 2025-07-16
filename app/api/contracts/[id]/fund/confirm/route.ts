@@ -65,7 +65,7 @@ export async function POST(
       );
     }
 
-    if (payment.status === "funded") {
+    if (payment.status === "completed") {
       return NextResponse.json(
         { error: "ALREADY_FUNDED", message: "Payment already confirmed" },
         { status: 400 }
@@ -97,7 +97,7 @@ export async function POST(
     const { error: updatePaymentError } = await supabase
       .from("contract_payments")
       .update({
-        status: "funded",
+        status: "completed",
         metadata: {
           ...payment.metadata,
           funded_at: now,

@@ -1,0 +1,316 @@
+import { NextRequest } from 'next/server'
+import { mockSupabaseClient, mockUser, mockProfile, mockContract } from '../../mocks/supabase.js'
+import { mockStripe, mockCheckoutSession } from '../../mocks/stripe.js'
+
+// Mock the Supabase client
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+// Mock Stripe
+jest.mock('stripe', () => ({
+  __esModule: true,
+  default: jest.fn(() => mockStripe),
+}))
+
+// Import after mocking
+import { POST } from '@/app/api/contracts/[id]/fund/route'
+
+// Mock the profile helpers
+jest.mock('@/utils/profile-helpers', () => ({
+  ensureUserProfile: jest.fn().mockResolvedValue(mockProfile),
+}))
+
+// Mock the security middleware
+jest.mock('@/utils/security/middleware', () => ({
+  withSecurity: jest.fn((handler) => handler),
+}))
+
+describe('/api/contracts/[id]/fund', () => {
+  let mockRequest: NextRequest
+  const contractId = 'contract-123'
+  const mockParams = { params: { id: contractId } }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}/fund`, {
+      method: 'POST',
+      body: JSON.stringify({
+        success_url: 'https://example.com/success',
+        cancel_url: 'https://example.com/cancel',
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    // Mock authenticated user
+    mockSupabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    })
+  })
+
+  describe('POST /api/contracts/[id]/fund', () => {
+    it('should create checkout session successfully', async () => {
+      const fundableContract = {
+        ...mockContract,
+        status: 'pending_funding',
+        client_id: mockUser.id,
+        escrow_funded: false,
+      }
+
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundableContract,
+          error: null,
+        }),
+      })
+
+      // Mock Stripe checkout session creation
+      mockStripe.checkout.sessions.create.mockResolvedValue(mockCheckoutSession)
+
+      // Mock escrow payment record creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: 'escrow-123', status: 'pending' },
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.checkout_url).toBe(mockCheckoutSession.url)
+      expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: fundableContract.currency.toLowerCase(),
+              product_data: {
+                name: `Escrow Payment: ${fundableContract.title}`,
+                description: `Payment for contract: ${fundableContract.title}`,
+              },
+              unit_amount: fundableContract.amount * 100, // Convert to cents
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: 'https://example.com/success',
+        cancel_url: 'https://example.com/cancel',
+        metadata: {
+          contract_id: contractId,
+          user_id: mockUser.id,
+          payment_type: 'escrow',
+        },
+      })
+    })
+
+    it('should return 404 for non-existent contract', async () => {
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 403 for non-client user', async () => {
+      const contractWithDifferentClient = {
+        ...mockContract,
+        client_id: 'different-client',
+        status: 'pending_funding',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contractWithDifferentClient,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(403)
+    })
+
+    it('should return 400 for contract not in pending_funding status', async () => {
+      const draftContract = {
+        ...mockContract,
+        status: 'draft',
+        client_id: mockUser.id,
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: draftContract,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 400 for already funded contract', async () => {
+      const fundedContract = {
+        ...mockContract,
+        status: 'pending_funding',
+        client_id: mockUser.id,
+        escrow_funded: true,
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundedContract,
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should validate required fields', async () => {
+      mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}/fund`, {
+        method: 'POST',
+        body: JSON.stringify({
+          // Missing success_url and cancel_url
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should handle Stripe errors', async () => {
+      const fundableContract = {
+        ...mockContract,
+        status: 'pending_funding',
+        client_id: mockUser.id,
+        escrow_funded: false,
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundableContract,
+          error: null,
+        }),
+      })
+
+      // Mock Stripe error
+      mockStripe.checkout.sessions.create.mockRejectedValue(
+        new Error('Stripe error')
+      )
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(500)
+    })
+
+    it('should handle database errors during escrow record creation', async () => {
+      const fundableContract = {
+        ...mockContract,
+        status: 'pending_funding',
+        client_id: mockUser.id,
+        escrow_funded: false,
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundableContract,
+          error: null,
+        }),
+      })
+
+      mockStripe.checkout.sessions.create.mockResolvedValue(mockCheckoutSession)
+
+      // Mock database error
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database error' },
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(500)
+    })
+
+    it('should return 401 for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: null,
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(401)
+    })
+
+    it('should calculate processing fee correctly', async () => {
+      const fundableContract = {
+        ...mockContract,
+        status: 'pending_funding',
+        client_id: mockUser.id,
+        escrow_funded: false,
+        amount: 1000,
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: fundableContract,
+          error: null,
+        }),
+      })
+
+      mockStripe.checkout.sessions.create.mockResolvedValue(mockCheckoutSession)
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: { id: 'escrow-123', status: 'pending' },
+          error: null,
+        }),
+      })
+
+      const response = await POST(mockRequest, mockParams)
+      expect(response.status).toBe(200)
+
+      // Verify the processing fee is calculated (typically 2.9% + $0.30)
+      const expectedProcessingFee = Math.round(1000 * 0.029 + 30) // 2.9% + $0.30 in cents
+      const createCall = mockStripe.checkout.sessions.create.mock.calls[0][0]
+      const totalAmount = createCall.line_items[0].price_data.unit_amount
+      
+      expect(totalAmount).toBeGreaterThan(100000) // Should be more than just the contract amount
+    })
+  })
+})

@@ -1,0 +1,370 @@
+import { NextRequest } from 'next/server'
+import { GET, PATCH, DELETE } from '@/app/api/contracts/[id]/route'
+import { mockSupabaseClient, mockUser, mockProfile, mockContract } from '../../mocks/supabase.js'
+
+// Mock the Supabase client
+jest.mock('@/utils/supabase/server', () => ({
+  createClient: jest.fn(() => mockSupabaseClient),
+}))
+
+// Mock the profile helpers
+jest.mock('@/utils/profile-helpers', () => ({
+  ensureUserProfile: jest.fn().mockResolvedValue(mockProfile),
+}))
+
+// Mock the security middleware
+jest.mock('@/utils/security/middleware', () => ({
+  withSecurity: jest.fn((handler) => handler),
+}))
+
+describe('/api/contracts/[id]', () => {
+  let mockRequest: NextRequest
+  const contractId = 'contract-123'
+  const mockParams = { params: { id: contractId } }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}`, {
+      method: 'GET',
+    })
+    
+    // Mock authenticated user
+    mockSupabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    })
+  })
+
+  describe('GET /api/contracts/[id]', () => {
+    it('should return contract details for authorized user', async () => {
+      const mockContractWithDetails = {
+        ...mockContract,
+        id: contractId,
+        creator_id: mockUser.id, // Add creator_id to authorize access
+        client_id: mockUser.id,
+        freelancer_id: 'freelancer-456',
+        milestones: [],
+        deliverables: [],
+        comments: [],
+        activities: [],
+        parties: [],
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockContractWithDetails,
+          error: null,
+        }),
+      })
+
+      const response = await GET(mockRequest, mockParams)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.contract.id).toBe(contractId)
+      expect(data.contract.title).toBe(mockContract.title)
+    })
+
+    it('should return 404 for non-existent contract', async () => {
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await GET(mockRequest, mockParams)
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 403 for unauthorized user', async () => {
+      const unauthorizedContract = {
+        ...mockContract,
+        client_id: 'other-user',
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: unauthorizedContract,
+          error: null,
+        }),
+      })
+
+      const response = await GET(mockRequest, mockParams)
+      expect(response.status).toBe(403)
+    })
+
+    it('should return 401 for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: null,
+      })
+
+      const response = await GET(mockRequest, mockParams)
+      expect(response.status).toBe(401)
+    })
+  })
+
+  describe('PATCH /api/contracts/[id]', () => {
+    beforeEach(() => {
+      mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: 'Updated Contract Title',
+          description: 'Updated description',
+          amount: 2000,
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    })
+
+    it('should update contract successfully', async () => {
+      const contractWithAuth = {
+        ...mockContract,
+        creator_id: mockUser.id,
+        client_id: mockUser.id,
+        freelancer_id: 'freelancer-456',
+        status: 'draft', // Only draft contracts can be updated
+      }
+      
+      const updatedContract = {
+        ...contractWithAuth,
+        title: 'Updated Contract Title',
+        amount: 2000,
+      }
+
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contractWithAuth,
+          error: null,
+        }),
+      })
+
+      // Mock contract update
+      mockSupabaseClient.from.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: updatedContract,
+          error: null,
+        }),
+      })
+
+      const response = await PATCH(mockRequest, mockParams)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.contract.title).toBe('Updated Contract Title')
+      expect(data.contract.amount).toBe(2000)
+    })
+
+    it('should prevent updates to non-draft contracts', async () => {
+      const activeContract = {
+        ...mockContract,
+        status: 'active',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: activeContract,
+          error: null,
+        }),
+      })
+
+      const response = await PATCH(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should validate status transitions', async () => {
+      mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'completed', // Invalid transition from draft
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockContract,
+          error: null,
+        }),
+      })
+
+      const response = await PATCH(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 404 for non-existent contract', async () => {
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await PATCH(mockRequest, mockParams)
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 403 for unauthorized user', async () => {
+      const unauthorizedContract = {
+        ...mockContract,
+        client_id: 'other-user',
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: unauthorizedContract,
+          error: null,
+        }),
+      })
+
+      const response = await PATCH(mockRequest, mockParams)
+      expect(response.status).toBe(403)
+    })
+  })
+
+  describe('DELETE /api/contracts/[id]', () => {
+    beforeEach(() => {
+      mockRequest = new NextRequest(`http://localhost:3000/api/contracts/${contractId}`, {
+        method: 'DELETE',
+      })
+    })
+
+    it('should delete draft contract successfully', async () => {
+      const contractWithAuth = {
+        ...mockContract,
+        creator_id: mockUser.id,
+        client_id: mockUser.id,
+        freelancer_id: 'freelancer-456',
+        status: 'draft',
+      }
+      
+      // Mock contract lookup
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: contractWithAuth,
+          error: null,
+        }),
+      })
+
+      // Mock contract deletion
+      mockSupabaseClient.from.mockReturnValueOnce({
+        delete: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        then: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await DELETE(mockRequest, mockParams)
+      expect(response.status).toBe(200)
+    })
+
+    it('should prevent deletion of non-draft contracts', async () => {
+      const activeContract = {
+        ...mockContract,
+        creator_id: mockUser.id,
+        client_id: mockUser.id,
+        freelancer_id: 'freelancer-456',
+        status: 'active',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: activeContract,
+          error: null,
+        }),
+      })
+
+      const response = await DELETE(mockRequest, mockParams)
+      expect(response.status).toBe(400)
+    })
+
+    it('should return 404 for non-existent contract', async () => {
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: null,
+        }),
+      })
+
+      const response = await DELETE(mockRequest, mockParams)
+      expect(response.status).toBe(404)
+    })
+
+    it('should return 403 for unauthorized user', async () => {
+      const unauthorizedContract = {
+        ...mockContract,
+        client_id: 'other-user',
+        freelancer_id: 'another-user',
+      }
+
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: unauthorizedContract,
+          error: null,
+        }),
+      })
+
+      const response = await DELETE(mockRequest, mockParams)
+      expect(response.status).toBe(403)
+    })
+
+    it('should return 401 for unauthenticated user', async () => {
+      mockSupabaseClient.auth.getUser.mockResolvedValue({
+        data: { user: null },
+        error: null,
+      })
+
+      const response = await DELETE(mockRequest, mockParams)
+      expect(response.status).toBe(401)
+    })
+  })
+})

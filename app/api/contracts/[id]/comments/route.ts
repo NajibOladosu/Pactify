@@ -33,10 +33,10 @@ export async function GET(
 
     // Fetch collaboration comments
     const { data: comments, error } = await supabase
-      .from("collaboration_comments")
+      .from("contract_comments")
       .select(`
         *,
-        profiles:author_id(email)
+        profiles:user_id(email)
       `)
       .eq("contract_id", contractId)
       .order("created_at", { ascending: true });
@@ -99,13 +99,11 @@ export async function POST(
 
     // Create new collaboration comment
     const { data: newComment, error } = await supabase
-      .from("collaboration_comments")
+      .from("contract_comments")
       .insert({
         contract_id: contractId,
-        content: body.content.trim(),
-        author_id: user.id,
-        section: body.section,
-        parent_comment_id: body.parent_comment_id
+        comment: body.content.trim(),
+        user_id: user.id
       })
       .select()
       .single();

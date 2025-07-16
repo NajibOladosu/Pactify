@@ -41,16 +41,25 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     return redirect("/sign-in");
   }
 
-  // Fetch the specific contract by ID, ensuring user has access (creator, client, or freelancer)
+  // First, fetch the basic contract data
   const { data: contract, error: fetchError } = await supabase
     .from("contracts")
-    .select(`
-      *,
-      contract_templates ( name )
-    `)
+    .select("*")
     .eq("id", id)
-    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
-    .maybeSingle();
+    .single();
+
+  // Check if user has access to this contract
+  if (contract && fetchError === null) {
+    const hasAccess = 
+      contract.creator_id === user.id ||
+      contract.client_id === user.id ||
+      contract.freelancer_id === user.id;
+
+    if (!hasAccess) {
+      console.log("Access denied for contract:", id, "User:", user.id);
+      notFound();
+    }
+  }
 
   // Fetch milestones if it's a milestone contract
   const { data: milestones } = await supabase
@@ -67,7 +76,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   // Calculate funded amount and escrow status
   const fundedAmount = payments?.reduce((total, payment) => {
-    if (payment.status === 'in_escrow' || payment.status === 'released') {
+    if (payment.status === 'completed' || payment.status === 'released') {
       return total + Number(payment.amount);
     }
     return total;
@@ -76,7 +85,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   const escrowStatus: 'pending' | 'held' | 'released' | 'refunded' = 
     payments?.some(p => p.status === 'released') ? 'released' :
     payments?.some(p => p.status === 'refunded') ? 'refunded' :
-    payments?.some(p => p.status === 'in_escrow') ? 'held' : 'pending';
+    payments?.some(p => p.status === 'completed') ? 'held' : 'pending';
 
   if (fetchError) {
     console.error(`Error fetching contract ${id}:`, fetchError);
@@ -85,6 +94,20 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   if (!contract) {
     notFound(); // Trigger Next.js 404 page
+  }
+
+  // Fetch contract template separately if template_id exists
+  let contractTemplate = null;
+  if (contract.template_id) {
+    const { data: template } = await supabase
+      .from("contract_templates")
+      .select("name")
+      .eq("id", contract.template_id)
+      .single();
+    
+    if (template) {
+      contractTemplate = template;
+    }
   }
 
   // Access is already controlled by the query filter above (creator_id = user.id)
@@ -134,6 +157,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   // Cast to the specific type for easier access
   const contractDetail = {
     ...contract,
+    contract_templates: contractTemplate,
     client_profile: clientProfile,
     freelancer_profile: freelancerProfile
   } as ContractDetail;

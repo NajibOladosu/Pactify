@@ -31,20 +31,10 @@ export async function GET(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    // Fetch contract versions
-    const { data: versions, error } = await supabase
-      .from("contract_versions")
-      .select(`
-        *,
-        profiles:proposed_by(email)
-      `)
-      .eq("contract_id", contractId)
-      .order("version_number", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching contract versions:", error);
-      return NextResponse.json({ error: "Failed to fetch versions" }, { status: 500 });
-    }
+    // Note: contract_versions table doesn't exist in current schema
+    // Return empty versions array for now
+    const versions: any[] = [];
+    const error = null;
 
     // Format versions with proposer email
     const formattedVersions = versions?.map(version => ({
