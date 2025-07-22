@@ -81,8 +81,13 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
             filter: `contract_id=eq.${contract.id}`
           },
           (payload) => {
-            const newMessage = payload.new as Message;
-            setMessages(prev => [...prev, newMessage]);
+            const newMessage = payload.new as any;
+            // Format the message to match our interface
+            const formattedMessage = {
+              ...newMessage,
+              sender_name: 'New User', // This will be updated when we refetch
+            };
+            setMessages(prev => [...prev, formattedMessage]);
             
             // Mark as read if it's not from current user
             if (newMessage.sender_id !== currentUser?.id) {
@@ -111,32 +116,22 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
   const fetchMessages = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('contract_messages')
-        .select(`
-          *,
-          profiles!inner(display_name)
-        `)
-        .eq('contract_id', contract.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-
-      const formattedMessages = data.map(msg => ({
-        ...msg,
-        sender_name: msg.profiles?.display_name || 'Unknown User'
-      }));
-
-      setMessages(formattedMessages);
+      // Use the API endpoint instead of direct Supabase call
+      const response = await fetch(`/api/contracts/${contract.id}/messages`);
       
-      // Mark messages as read
-      await markMessagesAsRead();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch messages');
+      }
+
+      const { messages: fetchedMessages } = await response.json();
+      setMessages(fetchedMessages || []);
+      
     } catch (error) {
       console.error('Error fetching messages:', error);
       toast({
         title: "Error",
-        description: "Failed to load chat messages.",
+        description: error.message || "Failed to load chat messages.",
         variant: "destructive",
       });
     } finally {
@@ -148,10 +143,14 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
     if (!currentUser) return;
     
     try {
-      await supabase.rpc('mark_messages_as_read', {
+      const { error } = await supabase.rpc('mark_messages_as_read', {
         p_contract_id: contract.id,
         p_user_id: currentUser.id
       });
+      
+      if (error) {
+        console.error('RPC Error marking messages as read:', error);
+      }
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -162,53 +161,29 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
 
     setIsSending(true);
     try {
-      // First, ensure conversation exists
-      const { data: conversation, error: convError } = await supabase
-        .from('contract_conversations')
-        .select('id')
-        .eq('contract_id', contract.id)
-        .maybeSingle();
-
-      let conversationId = conversation?.id;
-
-      if (!conversationId) {
-        // Create conversation if it doesn't exist
-        const { data: newConversation, error: createError } = await supabase
-          .from('contract_conversations')
-          .insert({
-            contract_id: contract.id
-          })
-          .select('id')
-          .single();
-
-        if (createError) throw createError;
-        conversationId = newConversation.id;
-      }
-
-      // Send message
-      const { data, error } = await supabase
-        .from('contract_messages')
-        .insert({
-          conversation_id: conversationId,
-          contract_id: contract.id,
-          sender_id: currentUser.id,
+      const response = await fetch(`/api/contracts/${contract.id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           message: newMessage.trim(),
           message_type: 'text'
-        })
-        .select(`
-          *,
-          profiles!inner(display_name)
-        `)
-        .single();
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send message');
+      }
 
-      const formattedMessage = {
-        ...data,
-        sender_name: data.profiles?.display_name || 'Unknown User'
-      };
-
-      setMessages(prev => [...prev, formattedMessage]);
+      const { data: sentMessage } = await response.json();
+      
+      // Add the message to the local state
+      if (sentMessage) {
+        setMessages(prev => [...prev, sentMessage]);
+      }
+      
       setNewMessage("");
       
       toast({
@@ -219,7 +194,7 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
       console.error('Error sending message:', error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error.message || "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
