@@ -4,6 +4,16 @@ import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
 import { ClientsListClient } from "@/components/dashboard/clients-list-client";
 
+interface ContractInfo {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  total_amount?: number;
+  currency?: string;
+}
+
 interface Client {
   id: string;
   email: string;
@@ -11,6 +21,7 @@ interface Client {
   company?: string;
   lastActivity?: string;
   contractCount: number;
+  contracts: ContractInfo[];
 }
 
 export default async function ClientsPage() {
@@ -36,7 +47,7 @@ export default async function ClientsPage() {
   // Use service role client to bypass potential RLS issues
   const { data: contracts, error: contractsError } = await serviceSupabase
     .from("contracts")
-    .select("id, client_email, content, created_at, updated_at, title")
+    .select("id, client_email, content, created_at, updated_at, title, status, total_amount, currency")
     .eq("creator_id", user.id);
 
 
@@ -100,6 +111,7 @@ export default async function ClientsPage() {
 
   // Process contracts to extract client information
   const clientsMap = new Map<string, Client>();
+  const contractsByClient = new Map<string, ContractInfo[]>();
   
   // 1. Process contracts with client_email field OR content.clientEmail
   if (contracts) {
@@ -109,6 +121,23 @@ export default async function ClientsPage() {
       const email = contract.client_email || (content?.clientEmail as string);
       
       if (email) {
+        // Create contract info
+        const contractInfo: ContractInfo = {
+          id: contract.id,
+          title: contract.title,
+          status: contract.status,
+          created_at: contract.created_at,
+          updated_at: contract.updated_at,
+          total_amount: contract.total_amount,
+          currency: contract.currency
+        };
+
+        // Add to contracts by client map
+        if (!contractsByClient.has(email)) {
+          contractsByClient.set(email, []);
+        }
+        contractsByClient.get(email)!.push(contractInfo);
+
         if (!clientsMap.has(email)) {
           // Extract name from contract content if available
           const clientName = (content?.clientName as string) || (content?.client_name as string);
@@ -120,11 +149,13 @@ export default async function ClientsPage() {
             company: undefined, // Could be extracted from content if available
             lastActivity: contract.updated_at || contract.created_at,
             contractCount: 1,
+            contracts: [contractInfo],
           });
         } else {
           // Update existing client
           const existingClient = clientsMap.get(email)!;
           existingClient.contractCount += 1;
+          existingClient.contracts.push(contractInfo);
           
           // Update last activity if this contract is more recent
           const currentActivity = new Date(contract.updated_at || contract.created_at);
@@ -155,6 +186,17 @@ export default async function ClientsPage() {
     const email = emailData.email;
     const clientName = profile?.display_name;
     
+    // Create contract info for party contracts
+    const contractInfo: ContractInfo = {
+      id: contract.id,
+      title: contract.title,
+      status: contract.status,
+      created_at: contract.created_at,
+      updated_at: contract.updated_at,
+      total_amount: contract.total_amount,
+      currency: contract.currency
+    };
+
     if (!clientsMap.has(email)) {
       clientsMap.set(email, {
         id: email,
@@ -163,11 +205,13 @@ export default async function ClientsPage() {
         company: undefined,
         lastActivity: contract.updated_at || contract.created_at,
         contractCount: 1,
+        contracts: [contractInfo],
       });
     } else {
       // Update existing client
       const existingClient = clientsMap.get(email)!;
       existingClient.contractCount += 1;
+      existingClient.contracts.push(contractInfo);
       
       // Update name if we have a better one from profile
       if (!existingClient.name && clientName) {
