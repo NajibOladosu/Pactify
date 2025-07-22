@@ -61,35 +61,45 @@ export default async function DashboardPage() {
      maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
   }
 
-  // 3. Count active contracts directly
-  const { data: contracts, error: contractsError } = await supabase
-    .from('contracts')
-    .select('id')
-    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
-    .in('status', ['draft', 'pending_signatures', 'pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion']);
+  // 3. Count active contracts using security definer function
+  const { data: contractCountResult, error: contractsError } = await supabase
+    .rpc('get_user_contract_count', { p_user_id: user.id });
 
   if (contractsError) {
     console.error("Dashboard Error: Failed to count active contracts.", contractsError);
     activeContractsCount = 0; // Default to 0 on error
   } else {
-    activeContractsCount = contracts?.length ?? 0;
+    activeContractsCount = contractCountResult ?? 0;
   }
 
   // 4. Determine if limit is reached (only for plans with a limit)
   const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
 
-  // 5. Fetch recent contracts
-  const { data: recentContracts } = await supabase
-    .from("contracts")
-    .select(`
-      id,
-      title,
-      status,
-      created_at
-    `)
-    .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
-    .order("created_at", { ascending: false })
-    .limit(5);
+  // 5. Fetch recent contracts and detailed statistics
+  const [contractsResult, statsResult] = await Promise.all([
+    supabase.rpc('get_user_contracts', { p_user_id: user.id }),
+    supabase.rpc('get_user_dashboard_stats', { p_user_id: user.id })
+  ]);
+  
+  // Get the 5 most recent contracts (they're already ordered by created_at DESC in the function)
+  const recentContracts = contractsResult.data?.slice(0, 5).map((contract: any) => ({
+    id: contract.id,
+    title: contract.title,
+    status: contract.status,
+    created_at: contract.created_at
+  })) || [];
+
+  // Parse dashboard statistics
+  const dashboardStats = statsResult.data || {
+    total_contracts: 0,
+    active_contracts: 0,
+    pending_signatures: 0,
+    completed_contracts: 0,
+    cancelled_contracts: 0,
+    pending_payments: 0,
+    total_revenue: 0,
+    avg_contract_value: 0
+  };
   // --- End Fetch ---
 
 
@@ -109,6 +119,7 @@ export default async function DashboardPage() {
       isLimitReached={isLimitReached}
       greeting={greeting}
       recentContracts={recentContracts || []}
+      dashboardStats={dashboardStats}
     />
   );
 }

@@ -35,6 +35,16 @@ interface DashboardWrapperProps {
     status: string | null;
     created_at: string;
   }>;
+  dashboardStats: {
+    total_contracts: number;
+    active_contracts: number;
+    pending_signatures: number;
+    completed_contracts: number;
+    cancelled_contracts: number;
+    pending_payments: number;
+    total_revenue: number;
+    avg_contract_value: number;
+  };
 }
 
 export default function DashboardWrapper({
@@ -45,7 +55,8 @@ export default function DashboardWrapper({
   maxContracts,
   isLimitReached,
   greeting,
-  recentContracts
+  recentContracts,
+  dashboardStats
 }: DashboardWrapperProps) {
   const [activeView, setActiveView] = useState<'overview' | 'analytics'>('overview');
 
@@ -124,6 +135,7 @@ export default function DashboardWrapper({
             userType={userType}
             activeContractsCount={activeContractsCount}
             maxContracts={maxContracts}
+            dashboardStats={dashboardStats}
           />
 
           {/* Main content section */}
@@ -214,20 +226,22 @@ export default function DashboardWrapper({
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">{activeContractsCount}</p>
+                  <p className="text-2xl font-bold">{dashboardStats.active_contracts}</p>
                   <p className="text-sm text-muted-foreground">Active Contracts</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">$0</p>
+                  <p className="text-2xl font-bold">${dashboardStats.total_revenue.toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">0</p>
+                  <p className="text-2xl font-bold">{dashboardStats.completed_contracts}</p>
                   <p className="text-sm text-muted-foreground">Completed Projects</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">-</p>
-                  <p className="text-sm text-muted-foreground">Avg Rating</p>
+                  <p className="text-2xl font-bold">
+                    {dashboardStats.avg_contract_value > 0 ? `$${Math.round(dashboardStats.avg_contract_value).toLocaleString()}` : '-'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Avg Contract Value</p>
                 </div>
               </div>
             </CardContent>

@@ -8,8 +8,27 @@ import { redirect } from "next/navigation";
 import { ContractsListClient } from "@/components/dashboard/contracts-list-client"; // Import the client component (to be created)
 import { Database } from "@/types/supabase"; // Assuming you have types generated
 
-// Define the type for fetched contracts based on your schema
-export type ContractWithTemplate = Database['public']['Tables']['contracts']['Row'] & {
+// Define the type for fetched contracts from get_user_contracts RPC function
+export type ContractWithTemplate = {
+  id: string;
+  contract_id: string;
+  title: string;
+  description: string | null;
+  total_amount: number | null;
+  currency: string | null;
+  status: string;
+  type: string | null;
+  client_id: string | null;
+  freelancer_id: string | null;
+  creator_id: string;
+  created_at: string;
+  updated_at: string;
+  locked: boolean;
+  milestones_count: number;
+  completed_milestones: number;
+  pending_amount: number;
+  next_due_date: string | null;
+  is_visible: boolean;
   contract_templates: { name: string } | null;
 };
 
@@ -27,12 +46,12 @@ export default async function ContractsPage() {
     return redirect("/sign-in");
   }
 
-  // Fetch contracts from the database for the current user
-  // Simplified query without joins to avoid RLS issues
+  // Fetch contracts using security definer function with free tier filtering
   const { data: contracts, error: fetchError } = await supabase
-    .from("contracts")
-    .select("*")
-    .order("created_at", { ascending: false }); // Order by creation date
+    .rpc('get_user_contracts', { 
+      p_user_id: user.id,
+      p_apply_free_tier_limit: true 
+    });
 
   let fetchedContracts: ContractWithTemplate[] = []; // Use let to allow reassignment
   if (fetchError) {
@@ -40,18 +59,11 @@ export default async function ContractsPage() {
     // Handle error display appropriately, maybe show a message on the page
     // fetchedContracts remains an empty array
   } else if (contracts) {
-    // Filter contracts client-side based on user access
-    const userContracts = contracts.filter(contract => 
-      contract.creator_id === user.id ||
-      contract.client_id === user.id ||
-      contract.freelancer_id === user.id ||
-      contract.client_email === user.email ||
-      contract.freelancer_email === user.email
-    );
+    const userContracts = contracts;
 
     // Fetch contract templates for the filtered contracts
     const contractsWithTemplates: ContractWithTemplate[] = await Promise.all(
-      userContracts.map(async (contract) => {
+      userContracts.map(async (contract: any) => {
         let contractTemplate = null;
         if (contract.template_id) {
           const { data: template } = await supabase
@@ -72,7 +84,8 @@ export default async function ContractsPage() {
       })
     );
 
-    fetchedContracts = contractsWithTemplates;
+    // Filter contracts to only show visible ones for free tier users
+    fetchedContracts = contractsWithTemplates.filter(contract => contract.is_visible);
   }
 
   // Use the fetchedContracts variable

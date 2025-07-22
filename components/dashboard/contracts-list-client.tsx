@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, CheckCircleIcon, ClockIcon, XCircleIcon, Loader2 } from "lucide-react"; // Import Loader2
+import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, CheckCircleIcon, ClockIcon, XCircleIcon, Loader2, LockIcon } from "lucide-react"; // Import Loader2 and LockIcon
 import { useToast } from "@/components/ui/use-toast";
 import { ContractWithTemplate } from "@/app/(dashboard)/dashboard/contracts/page"; // Import the type from the server component
 import { deleteContractAction, sendContractAction } from "@/app/actions"; // Import the delete and send actions
@@ -17,6 +17,14 @@ interface ContractsListClientProps {
 // Define status type more broadly based on schema
 type ContractStatus = 'draft' | 'pending' | 'signed' | 'completed' | 'cancelled' | 'disputed';
 
+interface ContractLimitInfo {
+  subscriptionTier: string;
+  totalContracts: number;
+  visibleContracts: number;
+  hiddenContracts: number;
+  contractLimit: number | null;
+}
+
 export function ContractsListClient({ initialContracts }: ContractsListClientProps) {
   const [contracts, setContracts] = useState<ContractWithTemplate[]>(initialContracts);
   const [searchQuery, setSearchQuery] = useState("");
@@ -24,12 +32,30 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
   const [isPending, startTransition] = useTransition(); // Add transition state
   const [deletingId, setDeletingId] = useState<string | null>(null); // Track which contract is being deleted
   const [sendingId, setSendingId] = useState<string | null>(null); // Track which contract is being sent
+  const [contractLimitInfo, setContractLimitInfo] = useState<ContractLimitInfo | null>(null);
   const { toast } = useToast();
 
   // Update contracts if initialContracts change (e.g., after revalidation)
   useEffect(() => {
     setContracts(initialContracts);
   }, [initialContracts]);
+
+  // Fetch contract limit info
+  useEffect(() => {
+    const fetchContractLimitInfo = async () => {
+      try {
+        const response = await fetch('/api/contracts/limit-info');
+        if (response.ok) {
+          const data = await response.json();
+          setContractLimitInfo(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch contract limit info:', error);
+      }
+    };
+
+    fetchContractLimitInfo();
+  }, []);
 
   const filteredContracts = contracts.filter(contract => {
     // Filter by search query (check title, description)
@@ -144,6 +170,36 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
 
   return (
     <div className="space-y-4">
+      {/* Contract Limit Banner */}
+      {contractLimitInfo && contractLimitInfo.contractLimit && (
+        <Card className="p-4 bg-muted/30 border-muted-foreground/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Contract Visibility:</span>
+                <Badge variant="outline">
+                  {contractLimitInfo.visibleContracts} of {contractLimitInfo.totalContracts} shown
+                </Badge>
+                {contractLimitInfo.hiddenContracts > 0 && (
+                  <Badge variant="secondary">
+                    <LockIcon className="mr-1 h-3 w-3" />
+                    {contractLimitInfo.hiddenContracts} hidden
+                  </Badge>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                ({contractLimitInfo.subscriptionTier} plan)
+              </span>
+            </div>
+            {contractLimitInfo.hiddenContracts > 0 && (
+              <div className="text-sm text-muted-foreground">
+                Upgrade to view all contracts
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Search and Filters */}
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -187,7 +243,9 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                   <div className="flex-1">
                     <div className="flex items-start gap-2 mb-2">
                       <div>
-                        <h3 className="font-medium">{contract.title}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium">{contract.title}</h3>
+                        </div>
                         <p className="text-sm text-muted-foreground line-clamp-1">{contract.description}</p>
                       </div>
                     </div>

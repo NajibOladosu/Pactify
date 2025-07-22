@@ -287,6 +287,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Function to get user contracts with enhanced details
 CREATE OR REPLACE FUNCTION public.get_user_contracts(p_user_id UUID)
 RETURNS TABLE (
+    id UUID,
     contract_id UUID,
     title TEXT,
     description TEXT,
@@ -299,6 +300,7 @@ RETURNS TABLE (
     creator_id UUID,
     created_at TIMESTAMP WITH TIME ZONE,
     updated_at TIMESTAMP WITH TIME ZONE,
+    locked BOOLEAN,
     milestones_count INTEGER,
     completed_milestones INTEGER,
     pending_amount DECIMAL,
@@ -307,6 +309,7 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT 
+        c.id,
         c.id as contract_id,
         c.title,
         c.description,
@@ -319,6 +322,7 @@ BEGIN
         c.creator_id,
         c.created_at,
         c.updated_at,
+        c.locked,
         COALESCE(milestone_stats.total_milestones, 0)::INTEGER as milestones_count,
         COALESCE(milestone_stats.completed_milestones, 0)::INTEGER as completed_milestones,
         COALESCE(escrow_stats.pending_amount, 0) as pending_amount,

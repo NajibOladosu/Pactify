@@ -22,9 +22,11 @@ interface SubscriptionData {
   planName: string;
   status: string;
   currentPeriodEnd: string | null;
+  currentPeriodStart: string | null;
   cancelAtPeriodEnd: boolean;
   stripeSubscriptionId: string | null;
   stripePriceId: string | null;
+  billingCycle?: string;
   priceMonthly: number;
   priceYearly: number;
   escrowFeePercentage: number;
@@ -79,6 +81,9 @@ export default function SubscriptionPage() {
           throw new Error(`Failed to fetch subscription: ${subRes.statusText}`);
         }
         const subData = await subRes.json();
+        console.log('🔍 Client received subscription data:', subData);
+        console.log('🔍 Subscription planId:', subData.subscription?.planId);
+        console.log('🔍 Subscription planName:', subData.subscription?.planName);
         setSubscription(subData.subscription);
 
         // Fetch available plans from database
@@ -161,15 +166,37 @@ export default function SubscriptionPage() {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to cancel subscription.');
       }
+      
+      const result = await response.json();
+      
       toast({
         title: "Subscription Cancellation Initiated",
         description: "Your plan will be downgraded to Free at the end of your current billing period.",
       });
-      router.refresh(); // Refresh data to show updated status
+
+      // Instead of router.refresh(), refetch the data directly
+      try {
+        const subRes = await fetch('/api/subscriptions');
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          setSubscription(subData.subscription);
+        }
+      } catch (refetchError) {
+        console.warn('Failed to refetch subscription data:', refetchError);
+      }
+
     } catch (err: any) {
+      console.error('Cancel subscription error:', err);
+      
+      // Try to get more details from the error response
+      let errorMessage = err.message || "Could not process cancellation request.";
+      if (err.message.includes('No active subscription found')) {
+        errorMessage = "No active subscription found to cancel. Please refresh the page and try again.";
+      }
+      
       toast({
         title: "Error Cancelling Subscription",
-        description: err.message || "Could not process cancellation request.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -250,8 +277,22 @@ export default function SubscriptionPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-lg">{currentPlan.planName}</h3>
-                <Badge variant="outline" className="text-xs capitalize">{currentPlan.status}</Badge>
-                {currentPlan.cancelAtPeriodEnd && <Badge variant="destructive" className="text-xs">Cancels on {formatDate(currentPlan.currentPeriodEnd ? Date.parse(currentPlan.currentPeriodEnd)/1000 : null)}</Badge>}
+                <Badge 
+                  variant={currentPlan.status === 'expired' ? 'destructive' : currentPlan.status === 'active' ? 'default' : 'secondary'} 
+                  className="text-xs capitalize"
+                >
+                  {currentPlan.status === 'expired' ? 'Expired' : currentPlan.status}
+                </Badge>
+                {currentPlan.status === 'expired' && (
+                  <Badge variant="outline" className="text-xs">
+                    Expired on {formatDate(currentPlan.currentPeriodEnd ? Date.parse(currentPlan.currentPeriodEnd)/1000 : null)}
+                  </Badge>
+                )}
+                {currentPlan.cancelAtPeriodEnd && currentPlan.status === 'active' && (
+                  <Badge variant="destructive" className="text-xs">
+                    Cancels on {formatDate(currentPlan.currentPeriodEnd ? Date.parse(currentPlan.currentPeriodEnd)/1000 : null)}
+                  </Badge>
+                )}
               </div>
               {/* Find description from fetched plans */}
               <p className="text-sm text-muted-foreground mt-1">
@@ -260,9 +301,25 @@ export default function SubscriptionPage() {
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                 {/* Display price based on API data - assuming monthly for simplicity here */}
-                 <span className="text-2xl font-bold">{formatCurrency(currentPlan.priceMonthly)}</span>
-                 <span className="text-muted-foreground">/month</span>
+                 {/* Display price based on actual billing cycle */}
+                 {currentPlan.planId === 'free' ? (
+                   <>
+                     <span className="text-2xl font-bold">Free</span>
+                   </>
+                 ) : currentPlan.billingCycle === 'yearly' ? (
+                   <>
+                     <span className="text-2xl font-bold">{formatCurrency(currentPlan.priceYearly)}</span>
+                     <span className="text-muted-foreground">/year</span>
+                     <div className="text-sm text-muted-foreground">
+                       {formatCurrency(currentPlan.priceYearly / 12)}/month
+                     </div>
+                   </>
+                 ) : (
+                   <>
+                     <span className="text-2xl font-bold">{formatCurrency(currentPlan.priceMonthly)}</span>
+                     <span className="text-muted-foreground">/month</span>
+                   </>
+                 )}
               </div>
 
               {/* --- Corrected Button Logic --- */}
@@ -283,11 +340,18 @@ export default function SubscriptionPage() {
               )}
 
               {/* Case 2: Paid Plan, Cancellation Pending */}
-              {currentPlan.planId !== 'free' && currentPlan.cancelAtPeriodEnd && (
+              {currentPlan.planId !== 'free' && currentPlan.status === 'active' && currentPlan.cancelAtPeriodEnd && (
                  <Button variant="outline" disabled>Cancellation Pending</Button>
               )}
 
-              {/* Case 3: Free Plan */}
+              {/* Case 3: Expired Plan */}
+              {currentPlan.status === 'expired' && (
+                 <Button variant="default" onClick={() => handleUpgrade(currentPlan.planId)}>
+                   Reactivate Plan
+                 </Button>
+              )}
+
+              {/* Case 4: Free Plan */}
               {currentPlan.planId === 'free' && (
                  <Button variant="outline" disabled>Current Plan</Button>
               )}
@@ -317,12 +381,29 @@ export default function SubscriptionPage() {
             </div>
 
             <div className="p-4 border rounded-lg space-y-1">
-              <p className="text-sm text-muted-foreground">Renewal Date</p>
+              <p className="text-sm text-muted-foreground">
+                {currentPlan.planId === 'free' 
+                  ? 'Plan Status' 
+                  : currentPlan.status === 'expired' 
+                    ? 'Expired On' 
+                    : 'Next Billing'
+                }
+              </p>
               <div className="text-2xl font-semibold">
-                {currentPlan.currentPeriodEnd ? formatDate(Date.parse(currentPlan.currentPeriodEnd)/1000) : 'N/A'}
+                {currentPlan.planId === 'free' 
+                  ? 'Active' 
+                  : (currentPlan.currentPeriodEnd ? formatDate(Date.parse(currentPlan.currentPeriodEnd)/1000) : 'N/A')
+                }
               </div>
               <p className="text-xs text-muted-foreground">
-                {currentPlan.planId === 'free' ? 'Free plan' : (currentPlan.cancelAtPeriodEnd ? 'Subscription ends' : 'Next billing date')}
+                {currentPlan.planId === 'free' 
+                  ? 'No billing required' 
+                  : currentPlan.status === 'expired'
+                    ? 'Plan has expired'
+                    : currentPlan.cancelAtPeriodEnd 
+                      ? 'Subscription ends' 
+                      : `${currentPlan.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} billing`
+                }
               </p>
             </div>
 

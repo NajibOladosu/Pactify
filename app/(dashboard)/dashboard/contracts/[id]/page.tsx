@@ -41,25 +41,21 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     return redirect("/sign-in");
   }
 
-  // First, fetch the basic contract data
-  const { data: contract, error: fetchError } = await supabase
-    .from("contracts")
-    .select("*")
-    .eq("id", id)
-    .single();
+  // Fetch the specific contract using security definer function
+  const { data: contractData, error: fetchError } = await supabase
+    .rpc('get_user_contract_by_id', { p_user_id: user.id, p_contract_id: id });
 
-  // Check if user has access to this contract
-  if (contract && fetchError === null) {
-    const hasAccess = 
-      contract.creator_id === user.id ||
-      contract.client_id === user.id ||
-      contract.freelancer_id === user.id;
-
-    if (!hasAccess) {
-      console.log("Access denied for contract:", id, "User:", user.id);
-      notFound();
-    }
+  if (fetchError) {
+    console.error("Error fetching contract:", fetchError);
+    notFound();
   }
+
+  if (!contractData) {
+    console.log("Contract not found or access denied:", id, "User:", user.id);
+    notFound();
+  }
+
+  const contract = contractData;
 
   // Fetch milestones if it's a milestone contract
   const { data: milestones } = await supabase
@@ -86,15 +82,6 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     payments?.some(p => p.status === 'released') ? 'released' :
     payments?.some(p => p.status === 'refunded') ? 'refunded' :
     payments?.some(p => p.status === 'completed') ? 'held' : 'pending';
-
-  if (fetchError) {
-    console.error(`Error fetching contract ${id}:`, fetchError);
-    notFound();
-  }
-
-  if (!contract) {
-    notFound(); // Trigger Next.js 404 page
-  }
 
   // Fetch contract template separately if template_id exists
   let contractTemplate = null;

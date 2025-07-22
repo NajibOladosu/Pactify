@@ -19,6 +19,16 @@ interface DashboardStatsProps {
   userType: string;
   activeContractsCount: number;
   maxContracts: number | null;
+  dashboardStats?: {
+    total_contracts: number;
+    active_contracts: number;
+    pending_signatures: number;
+    completed_contracts: number;
+    cancelled_contracts: number;
+    pending_payments: number;
+    total_revenue: number;
+    avg_contract_value: number;
+  };
 }
 
 interface DashboardStatsData {
@@ -31,15 +41,28 @@ export function DashboardStats({
   userType,
   activeContractsCount,
   maxContracts,
+  dashboardStats,
 }: DashboardStatsProps) {
   const [stats, setStats] = useState<DashboardStatsData>({
-    pendingSignatures: 0,
-    pendingPayments: 0,
+    pendingSignatures: dashboardStats?.pending_signatures || 0,
+    pendingPayments: dashboardStats?.pending_payments || 0,
     contactsCount: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!dashboardStats);
 
   useEffect(() => {
+    // If we have server-side stats, use them and don't fetch client-side
+    if (dashboardStats) {
+      setStats({
+        pendingSignatures: dashboardStats.pending_signatures,
+        pendingPayments: dashboardStats.pending_payments,
+        contactsCount: 0, // We'll calculate this separately if needed
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Fallback to client-side fetching if no server-side data
     async function fetchStats() {
       try {
         const supabase = createClient();
@@ -47,21 +70,19 @@ export function DashboardStats({
         
         if (!user) return;
 
-        // Fetch contracts data to calculate stats
+        // Fetch contracts data using security definer function
         const { data: contracts } = await supabase
-          .from('contracts')
-          .select('status, total_amount, creator_id, client_id, freelancer_id')
-          .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`);
+          .rpc('get_user_contracts', { p_user_id: user.id });
 
         if (contracts) {
-          const pendingSignatures = contracts.filter(c => c.status === 'pending_signatures').length;
+          const pendingSignatures = contracts.filter((c: any) => c.status === 'pending_signatures').length;
           const pendingPayments = contracts
-            .filter(c => ['pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion'].includes(c.status))
-            .reduce((sum, c) => sum + (c.total_amount || 0), 0);
+            .filter((c: any) => ['pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion'].includes(c.status))
+            .reduce((sum: number, c: any) => sum + (c.total_amount || 0), 0);
 
           // Count unique contacts
           const uniqueContacts = new Set();
-          contracts.forEach(contract => {
+          contracts.forEach((contract: any) => {
             if (contract.creator_id === user.id) {
               if (contract.client_id) uniqueContacts.add(contract.client_id);
               if (contract.freelancer_id) uniqueContacts.add(contract.freelancer_id);
@@ -88,7 +109,7 @@ export function DashboardStats({
     }
 
     fetchStats();
-  }, []);
+  }, [dashboardStats]);
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
