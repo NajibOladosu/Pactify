@@ -18,25 +18,50 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify access to contract
+    // Verify access to contract - check both old and new schema patterns
     const { data: contract } = await supabase
       .from("contracts")
-      .select("client_id, freelancer_id")
+      .select("id, creator_id, client_email, client_id, freelancer_id")
       .eq("id", contractId)
       .single();
 
-    if (!contract || (contract.client_id !== user.id && contract.freelancer_id !== user.id)) {
+    if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    // Fetch messages
+    // Check authorization - support both new and old schema
+    const isAuthorized = contract.creator_id === user.id || 
+                        contract.client_email === user.email ||
+                        contract.client_id === user.id || 
+                        contract.freelancer_id === user.id;
+
+    if (!isAuthorized) {
+      // Check contract_parties table as well
+      const { data: partyData } = await supabase
+        .from('contract_parties')
+        .select('id')
+        .eq('contract_id', contractId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!partyData) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    }
+
+    // Fetch messages with sender information
     const { data: messages, error } = await supabase
       .from("contract_messages")
       .select(`
         *,
-        profiles:sender_id(email)
+        profiles:sender_id (
+          id,
+          display_name,
+          email
+        )
       `)
       .eq("contract_id", contractId)
+      .is('deleted_at', null)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -46,10 +71,22 @@ export async function GET(
 
     const formattedMessages = messages?.map(message => ({
       ...message,
+      sender_name: message.profiles?.display_name || message.profiles?.email?.split('@')[0] || 'Unknown',
       sender_email: message.profiles?.email || 'Unknown',
     })) || [];
 
-    return NextResponse.json({ messages: formattedMessages });
+    // Mark messages as read for the current user
+    if (messages && messages.length > 0) {
+      await supabase.rpc('mark_messages_as_read', {
+        p_contract_id: contractId,
+        p_user_id: user.id
+      });
+    }
+
+    return NextResponse.json({ 
+      messages: formattedMessages,
+      count: formattedMessages.length 
+    });
   } catch (error) {
     console.error("Messages fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -73,32 +110,91 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify access to contract
+    // Verify access to contract - check both old and new schema patterns
     const { data: contract } = await supabase
       .from("contracts")
-      .select("client_id, freelancer_id")
+      .select("id, creator_id, client_email, client_id, freelancer_id")
       .eq("id", contractId)
       .single();
 
-    if (!contract || (contract.client_id !== user.id && contract.freelancer_id !== user.id)) {
+    if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
-      return NextResponse.json({ error: "Message content is required" }, { status: 400 });
+    // Check authorization - support both new and old schema
+    const isAuthorized = contract.creator_id === user.id || 
+                        contract.client_email === user.email ||
+                        contract.client_id === user.id || 
+                        contract.freelancer_id === user.id;
+
+    if (!isAuthorized) {
+      // Check contract_parties table as well
+      const { data: partyData } = await supabase
+        .from('contract_parties')
+        .select('id')
+        .eq('contract_id', contractId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!partyData) {
+        return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      }
+    }
+
+    // Support both 'content' and 'message' field names
+    const messageText = body.message || body.content;
+    if (!messageText || typeof messageText !== 'string' || messageText.trim().length === 0) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    }
+
+    // Ensure conversation exists
+    const { data: conversation } = await supabase
+      .from('contract_conversations')
+      .select('id')
+      .eq('contract_id', contractId)
+      .maybeSingle();
+
+    let conversationId = conversation?.id;
+
+    if (!conversationId) {
+      // Create conversation if it doesn't exist
+      const { data: newConversation, error: createConversationError } = await supabase
+        .from('contract_conversations')
+        .insert({
+          contract_id: contractId
+        })
+        .select('id')
+        .single();
+
+      if (createConversationError) {
+        console.error('Error creating conversation:', createConversationError);
+        return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 });
+      }
+
+      conversationId = newConversation.id;
     }
 
     // Create message
     const { data: newMessage, error } = await supabase
       .from("contract_messages")
       .insert({
+        conversation_id: conversationId,
         contract_id: contractId,
         sender_id: user.id,
-        content: body.content.trim(),
+        message: messageText.trim(),
         message_type: body.message_type || 'text',
-        attachments: body.attachments || []
+        attachment_url: body.attachment_url || null,
+        attachment_name: body.attachment_name || null,
+        attachment_size: body.attachment_size || null,
       })
-      .select()
+      .select(`
+        *,
+        profiles:sender_id (
+          id,
+          display_name,
+          email
+        )
+      `)
       .single();
 
     if (error) {
@@ -106,10 +202,17 @@ export async function POST(
       return NextResponse.json({ error: "Failed to create message" }, { status: 500 });
     }
 
+    const formattedMessage = {
+      ...newMessage,
+      sender_name: newMessage.profiles?.display_name || newMessage.profiles?.email?.split('@')[0] || 'Unknown',
+      sender_email: newMessage.profiles?.email || 'Unknown',
+    };
+
     revalidatePath(`/dashboard/contracts/${contractId}`);
     
     return NextResponse.json({ 
-      message: newMessage,
+      message: 'Message sent successfully',
+      data: formattedMessage,
       success: true 
     });
   } catch (error) {
