@@ -18,22 +18,43 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log('GET messages - User:', { userId: user.id, userEmail: user.email });
+    console.log('GET messages - Contract ID:', contractId);
+
     // Verify access to contract - check both old and new schema patterns
-    const { data: contract } = await supabase
+    const { data: contract, error: contractError } = await supabase
       .from("contracts")
       .select("id, creator_id, client_email, client_id, freelancer_id")
       .eq("id", contractId)
       .single();
 
-    if (!contract) {
+    console.log('GET messages - Contract query result:', { contract, contractError });
+
+    if (contractError || !contract) {
+      console.log('GET messages - Contract not found or error:', contractError);
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
     // Check authorization - support both new and old schema
-    const isAuthorized = contract.creator_id === user.id || 
-                        contract.client_email === user.email ||
-                        contract.client_id === user.id || 
-                        contract.freelancer_id === user.id;
+    const isCreator = contract.creator_id === user.id;
+    const isClientByEmail = contract.client_email === user.email;
+    const isClientById = contract.client_id === user.id;
+    const isFreelancer = contract.freelancer_id === user.id;
+    
+    console.log('GET messages - Authorization checks:', {
+      isCreator,
+      isClientByEmail,
+      isClientById,
+      isFreelancer,
+      contract_creator_id: contract.creator_id,
+      contract_client_email: contract.client_email,
+      contract_client_id: contract.client_id,
+      contract_freelancer_id: contract.freelancer_id,
+      user_id: user.id,
+      user_email: user.email
+    });
+
+    const isAuthorized = isCreator || isClientByEmail || isClientById || isFreelancer;
 
     if (!isAuthorized) {
       // Check contract_parties table as well
@@ -44,7 +65,10 @@ export async function GET(
         .eq('user_id', user.id)
         .maybeSingle();
 
+      console.log('GET messages - Contract parties check:', partyData);
+
       if (!partyData) {
+        console.log('GET messages - Access denied for user');
         return NextResponse.json({ error: "Access denied" }, { status: 403 });
       }
     }
