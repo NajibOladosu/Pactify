@@ -78,8 +78,8 @@ export async function POST(req: Request) {
         errorMessage = 'Your subscription has already been cancelled.';
       }
       
-      const statusMessage = allUserSubscriptions?.length > 0 
-        ? `Found ${allUserSubscriptions.length} subscription(s) but none are active/trialing/past_due. Statuses: ${allUserSubscriptions.map(s => s.status).join(', ')}`
+      const statusMessage = (allUserSubscriptions?.length || 0) > 0 
+        ? `Found ${allUserSubscriptions?.length} subscription(s) but none are active/trialing/past_due. Statuses: ${allUserSubscriptions?.map(s => s.status).join(', ')}`
         : 'No subscriptions found for this user.';
       
       console.log('❌ No active subscription found:', statusMessage);
