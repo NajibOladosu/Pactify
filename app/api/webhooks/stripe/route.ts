@@ -68,7 +68,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
-  console.log(`Received Stripe Event: ${event.type}`);
 
   if (relevantEvents.has(event.type)) {
     try {
@@ -82,7 +81,6 @@ export async function POST(request: Request) {
           if (checkoutSession.mode === 'subscription' && subscriptionId && customerId) {
             await handleSubscriptionCheckout(subscriptionId, customerId);
           } else {
-            console.log(`Checkout session ${checkoutSession.id} completed, but not a subscription or missing details.`);
           }
           break;
         }
@@ -114,7 +112,6 @@ export async function POST(request: Request) {
           if (subscriptionId && customerId) {
              await handleInvoicePaid(subscriptionId, customerId);
           } else {
-             console.log(`Invoice ${invoicePaid.id} paid event ignored: Missing subscription or customer ID.`);
           }
           break;
         }
@@ -132,7 +129,6 @@ export async function POST(request: Request) {
           if (subscriptionId && customerId) {
              await handleInvoicePaymentFailed(subscriptionId, customerId);
           } else {
-             console.log(`Invoice ${invoiceFailed.id} payment failed event ignored: Missing subscription or customer ID.`);
           }
           break;
         }
@@ -144,7 +140,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Webhook handler failed: ${error.message || 'Unknown error'}` }, { status: 500 });
     }
   } else {
-    console.log(`Ignoring irrelevant event type: ${event.type}`);
   }
 
   return NextResponse.json({ received: true });
@@ -154,7 +149,6 @@ export async function POST(request: Request) {
 
 async function handleSubscriptionCheckout(subscriptionId: string, customerId: string) {
   if (!supabaseAdmin) { console.error("Supabase Admin not init in handleSubscriptionCheckout"); return; }
-  console.log(`Handling checkout.session.completed for sub: ${subscriptionId}, customer: ${customerId}`);
   let subscriptionDetails: Stripe.Subscription;
   try {
       subscriptionDetails = await stripe.subscriptions.retrieve(subscriptionId);
@@ -232,13 +226,11 @@ async function handleSubscriptionCheckout(subscriptionId: string, customerId: st
      console.error(`Failed to update profile tier for user ${userId}:`, profileUpdateError);
    }
 
-  console.log(`Successfully processed checkout for user ${userId}, plan ${plan.id}`);
 }
 
 async function handleSubscriptionUpdate(subscriptionEventData: Stripe.Subscription) {
   // Renamed input param to avoid confusion with retrieved details
   if (!supabaseAdmin) { console.error("Supabase Admin not init in handleSubscriptionUpdate"); return; }
-  console.log(`Handling customer.subscription.updated for sub: ${subscriptionEventData.id}`);
 
   // Retrieve the full subscription details from Stripe to ensure we have all properties
   let subscriptionDetails: Stripe.Subscription;
@@ -323,13 +315,11 @@ async function handleSubscriptionUpdate(subscriptionEventData: Stripe.Subscripti
       console.error(`Failed to update profile tier for user ${userId}:`, profileUpdateError);
     }
 
-  console.log(`Successfully updated subscription ${subscriptionDetails.id} for user ${userId}`);
 }
 
 async function handleSubscriptionDelete(subscription: Stripe.Subscription) {
   // Corrected function implementation
   if (!supabaseAdmin) { console.error("Supabase Admin not init in handleSubscriptionDelete"); return; }
-  console.log(`Handling customer.subscription.deleted for sub: ${subscription.id}`);
 
   // Extract customerId correctly from the input subscription object
   const customerId = subscription.customer;
@@ -373,12 +363,10 @@ async function handleSubscriptionDelete(subscription: Stripe.Subscription) {
      console.error(`Failed to reset profile tier for user ${userId} after cancellation:`, profileUpdateError);
    }
 
-  console.log(`Successfully processed cancellation for subscription ${subscription.id}, user ${userId}`);
 }
 
 async function handleInvoicePaid(subscriptionId: string, customerId: string) {
     if (!supabaseAdmin) { console.error("Supabase Admin not init in handleInvoicePaid"); return; }
-    console.log(`Handling invoice.paid for sub: ${subscriptionId}, customer: ${customerId}`);
     const userId = await getUserIdFromCustomerId(customerId);
     if (!userId) return;
 
@@ -422,13 +410,11 @@ async function handleInvoicePaid(subscriptionId: string, customerId: string) {
     if (updateError) {
       console.error(`Failed to update subscription ${subscriptionId} on invoice paid for user ${userId}:`, updateError);
     } else {
-      console.log(`Updated subscription ${subscriptionId} status to active for user ${userId}`);
     }
 }
 
 async function handleInvoicePaymentFailed(subscriptionId: string, customerId: string) {
     if (!supabaseAdmin) { console.error("Supabase Admin not init in handleInvoicePaymentFailed"); return; }
-    console.log(`Handling invoice.payment_failed for sub: ${subscriptionId}, customer: ${customerId}`);
     const userId = await getUserIdFromCustomerId(customerId);
     if (!userId) return;
 
@@ -440,7 +426,6 @@ async function handleInvoicePaymentFailed(subscriptionId: string, customerId: st
     if (updateError) {
       console.error(`Failed to update subscription ${subscriptionId} on invoice failed for user ${userId}:`, updateError);
     } else {
-      console.log(`Updated subscription ${subscriptionId} status on payment failure for user ${userId}`);
     }
 }
 
@@ -469,7 +454,6 @@ async function getUserIdFromCustomerId(customerId: string): Promise<string | nul
     const customer = await stripe.customers.retrieve(customerId);
     // Ensure customer is not deleted and metadata exists
     if (!customer.deleted && customer.metadata?.userId) {
-      console.log(`Found userId in Stripe customer metadata for ${customerId}`);
       return customer.metadata.userId;
     }
   } catch (stripeError: any) {

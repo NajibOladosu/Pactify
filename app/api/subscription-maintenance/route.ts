@@ -5,7 +5,7 @@ export async function POST() {
   const supabase = await createClient();
 
   try {
-    console.log('🔧 Running subscription maintenance...');
+    console.log('Running subscription maintenance...');
 
     // Run expiration handling
     const { error: expirationError } = await supabase.rpc('handle_subscription_expiration');
@@ -23,7 +23,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Failed to sync profiles' }, { status: 500 });
     }
 
-    console.log('✅ Subscription maintenance completed');
+    console.log('Subscription maintenance completed');
 
     return NextResponse.json({
       message: 'Subscription maintenance completed',

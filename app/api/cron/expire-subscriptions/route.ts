@@ -18,13 +18,13 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE!
     );
 
-    console.log('🕐 Starting scheduled subscription expiration check...');
+    console.log('Starting scheduled subscription expiration check...');
 
     // Run the expiration function
     const { error: expirationError } = await supabase.rpc('handle_subscription_expiration');
     
     if (expirationError) {
-      console.error('❌ Expiration check failed:', expirationError);
+      console.error('Expiration check failed:', expirationError);
       return NextResponse.json({ 
         error: 'Expiration check failed', 
         details: expirationError.message 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
       .eq('subscription_tier', 'free');
 
-    console.log('✅ Expiration check completed successfully');
+    console.log('Expiration check completed successfully');
 
     return NextResponse.json({
       success: true,
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('💥 Unexpected error during expiration check:', error);
+    console.error('Unexpected error during expiration check:', error);
     return NextResponse.json({ 
       error: 'Internal server error', 
       timestamp: new Date().toISOString() 

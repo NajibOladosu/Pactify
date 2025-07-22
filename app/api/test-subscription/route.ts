@@ -11,7 +11,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('🧪 Testing subscription logic for user:', user.id);
 
     // Test the exact query
     const { data: testSubscription, error: testError } = await supabase
