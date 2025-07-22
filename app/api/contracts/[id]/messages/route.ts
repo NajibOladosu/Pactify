@@ -64,9 +64,11 @@ export async function GET(
       .is('deleted_at', null)
       .order("created_at", { ascending: true });
 
+    console.log('Messages query result:', { messages, error, contractId });
+
     if (error) {
       console.error("Error fetching messages:", error);
-      return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to fetch messages", details: error.message }, { status: 500 });
     }
 
     const formattedMessages = messages?.map(message => ({
@@ -143,6 +145,8 @@ export async function POST(
 
     // Support both 'content' and 'message' field names
     const messageText = body.message || body.content;
+    console.log('POST /api/contracts/[id]/messages - Request body:', { body, messageText, contractId });
+    
     if (!messageText || typeof messageText !== 'string' || messageText.trim().length === 0) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
