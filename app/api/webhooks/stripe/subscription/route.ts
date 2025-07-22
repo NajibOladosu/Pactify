@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
   }
 
-  console.log(`🎫 Received Stripe webhook: ${event.type}`);
 
   const supabase = await createClient();
 
@@ -33,7 +32,6 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice;
         
         if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
-          console.log(`💰 Processing subscription payment for: ${invoice.subscription}`);
           
           // Get subscription details
           const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
@@ -55,7 +53,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Failed to process payment' }, { status: 500 });
           }
 
-          console.log(`✅ Successfully processed subscription payment for ${subscription.metadata.user_id}`);
         }
         break;
       }
@@ -63,7 +60,6 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         
-        console.log(`🔄 Subscription updated: ${subscription.id}, status: ${subscription.status}`);
         
         // Update subscription status
         const { error: updateError } = await supabase

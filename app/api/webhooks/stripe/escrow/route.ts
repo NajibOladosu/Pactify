@@ -62,7 +62,6 @@ export async function POST(request: NextRequest) {
         break;
       
       default:
-        console.log(`Unhandled event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
@@ -177,7 +176,6 @@ async function handlePaymentIntentSucceeded(paymentIntent: any, supabase: any) {
       }
     }
 
-    console.log(`Payment succeeded for contract ${escrowPayment.contract_id}`);
   } catch (error) {
     console.error('Error handling payment intent succeeded:', error);
   }
@@ -212,7 +210,6 @@ async function handlePaymentIntentFailed(paymentIntent: any, supabase: any) {
       console.error('Error updating contract payment:', paymentError);
     }
 
-    console.log(`Payment failed for payment intent ${paymentIntent.id}`);
   } catch (error) {
     console.error('Error handling payment intent failed:', error);
   }
@@ -222,7 +219,6 @@ async function handleCheckoutSessionCompleted(session: any, supabase: any) {
   try {
     if (session.metadata?.type === 'escrow_funding') {
       // This is handled by payment_intent.succeeded, but we can add additional logic here
-      console.log(`Checkout session completed for contract ${session.metadata.contract_id}`);
     }
   } catch (error) {
     console.error('Error handling checkout session completed:', error);
@@ -231,7 +227,6 @@ async function handleCheckoutSessionCompleted(session: any, supabase: any) {
 
 async function handleTransferCreated(transfer: any, supabase: any) {
   try {
-    console.log(`Transfer created: ${transfer.id} for ${transfer.amount / 100}`);
     
     // Update escrow payment with transfer ID if needed
     if (transfer.metadata?.escrow_payment_id) {
@@ -254,7 +249,6 @@ async function handleTransferCreated(transfer: any, supabase: any) {
 
 async function handleTransferUpdated(transfer: any, supabase: any) {
   try {
-    console.log(`Transfer updated: ${transfer.id} - status: ${transfer.status}`);
     
     // Handle transfer status updates (paid, failed, etc.)
     if (transfer.status === 'paid' && transfer.metadata?.escrow_payment_id) {
@@ -278,7 +272,6 @@ async function handleTransferUpdated(transfer: any, supabase: any) {
 
 async function handleRefundCreated(refund: any, supabase: any) {
   try {
-    console.log(`Refund created: ${refund.id} for ${refund.amount / 100}`);
     
     // Update escrow payment status if it's related to a contract refund
     if (refund.metadata?.escrow_payment_id) {

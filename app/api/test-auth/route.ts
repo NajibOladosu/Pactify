@@ -15,11 +15,6 @@ export async function GET() {
     const { data: authTest, error: authError } = await supabase
       .rpc('debug_auth_context');
 
-    console.log('🧪 Auth test results:', {
-      userId: user.id,
-      authTest,
-      authError
-    });
 
     return NextResponse.json({
       userId: user.id,

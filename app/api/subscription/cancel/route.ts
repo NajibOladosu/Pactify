@@ -23,8 +23,6 @@ export async function POST(req: Request) {
   );
 
   try {
-    console.log('🚀 Cancel subscription request received');
-    
     // 1. Get User
     const {
       data: { user },
@@ -36,8 +34,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'User not authenticated.' }, { status: 401 });
     }
 
-    console.log('✅ User authenticated:', user.id);
-
     // 2. Get Active Subscription from DB using SERVICE ROLE to bypass RLS
     const { data: activeSubscription, error: subError } = await serviceSupabase
       .from('user_subscriptions') // Corrected table name
@@ -46,20 +42,12 @@ export async function POST(req: Request) {
       .in('status', ['active', 'trialing', 'past_due']) // Include past_due subscriptions that might still be cancelable
       .maybeSingle(); // Expecting zero or one active/trialing subscription
 
-    console.log('🔍 Active subscription query result (service role):', { 
-      userId: user.id, 
-      activeSubscription, 
-      subError,
-      hasSubscription: !!activeSubscription
-    });
 
     // Also check what subscriptions this user has at all using SERVICE ROLE
     const { data: allUserSubscriptions } = await serviceSupabase
       .from('user_subscriptions')
       .select('*')
       .eq('user_id', user.id);
-    
-    console.log('📊 All subscriptions for this user (service role):', allUserSubscriptions);
 
     if (subError) {
       console.error('Cancel Subscription Error (DB Query):', subError);
@@ -78,15 +66,9 @@ export async function POST(req: Request) {
         errorMessage = 'Your subscription has already been cancelled.';
       }
       
-      const statusMessage = (allUserSubscriptions?.length || 0) > 0 
-        ? `Found ${allUserSubscriptions?.length} subscription(s) but none are active/trialing/past_due. Statuses: ${allUserSubscriptions?.map(s => s.status).join(', ')}`
-        : 'No subscriptions found for this user.';
-      
-      console.log('❌ No active subscription found:', statusMessage);
       
       return NextResponse.json({ 
-        error: errorMessage,
-        debug: statusMessage
+        error: errorMessage
       }, { status: 404 });
     }
 
@@ -126,10 +108,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to update local subscription status.' }, { status: 500 });
     }
 
-    console.log('✅ Database updated successfully');
-
     // 6. Success
-    console.log(`✅ Subscription ${stripeSubscriptionId} for user ${user.id} marked for cancellation.`);
     return NextResponse.json({ 
       message: 'Subscription cancellation initiated successfully.',
       subscription: {

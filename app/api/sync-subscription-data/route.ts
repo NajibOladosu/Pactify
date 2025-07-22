@@ -5,7 +5,7 @@ export async function POST() {
   const supabase = await createClient();
 
   try {
-    console.log('🔄 Starting subscription data sync...');
+    console.log('Starting subscription data sync...');
 
     // Get all users with active subscriptions
     const { data: activeSubscriptions, error: subscriptionsError } = await supabase
@@ -18,7 +18,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
     }
 
-    console.log(`📊 Found ${activeSubscriptions?.length || 0} active subscriptions`);
+    console.log(`Found ${activeSubscriptions?.length || 0} active subscriptions`);
 
     let syncedCount = 0;
     let errors = [];
@@ -34,14 +34,13 @@ export async function POST() {
 
         if (updateError) {
           errors.push(`User ${subscription.user_id}: ${updateError.message}`);
-          console.error(`❌ Failed to update profile for user ${subscription.user_id}:`, updateError);
+          console.error(`Failed to update profile for user ${subscription.user_id}:`, updateError);
         } else {
           syncedCount++;
-          console.log(`✅ Synced user ${subscription.user_id} to ${subscription.plan_id}`);
         }
       } catch (err) {
         errors.push(`User ${subscription.user_id}: ${err}`);
-        console.error(`❌ Exception updating user ${subscription.user_id}:`, err);
+        console.error(`Exception updating user ${subscription.user_id}:`, err);
       }
     }
 
@@ -57,10 +56,9 @@ export async function POST() {
       console.error('Error updating free profiles:', freeError);
       errors.push(`Free profiles update: ${freeError.message}`);
     } else {
-      console.log(`✅ Updated ${freeProfiles?.length || 0} profiles to free tier`);
     }
 
-    console.log('🎉 Subscription data sync completed');
+    console.log('Subscription data sync completed');
 
     return NextResponse.json({
       message: 'Subscription data sync completed',

@@ -175,7 +175,6 @@ export const updateUserProfile = async (formData: FormData) => {
 
   if (Object.keys(updateData).length === 0) {
     // No actual data to update
-    console.log("No profile changes detected.");
     return; 
   }
 
@@ -193,7 +192,6 @@ export const updateUserProfile = async (formData: FormData) => {
   // Revalidate the path to show updated data
   revalidatePath("/dashboard/settings");
 
-  console.log("Profile updated successfully!");
   // Server actions used directly in `action` should typically return void or Promise<void>.
   // Feedback (like toasts) would require using `useFormState` on the client.
 };
@@ -315,7 +313,6 @@ export const createContractAction = async (formData: {
 
     // RPC returns the count directly
     if (count !== null && count >= maxContracts) {
-      console.log(`User ${userId} on plan ${planId} reached limit of ${maxContracts} contracts (Count: ${count}).`);
       return { error: `You have reached the maximum number of active contracts (${maxContracts}) for the ${planId} plan. Please upgrade to create more.` };
     }
   }
@@ -335,7 +332,6 @@ export const createContractAction = async (formData: {
       return { error: `Could not find the specified template "${formData.template}".` };
     }
     if (!templateData) {
-        console.warn(`Create Contract Warning: Template name "${formData.template}" not found in database.`);
         // Proceed without template ID if not found, or return error? Let's proceed without.
         templateUuid = null;
     } else {
@@ -407,7 +403,6 @@ export const createContractAction = async (formData: {
   revalidatePath(`/dashboard/contracts/${newContract.id}`); // Revalidate detail page too
   revalidatePath('/dashboard'); // Revalidate dashboard for stats update
 
-  console.log(`Contract ${newContract.id} created successfully for user ${userId} (Template ID: ${templateUuid}). Creator party added.`);
   // 9. Return success
   return { success: true, contractId: newContract.id };
 };
@@ -478,16 +473,12 @@ export const updateContractContentAction = async (formData: {
   revalidatePath(`/dashboard/contracts/${formData.contractId}`);
   revalidatePath(`/dashboard/contracts/${formData.contractId}/edit`); // Revalidate edit page too
 
-  console.log(`Contract ${formData.contractId} content updated successfully by user ${userId}.`);
   // 8. Return success
   return { success: true };
 };
 
-// Action to delete a contract
+// Action to send a contract
 export const sendContractAction = async (formData: { contractId: string; recipientEmail?: string }) => {
-  console.log("=== SEND CONTRACT ACTION DEBUG ===");
-  console.log("Form data:", formData);
-  console.log("Contract ID:", formData.contractId);
   
   const supabase = await createClient();
 
@@ -502,7 +493,6 @@ export const sendContractAction = async (formData: { contractId: string; recipie
     return { error: "Authentication required" };
   }
 
-  console.log("User authenticated:", user.id);
 
   try {
     // Get contract details and verify ownership/permissions
@@ -512,17 +502,12 @@ export const sendContractAction = async (formData: { contractId: string; recipie
       .eq('id', formData.contractId)
       .single();
 
-    console.log("Contract query result:", { data: contract, error: contractError });
     
     if (contractError || !contract) {
       console.error("Contract lookup failed:", contractError);
-      console.log("Searched for contract ID:", formData.contractId);
       return { error: "Contract not found" };
     }
 
-    console.log("Contract found successfully:", contract.id);
-    console.log("Contract status:", contract.status);
-    console.log("Contract status type:", typeof contract.status);
 
     // Verify user can send this contract (creator or client)
     if (contract.creator_id !== user.id && contract.client_id !== user.id) {
@@ -562,27 +547,16 @@ export const sendContractAction = async (formData: { contractId: string; recipie
     );
     
     // Send the email
-    console.log(`=== SENDING EMAIL ===`);
-    console.log(`Recipient: ${recipientEmail}`);
-    console.log(`Contract: ${contract.title} (${contract.id})`);
-    
     const emailSent = await sendEmail(emailOptions);
-    
-    console.log(`Email sent result: ${emailSent}`);
     
     if (emailSent) {
       // Update contract status if it was draft
       if (contract.status === 'draft') {
-        console.log(`=== UPDATING CONTRACT STATUS ===`);
-        console.log(`Contract ID: ${contract.id}`);
-        console.log(`Current Status: ${contract.status}`);
-        console.log(`New Status: pending_signatures`);
         
         // Try multiple approaches to update the status
         let updateError = null;
         
-        // Approach 1: Try direct update (might work if it's just text)
-        console.log('=== TRYING DIRECT UPDATE ===');
+        // Approach 1: Try direct update
         try {
           const { error } = await supabase
             .from('contracts')
@@ -593,19 +567,12 @@ export const sendContractAction = async (formData: { contractId: string; recipie
             })
             .eq('id', contract.id);
           updateError = error;
-          if (error) {
-            console.log('Direct update failed:', error);
-          } else {
-            console.log('Direct update succeeded!');
-          }
         } catch (err) {
-          console.log('Direct update threw exception:', err);
           updateError = err;
         }
         
-        // Approach 2: If that fails, try RPC function (now available)
+        // Approach 2: If that fails, try RPC function
         if (updateError) {
-          console.log('=== TRYING RPC FUNCTION ===');
           try {
             const { data, error } = await supabase
               .rpc('update_contract_status_simple', {
@@ -614,37 +581,20 @@ export const sendContractAction = async (formData: { contractId: string; recipie
               });
             
             if (error) {
-              console.log('RPC function failed:', error);
               updateError = error;
             } else if (data && !data.success) {
-              console.log('RPC function returned error:', data.error);
               updateError = new Error(data.error);
             } else {
-              console.log('RPC function succeeded!');
               updateError = null; // Success!
             }
           } catch (err) {
-            console.log('RPC function threw exception:', err);
             updateError = err;
           }
         }
           
         if (updateError) {
           console.error('Failed to update contract status:', updateError);
-        } else {
-          console.log('Contract status updated successfully');
-          
-          // Verify the update worked
-          const { data: updatedContract } = await supabase
-            .from('contracts')
-            .select('status')
-            .eq('id', contract.id)
-            .single();
-          
-          console.log('Contract status after update:', updatedContract?.status);
         }
-      } else {
-        console.log('Contract status is not draft, skipping status update. Current status:', contract.status);
       }
 
       // Log contract activity
@@ -735,7 +685,6 @@ export const deleteContractAction = async (formData: { contractId: string }) => 
   revalidatePath('/dashboard/contracts');
   revalidatePath('/dashboard'); // For stats potentially
 
-  console.log(`Contract ${formData.contractId} deleted successfully by user ${userId}.`);
   // 8. Return success
   return { success: true };
 };
