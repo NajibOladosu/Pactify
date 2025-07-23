@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
@@ -8,6 +9,10 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
     const { id: contractId } = await params;
 
     const {
@@ -21,8 +26,8 @@ export async function GET(
     console.log('GET messages - User:', { userId: user.id, userEmail: user.email });
     console.log('GET messages - Contract ID:', contractId);
 
-    // Verify access to contract - check both old and new schema patterns
-    const { data: contract, error: contractError } = await supabase
+    // Use service role client to bypass RLS for contract lookup
+    const { data: contract, error: contractError } = await serviceSupabase
       .from("contracts")
       .select("id, creator_id, client_email, client_id, freelancer_id")
       .eq("id", contractId)
@@ -73,8 +78,8 @@ export async function GET(
       }
     }
 
-    // Fetch messages with sender information
-    const { data: messages, error } = await supabase
+    // Fetch messages with sender information using service client
+    const { data: messages, error } = await serviceSupabase
       .from("contract_messages")
       .select(`
         *,
@@ -125,6 +130,10 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
     const { id: contractId } = await params;
     const body = await request.json();
 
@@ -136,8 +145,8 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify access to contract - check both old and new schema patterns
-    const { data: contract } = await supabase
+    // Use service role client to bypass RLS for contract lookup
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("id, creator_id, client_email, client_id, freelancer_id")
       .eq("id", contractId)
@@ -175,8 +184,8 @@ export async function POST(
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    // Ensure conversation exists
-    const { data: conversation } = await supabase
+    // Ensure conversation exists using service client
+    const { data: conversation } = await serviceSupabase
       .from('contract_conversations')
       .select('id')
       .eq('contract_id', contractId)
@@ -186,7 +195,7 @@ export async function POST(
 
     if (!conversationId) {
       // Create conversation if it doesn't exist
-      const { data: newConversation, error: createConversationError } = await supabase
+      const { data: newConversation, error: createConversationError } = await serviceSupabase
         .from('contract_conversations')
         .insert({
           contract_id: contractId
@@ -202,8 +211,8 @@ export async function POST(
       conversationId = newConversation.id;
     }
 
-    // Create message
-    const { data: newMessage, error } = await supabase
+    // Create message using service client
+    const { data: newMessage, error } = await serviceSupabase
       .from("contract_messages")
       .insert({
         conversation_id: conversationId,
