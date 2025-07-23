@@ -78,17 +78,10 @@ export async function GET(
       }
     }
 
-    // Fetch messages with sender information using service client
+    // Fetch messages first, then get profile information separately
     const { data: messages, error } = await serviceSupabase
       .from("contract_messages")
-      .select(`
-        *,
-        profiles:sender_id (
-          id,
-          display_name,
-          email
-        )
-      `)
+      .select("*")
       .eq("contract_id", contractId)
       .is('deleted_at', null)
       .order("created_at", { ascending: true });
@@ -100,11 +93,32 @@ export async function GET(
       return NextResponse.json({ error: "Failed to fetch messages", details: error.message }, { status: 500 });
     }
 
-    const formattedMessages = messages?.map(message => ({
-      ...message,
-      sender_name: message.profiles?.display_name || message.profiles?.email?.split('@')[0] || 'Unknown',
-      sender_email: message.profiles?.email || 'Unknown',
-    })) || [];
+    // Get unique sender IDs to fetch profile information
+    const senderIds = [...new Set(messages?.map(m => m.sender_id) || [])];
+    
+    // Fetch profile information for all senders
+    let profilesMap = new Map();
+    if (senderIds.length > 0) {
+      const { data: profiles } = await serviceSupabase
+        .from('profiles')
+        .select('id, display_name, email')
+        .in('id', senderIds);
+      
+      if (profiles) {
+        profiles.forEach(profile => {
+          profilesMap.set(profile.id, profile);
+        });
+      }
+    }
+
+    const formattedMessages = messages?.map(message => {
+      const profile = profilesMap.get(message.sender_id);
+      return {
+        ...message,
+        sender_name: profile?.display_name || profile?.email?.split('@')[0] || 'Unknown',
+        sender_email: profile?.email || 'Unknown',
+      };
+    }) || [];
 
     // Mark messages as read for the current user
     if (messages && messages.length > 0) {
@@ -224,14 +238,7 @@ export async function POST(
         attachment_name: body.attachment_name || null,
         attachment_size: body.attachment_size || null,
       })
-      .select(`
-        *,
-        profiles:sender_id (
-          id,
-          display_name,
-          email
-        )
-      `)
+      .select("*")
       .single();
 
     if (error) {
@@ -239,10 +246,17 @@ export async function POST(
       return NextResponse.json({ error: "Failed to create message" }, { status: 500 });
     }
 
+    // Get sender profile information
+    const { data: senderProfile } = await serviceSupabase
+      .from('profiles')
+      .select('id, display_name, email')
+      .eq('id', user.id)
+      .single();
+
     const formattedMessage = {
       ...newMessage,
-      sender_name: newMessage.profiles?.display_name || newMessage.profiles?.email?.split('@')[0] || 'Unknown',
-      sender_email: newMessage.profiles?.email || 'Unknown',
+      sender_name: senderProfile?.display_name || senderProfile?.email?.split('@')[0] || 'Unknown',
+      sender_email: senderProfile?.email || 'Unknown',
     };
 
     revalidatePath(`/dashboard/contracts/${contractId}`);
