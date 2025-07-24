@@ -133,7 +133,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
         }));
 
         const { error: milestonesError } = await supabase
-          .from("milestones")
+          .from("contract_milestones")
           .insert(milestonesData);
 
         if (milestonesError) {
@@ -226,7 +226,8 @@ const secureGetHandler = SecurityMiddleware.withSecurity(
       // Parse and validate query parameters
       const status = searchParams.get("status");
       const type = searchParams.get("type");
-      const limit = parseInt(searchParams.get("limit") || "10", 10);
+      const includeProgress = searchParams.get("include_progress") === "true";
+      const limit = parseInt(searchParams.get("limit") || (includeProgress ? "100" : "10"), 10);
       const offset = parseInt(searchParams.get("offset") || "0", 10);
 
       // Validate parameters
@@ -268,18 +269,30 @@ const secureGetHandler = SecurityMiddleware.withSecurity(
 
       const queryData = { status, type, limit, offset };
 
+      // Build query based on whether progress data is needed
+      const baseSelectFields = `
+        *,
+        contract_templates!left(name, description),
+        contract_activities!left(
+          id, activity_type, description, created_at,
+          profiles(display_name)
+        )
+      `;
+
+      const progressSelectFields = `
+        *,
+        contract_templates!left(name, description),
+        contract_milestones!left(id, title, description, amount, status, due_date, order_index, deliverables),
+        contract_activities!left(
+          id, activity_type, description, created_at,
+          profiles(display_name)
+        )
+      `;
+
       let query = supabase
         .from("contracts")
-        .select(`
-          *,
-          contract_templates(name, description),
-          milestones(id, title, amount, status, due_date, order_index),
-          contract_activities(
-            id, activity_type, description, created_at,
-            profiles(display_name)
-          )
-        `)
-        .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id},client_email.eq.${user.email},freelancer_email.eq.${user.email}`)
+        .select(includeProgress ? progressSelectFields : baseSelectFields)
+        .or(`creator_id.eq.${user.id},client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
         .order("created_at", { ascending: false })
         .range(queryData.offset, queryData.offset + queryData.limit - 1);
 
