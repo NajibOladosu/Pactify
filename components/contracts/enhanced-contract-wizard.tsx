@@ -302,146 +302,231 @@ export default function EnhancedContractWizard() {
     switch (currentStep) {
       case 0: // Template Selection
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Choose Your Contract Template</h3>
-              <p className="text-muted-foreground">Select a template that best matches your project type.</p>
+          <div className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-serif font-bold mb-4">Choose Your Contract Template</h2>
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                Select a pre-designed template that best matches your project type. Each template includes 
+                optimized terms and suggested contract structure for your industry.
+              </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl mx-auto">
               {TEMPLATES.map(template => (
                 <Card 
                   key={template.id}
                   className={cn(
-                    "cursor-pointer transition-all hover:border-primary",
-                    selectedTemplate?.id === template.id ? "border-primary bg-primary/5" : ""
+                    "cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02]",
+                    selectedTemplate?.id === template.id 
+                      ? "border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20" 
+                      : "hover:border-primary/50"
                   )}
                   onClick={() => handleTemplateSelect(template)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="text-2xl">{template.icon}</div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{template.name}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="secondary" className="text-xs">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="text-4xl p-3 rounded-lg bg-muted/50">
+                        {template.icon}
+                      </div>
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <h3 className="text-xl font-semibold">{template.name}</h3>
+                          <p className="text-muted-foreground mt-1 leading-relaxed">
+                            {template.description}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="secondary" className="px-3 py-1">
                             {template.category}
                           </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {template.suggested_type}
+                          <Badge variant="outline" className="px-3 py-1 capitalize">
+                            {template.suggested_type} Rate
                           </Badge>
                         </div>
                       </div>
-                      {selectedTemplate?.id === template.id && (
-                        <CheckCircleIcon className="h-5 w-5 text-primary" />
-                      )}
+                      <div className="flex-shrink-0">
+                        {selectedTemplate?.id === template.id ? (
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                            <CheckCircleIcon className="h-5 w-5 text-primary-foreground" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/20" />
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
             
+            {selectedTemplate && (
+              <div className="mt-8 p-6 bg-muted/30 rounded-lg max-w-4xl mx-auto">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <FileTextIcon className="h-5 w-5" />
+                  Preview: Default Terms for {selectedTemplate.name}
+                </h4>
+                <div className="text-sm text-muted-foreground whitespace-pre-line bg-background p-4 rounded border">
+                  {selectedTemplate.default_terms}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  * These terms can be customized in the next steps
+                </p>
+              </div>
+            )}
+            
             {errors.template && (
-              <p className="text-sm text-destructive">{errors.template}</p>
+              <div className="flex items-center gap-2 text-destructive justify-center">
+                <XCircleIcon className="h-4 w-4" />
+                <span className="text-sm">{errors.template}</span>
+              </div>
             )}
           </div>
         );
 
       case 1: // Basic Info
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Contract Information & Your Role</h3>
-              <p className="text-muted-foreground">Provide the basic details and specify your role in this contract.</p>
+          <div className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-serif font-bold mb-4">Contract Information & Your Role</h2>
+              <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
+                Let's establish the basic details of your contract and clarify your role in this agreement.
+              </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="max-w-4xl mx-auto space-y-8">
               {/* Role Selection */}
-              <div>
-                <Label className="text-sm font-medium">I am the... *</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold mb-2">Your Role</h3>
+                  <p className="text-muted-foreground">Are you the one providing services or hiring someone?</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
                   {[
                     { 
                       value: 'freelancer', 
-                      label: 'Freelancer', 
+                      label: 'Freelancer/Service Provider', 
                       desc: 'I am providing services to a client',
-                      icon: '👨‍💻'
+                      icon: '👨‍💻',
+                      details: 'You will be delivering work or services'
                     },
                     { 
                       value: 'client', 
-                      label: 'Client', 
+                      label: 'Client/Buyer', 
                       desc: 'I am hiring a freelancer for services',
-                      icon: '🏢'
+                      icon: '🏢',
+                      details: 'You will be receiving work or services'
                     }
                   ].map(role => (
                     <Card 
                       key={role.value}
                       className={cn(
-                        "cursor-pointer transition-all hover:border-primary p-4 relative",
-                        formData.user_role === role.value ? "border-primary bg-primary/5" : "",
+                        "cursor-pointer transition-all duration-200 hover:shadow-lg relative",
+                        formData.user_role === role.value 
+                          ? "border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20" 
+                          : "hover:border-primary/50",
                         errors.user_role ? "border-destructive" : ""
                       )}
                       onClick={() => setFormData(prev => ({ ...prev, user_role: role.value as any }))}
                     >
-                      <div className="text-center">
-                        <div className="text-2xl mb-2">{role.icon}</div>
-                        <h4 className="font-medium">{role.label}</h4>
-                        <p className="text-xs text-muted-foreground mt-1">{role.desc}</p>
-                      </div>
-                      {formData.user_role === role.value && (
-                        <CheckCircleIcon className="h-4 w-4 text-primary absolute top-2 right-2" />
-                      )}
+                      <CardContent className="p-6 text-center">
+                        <div className="text-4xl mb-4 p-3 rounded-lg bg-muted/30 inline-block">{role.icon}</div>
+                        <h4 className="text-lg font-semibold mb-2">{role.label}</h4>
+                        <p className="text-muted-foreground text-sm mb-2">{role.desc}</p>
+                        <p className="text-xs text-muted-foreground">{role.details}</p>
+                        {formData.user_role === role.value && (
+                          <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                            <CheckCircleIcon className="h-4 w-4 text-primary-foreground" />
+                          </div>
+                        )}
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
-                {errors.user_role && <p className="text-sm text-destructive mt-1">{errors.user_role}</p>}
+                {errors.user_role && (
+                  <div className="flex items-center gap-2 text-destructive justify-center">
+                    <XCircleIcon className="h-4 w-4" />
+                    <span className="text-sm">{errors.user_role}</span>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <Label htmlFor="title">Contract Title *</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Website Redesign for ABC Company"
-                  className={errors.title ? "border-destructive" : ""}
-                />
-                {errors.title && <p className="text-sm text-destructive mt-1">{errors.title}</p>}
-              </div>
+              {/* Contract Details */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4">Contract Details</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="title" className="text-base font-medium">Contract Title *</Label>
+                        <Input
+                          id="title"
+                          value={formData.title}
+                          onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="e.g., Website Redesign for ABC Company"
+                          className={cn("mt-2 h-12", errors.title ? "border-destructive" : "")}
+                        />
+                        {errors.title && (
+                          <div className="flex items-center gap-2 text-destructive mt-2">
+                            <XCircleIcon className="h-4 w-4" />
+                            <span className="text-sm">{errors.title}</span>
+                          </div>
+                        )}
+                      </div>
 
-              <div>
-                <Label htmlFor="description">Project Description *</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe the project scope, objectives, and key requirements..."
-                  rows={4}
-                  className={errors.description ? "border-destructive" : ""}
-                />
-                {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
-              </div>
+                      <div>
+                        <Label htmlFor="client_email" className="text-base font-medium">
+                          {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
+                        </Label>
+                        <Input
+                          id="client_email"
+                          type="email"
+                          value={formData.client_email}
+                          onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
+                          placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
+                          className={cn("mt-2 h-12", errors.client_email ? "border-destructive" : "")}
+                        />
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {formData.user_role === 'freelancer' 
+                            ? 'The client will receive an invitation to review and sign the contract.'
+                            : 'The freelancer will receive an invitation to review and sign the contract.'
+                          }
+                        </p>
+                        {errors.client_email && (
+                          <div className="flex items-center gap-2 text-destructive mt-2">
+                            <XCircleIcon className="h-4 w-4" />
+                            <span className="text-sm">{errors.client_email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-              <div>
-                <Label htmlFor="client_email">
-                  {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
-                </Label>
-                <Input
-                  id="client_email"
-                  type="email"
-                  value={formData.client_email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
-                  placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
-                  className={errors.client_email ? "border-destructive" : ""}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formData.user_role === 'freelancer' 
-                    ? 'The client will receive an invitation to review and sign the contract.'
-                    : 'The freelancer will receive an invitation to review and sign the contract.'
-                  }
-                </p>
-                {errors.client_email && <p className="text-sm text-destructive mt-1">{errors.client_email}</p>}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-4">Project Description</h3>
+                    <div>
+                      <Label htmlFor="description" className="text-base font-medium">Describe the Project *</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Describe the project scope, objectives, key requirements, and expected deliverables..."
+                        rows={8}
+                        className={cn("mt-2 resize-none", errors.description ? "border-destructive" : "")}
+                      />
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Be as detailed as possible to avoid misunderstandings later.
+                      </p>
+                      {errors.description && (
+                        <div className="flex items-center gap-2 text-destructive mt-2">
+                          <XCircleIcon className="h-4 w-4" />
+                          <span className="text-sm">{errors.description}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -846,82 +931,126 @@ export default function EnhancedContractWizard() {
     : currentStep >= 3 ? currentStep + 1 : currentStep;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-serif font-bold">Create New Contract</h1>
-        <p className="text-muted-foreground mt-1">
-          Follow our guided wizard to create a comprehensive, legally-binding contract.
-        </p>
+    <div className="min-h-screen bg-background">
+      {/* Header Section */}
+      <div className="border-b bg-card">
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-serif font-bold tracking-tight">Create New Contract</h1>
+              <p className="text-muted-foreground mt-2 text-lg">
+                Follow our guided wizard to create a comprehensive, legally-binding contract.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-muted-foreground">Step</div>
+              <div className="text-2xl font-bold">{currentStep + 1} of {effectiveSteps.length}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Progress Steps */}
-      <div className="flex items-center justify-between">
-        {effectiveSteps.map((stepName, index) => {
-          const isActive = index === currentStep;
-          const isCompleted = index < currentStep;
-          const stepNumber = formData.type === 'milestone' ? index : (index >= 3 ? index + 1 : index);
-          
-          return (
-            <div key={stepName} className="flex items-center">
-              <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium",
-                isCompleted ? "bg-primary text-primary-foreground" :
-                isActive ? "bg-primary text-primary-foreground" :
-                "bg-muted text-muted-foreground"
-              )}>
-                {isCompleted ? <CheckCircleIcon className="w-4 h-4" /> : stepNumber + 1}
-              </div>
-              <div className="ml-2 text-sm font-medium">{stepName}</div>
-              {index < effectiveSteps.length - 1 && (
-                <div className={cn(
-                  "mx-4 h-0.5 w-12 transition-colors",
-                  isCompleted ? "bg-primary" : "bg-muted"
-                )} />
-              )}
-            </div>
-          );
-        })}
+      <div className="border-b bg-muted/30">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex items-center justify-center space-x-8">
+            {effectiveSteps.map((stepName, index) => {
+              const isActive = index === currentStep;
+              const isCompleted = index < currentStep;
+              const stepNumber = formData.type === 'milestone' ? index : (index >= 3 ? index + 1 : index);
+              
+              return (
+                <div key={stepName} className="flex items-center">
+                  <div className="flex flex-col items-center">
+                    <div className={cn(
+                      "flex items-center justify-center w-12 h-12 rounded-full text-sm font-medium transition-all",
+                      isCompleted ? "bg-primary text-primary-foreground shadow-lg" :
+                      isActive ? "bg-primary text-primary-foreground shadow-lg scale-110" :
+                      "bg-muted text-muted-foreground border-2 border-muted-foreground/20"
+                    )}>
+                      {isCompleted ? <CheckCircleIcon className="w-6 h-6" /> : stepNumber + 1}
+                    </div>
+                    <div className={cn(
+                      "mt-2 text-sm font-medium text-center min-w-[100px]",
+                      isActive ? "text-foreground" : "text-muted-foreground"
+                    )}>
+                      {stepName}
+                    </div>
+                  </div>
+                  {index < effectiveSteps.length - 1 && (
+                    <div className={cn(
+                      "mx-6 h-0.5 w-16 transition-colors",
+                      isCompleted ? "bg-primary" : "bg-muted-foreground/20"
+                    )} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Step Content */}
-      <Card>
-        <CardContent className="p-6">
-          {renderStepContent()}
-          
-          {/* Navigation */}
-          <div className="flex justify-between mt-8 pt-6 border-t">
-            <Button 
-              onClick={prevStep} 
-              variant="outline"
-              disabled={currentStep === 0 || isPending}
-            >
-              <ChevronLeftIcon className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            
-            {currentStep === effectiveSteps.length - 1 ? (
-              <Button onClick={handleSubmit} disabled={isPending}>
-                {isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating Contract...
-                  </>
+      {/* Main Content Area */}
+      <div className="container mx-auto px-6 py-8">
+        <div className="max-w-6xl mx-auto">
+          <Card className="shadow-lg border-0 bg-card">
+            <CardContent className="p-8 md:p-12">
+              <div className="min-h-[600px]">
+                {renderStepContent()}
+              </div>
+              
+              {/* Navigation */}
+              <div className="flex justify-between items-center mt-12 pt-8 border-t border-border">
+                <Button 
+                  onClick={prevStep} 
+                  variant="outline"
+                  size="lg"
+                  disabled={currentStep === 0 || isPending}
+                  className="px-8"
+                >
+                  <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                  Back
+                </Button>
+                
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                  <span>Step {currentStep + 1} of {effectiveSteps.length}</span>
+                </div>
+                
+                {currentStep === effectiveSteps.length - 1 ? (
+                  <Button 
+                    onClick={handleSubmit} 
+                    size="lg"
+                    disabled={isPending}
+                    className="px-8 bg-primary hover:bg-primary/90"
+                  >
+                    {isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Creating Contract...
+                      </>
+                    ) : (
+                      <>
+                        <FileTextIcon className="w-5 h-5 mr-2" />
+                        Create Contract
+                      </>
+                    )}
+                  </Button>
                 ) : (
-                  'Create Contract'
+                  <Button 
+                    onClick={nextStep}
+                    size="lg"
+                    disabled={isPending}
+                    className="px-8"
+                  >
+                    Continue
+                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                  </Button>
                 )}
-              </Button>
-            ) : (
-              <Button 
-                onClick={nextStep}
-                disabled={isPending}
-              >
-                Next
-                <ChevronRightIcon className="w-4 h-4 ml-2" />
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
