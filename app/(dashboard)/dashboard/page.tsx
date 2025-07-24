@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from "next/navigation";
 import DashboardWrapper from "@/components/dashboard/dashboard-wrapper";
 
@@ -9,6 +10,12 @@ export const metadata = {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  
+  // Create service role client for bypassing RLS when needed
+  const serviceSupabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE!
+  );
 
   const {
     data: { user },
@@ -34,8 +41,8 @@ export default async function DashboardPage() {
   let maxContracts: number | null = 3; // Default to free plan limit
   let activeContractsCount = 0;
 
-  // 1. Get active subscription
-  const { data: subscription } = await supabase
+  // 1. Get active subscription using service role client
+  const { data: subscription } = await serviceSupabase
     .from('user_subscriptions')
     .select('plan_id')
     .eq('user_id', user.id)
@@ -44,8 +51,8 @@ export default async function DashboardPage() {
 
   if (subscription?.plan_id) {
     planId = subscription.plan_id;
-    // 2. Get plan details
-    const { data: planDetails } = await supabase
+    // 2. Get plan details using service role client
+    const { data: planDetails } = await serviceSupabase
       .from('subscription_plans')
       .select('max_contracts')
       .eq('id', planId)
@@ -53,7 +60,7 @@ export default async function DashboardPage() {
     maxContracts = planDetails?.max_contracts ?? null; // Use null for unlimited
   } else {
      // Ensure we have the free plan limit if no active sub
-     const { data: freePlanDetails } = await supabase
+     const { data: freePlanDetails } = await serviceSupabase
       .from('subscription_plans')
       .select('max_contracts')
       .eq('id', 'free')
