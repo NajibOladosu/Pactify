@@ -21,7 +21,7 @@ export async function POST() {
     console.log(`Found ${activeSubscriptions?.length || 0} active subscriptions`);
 
     let syncedCount = 0;
-    let errors = [];
+    const errors = [];
 
     // Update each user's profile to match their subscription
     for (const subscription of activeSubscriptions || []) {

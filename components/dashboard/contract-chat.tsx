@@ -131,7 +131,7 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
       console.error('Error fetching messages:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to load chat messages.",
+        description: (error as Error).message || "Failed to load chat messages.",
         variant: "destructive",
       });
     } finally {
@@ -194,7 +194,7 @@ export function ContractChat({ contract, isOpen, onClose, clientEmail, clientNam
       console.error('Error sending message:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to send message. Please try again.",
+        description: (error as Error).message || "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {

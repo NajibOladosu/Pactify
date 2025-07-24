@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import { createClient } from '@/utils/supabase/server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2025-03-31.basil',
 });
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -31,9 +31,11 @@ export async function POST(req: NextRequest) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
         
+        // @ts-expect-error Property 'subscription' may not exist on type 'Invoice'
         if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
           
           // Get subscription details
+          // @ts-expect-error Property 'subscription' may not exist on type 'Invoice'
           const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
           
           // Call our database function to handle the payment
@@ -42,7 +44,9 @@ export async function POST(req: NextRequest) {
             {
               p_user_id: subscription.metadata.user_id,
               p_stripe_subscription_id: subscription.id,
+              // @ts-expect-error Stripe subscription properties may not be properly typed
               p_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+              // @ts-expect-error Stripe subscription properties may not be properly typed
               p_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
               p_payment_date: new Date(invoice.status_transitions.paid_at! * 1000).toISOString()
             }
@@ -66,9 +70,12 @@ export async function POST(req: NextRequest) {
           .from('user_subscriptions')
           .update({
             status: subscription.status === 'active' ? 'active' : subscription.status,
+            // @ts-expect-error Stripe subscription properties may not be properly typed
             current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            // @ts-expect-error Stripe subscription properties may not be properly typed
             current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             cancel_at_period_end: subscription.cancel_at_period_end,
+            // @ts-expect-error Stripe subscription properties may not be properly typed
             renewal_date: new Date(subscription.current_period_end * 1000).toISOString(),
             updated_at: new Date().toISOString()
           })

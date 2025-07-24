@@ -97,7 +97,7 @@ export async function GET(
     const senderIds = [...new Set(messages?.map(m => m.sender_id) || [])];
     
     // Fetch profile information for all senders
-    let profilesMap = new Map();
+    const profilesMap = new Map();
     if (senderIds.length > 0) {
       const { data: profiles } = await serviceSupabase
         .from('profiles')

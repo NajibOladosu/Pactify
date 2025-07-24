@@ -92,7 +92,7 @@ export async function GET() {
     return NextResponse.json({
       expiringSoon: expiringSoon?.length || 0,
       alreadyExpired: alreadyExpired?.length || 0,
-      recommendations: alreadyExpired?.length > 0 
+      recommendations: (alreadyExpired?.length || 0) > 0 
         ? 'Run expiration cleanup immediately' 
         : 'All subscriptions are current',
       details: {

@@ -43,14 +43,14 @@ export async function POST(request: NextRequest) {
     // Create Stripe instance
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-03-31.basil',
     });
     
     const accountLink = await stripe.accountLinks.create({
       account: profile.stripe_connect_account_id,
       refresh_url: validatedData.refresh_url || `${baseUrl}/dashboard/settings/payments/refresh`,
       return_url: validatedData.return_url || `${baseUrl}/dashboard/settings/payments/return`,
-      type: validatedData.type,
+      type: validatedData.type || 'account_onboarding',
     });
 
     // Update KYC verification status
