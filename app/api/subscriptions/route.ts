@@ -326,7 +326,7 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE() {
+export function DELETE() {
   try {
     // In a real application, this would cancel the subscription in Stripe and update the database
     return NextResponse.json({ 
