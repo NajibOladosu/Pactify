@@ -37,7 +37,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   } = await supabase.auth.getUser();
 
   if (getUserError || !user) {
-    console.error("Contract Detail Error: User not found.", getUserError);
+    // User authentication failed
     return redirect("/sign-in");
   }
 
@@ -46,12 +46,12 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     .rpc('get_user_contract_by_id', { p_user_id: user.id, p_contract_id: id });
 
   if (fetchError) {
-    console.error("Error fetching contract:", fetchError);
+    // Contract fetch failed
     notFound();
   }
 
   if (!contractData) {
-    console.log("Contract not found or access denied:", id, "User:", user.id);
+    // Contract not found or access denied
     notFound();
   }
 
