@@ -19,7 +19,8 @@ let supabaseAdmin: SupabaseClient | null = null;
 if (supabaseUrl && supabaseServiceRole) {
     supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole);
 } else {
-    console.error("FATAL: Missing Supabase URL or Service Role Key in environment variables for webhook handler.");
+    // FATAL: Missing required environment variables
+    throw new Error("Missing Supabase configuration for webhook handler");
 }
 
 const relevantEvents = new Set([
@@ -33,7 +34,7 @@ const relevantEvents = new Set([
 export async function POST(request: Request) {
   // Check if Supabase Admin client initialized correctly
   if (!supabaseAdmin) {
-      console.error("Supabase Admin client not initialized in webhook handler.");
+      // Supabase Admin client not initialized
       return NextResponse.json({ error: 'Webhook internal configuration error.' }, { status: 500 });
   }
 
@@ -51,11 +52,11 @@ export async function POST(request: Request) {
 
   // Check signature and secret exist
   if (!signature) {
-    console.error('Webhook Error: Missing Stripe signature.');
+    // Missing Stripe signature
     return NextResponse.json({ error: 'Missing Stripe signature' }, { status: 400 });
   }
   if (!webhookSecret) {
-     console.error('Webhook Error: Missing webhook secret.');
+     // Missing webhook secret configuration
      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 400 });
   }
 
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
+    // Webhook signature verification failed
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 

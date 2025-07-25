@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, sig!, endpointSecret);
   } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
+    // Webhook signature verification failed - return 400 to prevent retries
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
   }
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           );
 
           if (paymentError) {
-            console.error('Error handling subscription payment:', paymentError);
+            // Payment processing failed
             return NextResponse.json({ error: 'Failed to process payment' }, { status: 500 });
           }
 
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           .eq('stripe_subscription_id', subscription.id);
 
         if (updateError) {
-          console.error('Error updating subscription:', updateError);
+          // Subscription update failed
           return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
         }
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
               .eq('id', subData.user_id);
 
             if (profileError) {
-              console.error('Error updating profile to free:', profileError);
+              // Profile update to free tier failed - log silently
             }
           }
         }
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         
-        console.log(`🗑️ Subscription deleted: ${subscription.id}`);
+        // Subscription deleted successfully
         
         // Get user ID before deleting
         const { data: subData } = await supabase
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
           .eq('stripe_subscription_id', subscription.id);
 
         if (deleteError) {
-          console.error('Error deleting subscription:', deleteError);
+          // Subscription deletion failed
           return NextResponse.json({ error: 'Failed to delete subscription' }, { status: 500 });
         }
 
@@ -139,19 +139,19 @@ export async function POST(req: NextRequest) {
             .eq('id', subData.user_id);
 
           if (profileError) {
-            console.error('Error updating profile to free:', profileError);
+            // Profile update to free tier failed - log silently
           }
         }
         break;
       }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        // Unhandled event type - no action needed
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    // Webhook processing failed
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
