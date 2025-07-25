@@ -28,8 +28,6 @@
     "test:ci": "npm run test:coverage && npm run test:e2e"
   },
   "dependencies": {
-    "@swc/core": "^1.13.2",
-    "@swc/helpers": "^0.5.17",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
