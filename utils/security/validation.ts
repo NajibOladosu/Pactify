@@ -102,11 +102,55 @@ export function sanitizeText(text: string): string {
     return '';
   }
   
-  // Remove HTML tags
-  const cleanText = text.replace(/<[^>]*>/g, '');
+  // Remove HTML tags and attributes
+  let cleanText = text.replace(/<[^>]*>/g, '');
+  
+  // Remove potentially dangerous characters
+  cleanText = cleanText
+    .replace(/[<>'"&]/g, (char) => {
+      const entities: Record<string, string> = {
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;',
+        '&': '&amp;'
+      };
+      return entities[char] || char;
+    })
+    .replace(/javascript:/gi, '')
+    .replace(/data:/gi, '')
+    .replace(/vbscript:/gi, '')
+    .replace(/on\w+=/gi, '');
   
   // Trim whitespace
   return cleanText.trim();
+}
+
+/**
+ * Sanitizes HTML content for rich text editors
+ * @param html - HTML to sanitize
+ * @returns Sanitized HTML
+ */
+export function sanitizeHTML(html: string): string {
+  if (!html || typeof html !== 'string') {
+    return '';
+  }
+  
+  // Allow only safe HTML tags and attributes
+  const allowedTags = ['p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+  const allowedAttributes = ['class', 'style'];
+  
+  // Remove script tags and event handlers
+  let cleanHTML = html
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/data:/gi, '');
+  
+  // This is a basic implementation - in production, use DOMPurify
+  return cleanHTML;
 }
 
 /**

@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,8 @@ export async function GET(
       );
     }
 
-    const contractId = context.params.id;
+    const resolvedParams = await context.params;
+    const contractId = resolvedParams.id;
 
     // Fetch contract with full details
     const { data: contract, error } = await supabase
@@ -84,7 +85,7 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -98,7 +99,8 @@ export async function PATCH(
       );
     }
 
-    const contractId = context.params.id;
+    const resolvedParams = await context.params;
+    const contractId = resolvedParams.id;
     const body = await request.json();
 
     // First, fetch the contract to check permissions and current status
@@ -222,7 +224,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -236,7 +238,8 @@ export async function DELETE(
       );
     }
 
-    const contractId = context.params.id;
+    const resolvedParams = await context.params;
+    const contractId = resolvedParams.id;
 
     // Check if contract exists and user is the creator
     const { data: contract, error: fetchError } = await supabase

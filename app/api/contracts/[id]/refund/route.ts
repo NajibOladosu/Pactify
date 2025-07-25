@@ -5,11 +5,11 @@ import { auditLogger } from "@/utils/security/audit-logger";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const contractId = params.id;
+    const resolvedParams = await params; const contractId = resolvedParams.id;
     const body = await request.json();
 
     // Get current user

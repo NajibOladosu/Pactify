@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,8 @@ export async function GET(
       );
     }
 
-    const contractId = params.id;
+    const resolvedParams = await params;
+    const contractId = resolvedParams.id;
     const { searchParams } = new URL(request.url);
     const activityType = searchParams.get("type");
     const limit = parseInt(searchParams.get("limit") || "50");
@@ -112,7 +113,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -126,7 +127,8 @@ export async function POST(
       );
     }
 
-    const contractId = params.id;
+    const resolvedParams = await params;
+    const contractId = resolvedParams.id;
     const body = await request.json();
     const { activity_type, description, metadata = {} } = body;
 

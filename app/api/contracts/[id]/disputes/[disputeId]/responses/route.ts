@@ -5,7 +5,7 @@ import { auditLogger } from "@/utils/security/audit-logger";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; disputeId: string } }
+  { params }: { params: Promise<{ id: string; disputeId: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -73,7 +73,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; disputeId: string } }
+  { params }: { params: Promise<{ id: string; disputeId: string }> }
 ) {
   try {
     const supabase = await createClient();
