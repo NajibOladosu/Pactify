@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function POST(
       );
     }
 
-    const contractId = params.id;
+    const resolvedParams = await params; const contractId = resolvedParams.id;
     const body = await request.json();
     const { 
       action, // "approve" or "request_revision"
@@ -269,7 +269,7 @@ export async function POST(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -283,7 +283,7 @@ export async function GET(
       );
     }
 
-    const contractId = params.id;
+    const resolvedParams = await params; const contractId = resolvedParams.id;
 
     // Verify access to contract
     const { data: contract, error: contractError } = await supabase

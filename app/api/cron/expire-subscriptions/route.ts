@@ -4,12 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 // This endpoint can be called by external cron services like Vercel Cron, GitHub Actions, etc.
 export async function POST(request: NextRequest) {
   try {
-    // Verify the request is authorized (optional security measure)
+    // Verify the request is authorized (mandatory security measure)
     const authHeader = request.headers.get('authorization');
     const expectedToken = process.env.CRON_SECRET_TOKEN;
     
-    if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+      return NextResponse.json({ error: 'Unauthorized - Invalid or missing token' }, { status: 401 });
+    }
+
+    // Additional security: Check User-Agent for Vercel Cron
+    const userAgent = request.headers.get('user-agent');
+    if (!userAgent?.includes('vercel') && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Unauthorized - Invalid source' }, { status: 401 });
     }
 
     // Create service client for administrative operations

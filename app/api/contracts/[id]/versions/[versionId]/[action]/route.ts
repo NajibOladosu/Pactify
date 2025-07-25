@@ -5,11 +5,12 @@ import { auditLogger } from "@/utils/security/audit-logger";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; versionId: string; action: string } }
+  { params }: { params: Promise<{ id: string; versionId: string; action: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id: contractId, versionId, action } = params;
+    const resolvedParams = await params;
+    const { id: contractId, versionId, action } = resolvedParams;
     const body = await request.json();
 
     if (!['accept', 'reject'].includes(action)) {
@@ -130,7 +131,7 @@ export async function POST(
       message: `Contract version ${action}ed successfully` 
     });
   } catch (error) {
-    console.error(`Contract version ${params.action} error:`, error);
+    console.error('Contract version action error:', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
