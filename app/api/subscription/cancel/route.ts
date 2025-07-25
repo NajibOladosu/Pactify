@@ -6,7 +6,7 @@ import Stripe from 'stripe'; // Import Stripe class
 
 // Initialize Stripe client directly
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-03-31.basil', // Match webhook API version or use your desired version
+  apiVersion: '2025-06-30.basil', // Match webhook API version or use your desired version
   typescript: true,
 });
 

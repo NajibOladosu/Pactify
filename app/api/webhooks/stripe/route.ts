@@ -6,7 +6,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'; // Import 
 
 // Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-03-31.basil', // Use a consistent API version
+  apiVersion: '2025-06-30.basil', // Use a consistent API version
   typescript: true,
 });
 
