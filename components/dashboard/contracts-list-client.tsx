@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, CheckCircleIcon, ClockIcon, XCircleIcon, Loader2, LockIcon } from "lucide-react"; // Import Loader2 and LockIcon
+import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, ClockIcon, Loader2, LockIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ContractWithTemplate } from "@/app/(dashboard)/dashboard/contracts/page"; // Import the type from the server component
 import { deleteContractAction, sendContractAction } from "@/app/actions"; // Import the delete and send actions
