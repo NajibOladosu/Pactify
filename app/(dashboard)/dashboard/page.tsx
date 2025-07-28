@@ -68,25 +68,19 @@ export default async function DashboardPage() {
      maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
   }
 
-  // 3. Count active contracts using security definer function
-  const { data: contractCountResult, error: contractsError } = await supabase
-    .rpc('get_user_contract_count', { p_user_id: user.id });
-
-  if (contractsError) {
-    console.error("Dashboard Error: Failed to count active contracts.", contractsError);
-    activeContractsCount = 0; // Default to 0 on error
-  } else {
-    activeContractsCount = contractCountResult ?? 0;
-  }
-
-  // 4. Determine if limit is reached (only for plans with a limit)
-  const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
-
-  // 5. Fetch recent contracts and detailed statistics
-  const [contractsResult, statsResult] = await Promise.all([
+  // 3. Fetch recent contracts and comprehensive dashboard statistics
+  const [contractsResult, dashboardStatsResult] = await Promise.all([
     supabase.rpc('get_user_contracts', { p_user_id: user.id }),
-    supabase.rpc('get_user_dashboard_stats', { p_user_id: user.id })
+    serviceSupabase.rpc('get_dashboard_stats', { p_user_id: user.id })
   ]);
+
+  // Check for errors and log them
+  if (contractsResult.error) {
+    console.error('Dashboard Error: Failed to fetch contracts:', contractsResult.error);
+  }
+  if (dashboardStatsResult.error) {
+    console.error('Dashboard Error: Failed to fetch dashboard stats:', dashboardStatsResult.error);
+  }
   
   // Get the 5 most recent contracts (they're already ordered by created_at DESC in the function)
   const recentContracts = contractsResult.data?.slice(0, 5).map((contract: any) => ({
@@ -96,16 +90,31 @@ export default async function DashboardPage() {
     created_at: contract.created_at
   })) || [];
 
-  // Parse dashboard statistics
-  const dashboardStats = statsResult.data || {
-    total_contracts: 0,
+  // Parse dashboard statistics from the single stats result
+  const statsData = dashboardStatsResult.data?.[0] || {
     active_contracts: 0,
     pending_signatures: 0,
-    completed_contracts: 0,
-    cancelled_contracts: 0,
     pending_payments: 0,
-    total_revenue: 0,
-    avg_contract_value: 0
+    contacts_count: 0
+  };
+
+  // Set active contracts count from stats
+  activeContractsCount = statsData.active_contracts || 0;
+
+  // 4. Determine if limit is reached (only for plans with a limit)
+  const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
+
+  // Build comprehensive dashboard stats object
+  const dashboardStats = {
+    total_contracts: activeContractsCount, // Use active contracts as proxy for total
+    active_contracts: statsData.active_contracts,
+    pending_signatures: statsData.pending_signatures,
+    completed_contracts: 0, // Will be calculated separately if needed
+    cancelled_contracts: 0, // Will be calculated separately if needed
+    pending_payments: statsData.pending_payments || 0,
+    total_revenue: 0, // Will be calculated separately if needed
+    avg_contract_value: 0, // Will be calculated separately if needed
+    contacts_count: statsData.contacts_count || 0
   };
   // --- End Fetch ---
 

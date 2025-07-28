@@ -28,6 +28,7 @@ interface DashboardStatsProps {
     pending_payments: number;
     total_revenue: number;
     avg_contract_value: number;
+    contacts_count?: number;
   };
 }
 
@@ -46,7 +47,7 @@ export function DashboardStats({
   const [stats, setStats] = useState<DashboardStatsData>({
     pendingSignatures: dashboardStats?.pending_signatures || 0,
     pendingPayments: dashboardStats?.pending_payments || 0,
-    contactsCount: 0,
+    contactsCount: dashboardStats?.contacts_count || 0,
   });
   const [loading, setLoading] = useState(!dashboardStats);
 
@@ -56,7 +57,7 @@ export function DashboardStats({
       setStats({
         pendingSignatures: dashboardStats.pending_signatures,
         pendingPayments: dashboardStats.pending_payments,
-        contactsCount: 0, // We'll calculate this separately if needed
+        contactsCount: dashboardStats.contacts_count || 0,
       });
       setLoading(false);
       return;
