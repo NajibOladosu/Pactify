@@ -66,11 +66,11 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     });
   };
 
-  // Fund contract project using Stripe Connect escrow
+  // Fund contract project using platform escrow
   const handleFundContract = async () => {
     try {
-      // First, try the new Stripe Connect escrow system
-      const response = await fetch(`/api/contracts/${contract.id}/fund-stripe-connect`, {
+      // Use the new platform escrow system that doesn't require freelancer setup
+      const response = await fetch(`/api/contracts/${contract.id}/fund-escrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,32 +82,8 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
       const result = await response.json();
       
       if (result.success && result.sessionUrl) {
-        // Redirect to Stripe Checkout with Connect escrow
+        // Redirect to Stripe Checkout with platform escrow
         window.location.href = result.sessionUrl;
-      } else if (result.fallback_required || result.error?.includes('payment account')) {
-        // Fall back to legacy system if freelancer hasn't set up Connect
-        toast({
-          title: "Freelancer Setup Required",
-          description: "The freelancer needs to complete payment account setup first. Using standard escrow for now.",
-          variant: "default"
-        });
-        
-        // Try legacy fund endpoint
-        const legacyResponse = await fetch(`/api/contracts/${contract.id}/fund`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            return_url: `${window.location.origin}/dashboard/contracts/${contract.id}`
-          })
-        });
-        
-        const legacyResult = await legacyResponse.json();
-        
-        if (legacyResult.success && legacyResult.checkout_session?.url) {
-          window.location.href = legacyResult.checkout_session.url;
-        } else {
-          throw new Error(legacyResult.message || 'Legacy funding failed');
-        }
       } else {
         toast({
           title: "Failed to initiate funding",
@@ -161,16 +137,20 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     }
   };
 
-  // Release payment
+  // Release payment using platform escrow system
   const handleReleasePayment = async () => {
-    if (!confirm("Are you sure you want to release the payment? This action cannot be undone.")) {
+    if (!confirm("Are you sure you want to release the payment? This action cannot be undone. The freelancer will receive payout instructions via email.")) {
       return;
     }
     
     try {
-      const response = await fetch(`/api/contracts/${contract.id}/release-payment`, {
+      const response = await fetch(`/api/contracts/${contract.id}/release-escrow`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: 'work_completed',
+          release_method: 'pending_payout'
+        })
       });
       
       const result = await response.json();
@@ -178,13 +158,13 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
       if (result.success) {
         toast({
           title: "Payment released successfully",
-          description: "The payment has been released to the freelancer.",
+          description: result.message || "The payment has been released. Freelancer will receive payout instructions via email.",
         });
         window.location.reload();
       } else {
         toast({
           title: "Failed to release payment",
-          description: result.message || "Please try again.",
+          description: result.error || "Please try again.",
           variant: "destructive"
         });
       }
