@@ -66,7 +66,7 @@ export async function POST(
     // Get freelancer profile
     const { data: freelancerProfile, error: freelancerError } = await serviceClient
       .from('profiles')
-      .select('id, display_name, email')
+      .select('id, display_name')
       .eq('id', contract.freelancer_id)
       .single();
 
@@ -75,6 +75,9 @@ export async function POST(
         error: 'Freelancer profile not found' 
       }, { status: 404 });
     }
+
+    // Get freelancer email from auth.users (placeholder for now)
+    const freelancerEmail = 'freelancer@example.com'; // TODO: Get from auth.users table
 
     // Get request body for release options
     const body = await request.json();
@@ -162,7 +165,7 @@ export async function POST(
       release_id: releaseRequest.id,
       amount_released: releaseAmount,
       freelancer_name: freelancerProfile.display_name,
-      freelancer_email: freelancerProfile.email,
+      freelancer_email: freelancerEmail,
       release_status: 'pending_payout',
       message: `Successfully released $${releaseAmount.toFixed(2)} to ${freelancerProfile.display_name}. Payout will be processed within 2-3 business days.`,
       next_steps: {
