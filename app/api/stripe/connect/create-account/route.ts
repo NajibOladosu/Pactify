@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Create Stripe instance
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2025-06-30.basil',
+      apiVersion: '2025-06-30',
     });
     
     const account = await stripe.accounts.create({
@@ -57,9 +57,15 @@ export async function POST(request: NextRequest) {
       settings: {
         payouts: {
           schedule: {
-            interval: 'manual',
+            interval: 'manual', // Essential for escrow - prevents automatic payouts
           },
         },
+      },
+      metadata: {
+        platform_user_id: user.id,
+        user_email: user.email || '',
+        account_purpose: 'freelancer_escrow',
+        created_at: new Date().toISOString(),
       },
     });
 

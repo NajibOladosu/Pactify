@@ -66,26 +66,52 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     });
   };
 
-  // Fund contract project
+  // Fund contract project using Stripe Connect escrow
   const handleFundContract = async () => {
     try {
-      const response = await fetch(`/api/contracts/${contract.id}/fund`, {
+      // First, try the new Stripe Connect escrow system
+      const response = await fetch(`/api/contracts/${contract.id}/fund-stripe-connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          return_url: `${window.location.origin}/dashboard/contracts/${contract.id}`
+          success_url: `${window.location.origin}/dashboard/contracts/${contract.id}?funded=true`,
+          cancel_url: `${window.location.origin}/dashboard/contracts/${contract.id}`
         })
       });
       
       const result = await response.json();
       
-      if (result.success && result.checkout_session?.url) {
-        // Redirect directly to Stripe Checkout page
-        window.location.href = result.checkout_session.url;
+      if (result.success && result.sessionUrl) {
+        // Redirect to Stripe Checkout with Connect escrow
+        window.location.href = result.sessionUrl;
+      } else if (result.fallback_required || result.error?.includes('payment account')) {
+        // Fall back to legacy system if freelancer hasn't set up Connect
+        toast({
+          title: "Freelancer Setup Required",
+          description: "The freelancer needs to complete payment account setup first. Using standard escrow for now.",
+          variant: "default"
+        });
+        
+        // Try legacy fund endpoint
+        const legacyResponse = await fetch(`/api/contracts/${contract.id}/fund`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            return_url: `${window.location.origin}/dashboard/contracts/${contract.id}`
+          })
+        });
+        
+        const legacyResult = await legacyResponse.json();
+        
+        if (legacyResult.success && legacyResult.checkout_session?.url) {
+          window.location.href = legacyResult.checkout_session.url;
+        } else {
+          throw new Error(legacyResult.message || 'Legacy funding failed');
+        }
       } else {
         toast({
           title: "Failed to initiate funding",
-          description: result.message || "Please try again.",
+          description: result.error || result.message || "Please try again.",
           variant: "destructive"
         });
       }

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     // Create Stripe instance for webhook verification
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2025-06-30.basil',
+      apiVersion: '2025-06-30',
     });
 
     // Verify webhook signature
@@ -56,9 +56,21 @@ export async function POST(request: NextRequest) {
       case 'transfer.updated':
         await handleTransferUpdated(event.data.object, supabase);
         break;
+        
+      case 'transfer.paid':
+        await handleTransferPaid(event.data.object, supabase);
+        break;
+        
+      case 'transfer.failed':
+        await handleTransferFailed(event.data.object, supabase);
+        break;
       
       case 'refund.created':
         await handleRefundCreated(event.data.object, supabase);
+        break;
+        
+      case 'account.updated':
+        await handleAccountUpdated(event.data.object, supabase);
         break;
       
       default:
@@ -249,9 +261,34 @@ async function handleTransferCreated(transfer: any, supabase: any) {
 
 async function handleTransferUpdated(transfer: any, supabase: any) {
   try {
+    // Log transfer status change
+    console.log(`Transfer ${transfer.id} updated to status: ${transfer.status}`);
     
-    // Handle transfer status updates (paid, failed, etc.)
-    if (transfer.status === 'paid' && transfer.metadata?.escrow_payment_id) {
+    // Update escrow payment with transfer status if metadata contains escrow_payment_id
+    if (transfer.metadata?.escrow_payment_id) {
+      const { error: updateError } = await supabase
+        .from('escrow_payments')
+        .update({
+          stripe_transfer_id: transfer.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', transfer.metadata.escrow_payment_id);
+
+      if (updateError) {
+        console.error('Error updating escrow payment with transfer status:', updateError);
+      }
+    }
+  } catch (error) {
+    console.error('Error handling transfer updated:', error);
+  }
+}
+
+async function handleTransferPaid(transfer: any, supabase: any) {
+  try {
+    console.log(`Transfer ${transfer.id} has been paid successfully`);
+    
+    // Update escrow payment status to released when transfer is successfully paid
+    if (transfer.metadata?.escrow_payment_id) {
       const { error: updateError } = await supabase
         .from('escrow_payments')
         .update({
@@ -262,16 +299,162 @@ async function handleTransferUpdated(transfer: any, supabase: any) {
         .eq('id', transfer.metadata.escrow_payment_id);
 
       if (updateError) {
-        console.error('Error updating escrow payment status:', updateError);
+        console.error('Error updating escrow payment to released:', updateError);
+        return;
+      }
+
+      // Update contract payment record
+      const { error: paymentError } = await supabase
+        .from('contract_payments')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_payment_id', transfer.id);
+
+      if (paymentError) {
+        console.error('Error updating contract payment status:', paymentError);
+      }
+
+      // Send notification to freelancer
+      if (transfer.metadata?.contract_id && transfer.metadata?.freelancer_id) {
+        const { error: notificationError } = await supabase
+          .from('contract_notifications')
+          .insert({
+            contract_id: transfer.metadata.contract_id,
+            user_id: transfer.metadata.freelancer_id,
+            notification_type: 'payment_received',
+            title: 'Payment Received',
+            message: `Your payment of $${(transfer.amount / 100).toFixed(2)} has been successfully transferred to your account.`,
+            metadata: {
+              transfer_id: transfer.id,
+              amount: transfer.amount / 100,
+            },
+          });
+
+        if (notificationError) {
+          console.error('Error creating payment received notification:', notificationError);
+        }
       }
     }
   } catch (error) {
-    console.error('Error handling transfer updated:', error);
+    console.error('Error handling transfer paid:', error);
+  }
+}
+
+async function handleTransferFailed(transfer: any, supabase: any) {
+  try {
+    console.error(`Transfer ${transfer.id} failed: ${transfer.failure_message}`);
+    
+    // Update escrow payment status back to funded if transfer failed
+    if (transfer.metadata?.escrow_payment_id) {
+      const { error: updateError } = await supabase
+        .from('escrow_payments')
+        .update({
+          status: 'funded', // Return to funded status
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', transfer.metadata.escrow_payment_id);
+
+      if (updateError) {
+        console.error('Error reverting escrow payment status:', updateError);
+      }
+
+      // Create notification for both parties about the failed transfer
+      if (transfer.metadata?.contract_id) {
+        const notifications = [];
+        
+        if (transfer.metadata?.client_id) {
+          notifications.push({
+            contract_id: transfer.metadata.contract_id,
+            user_id: transfer.metadata.client_id,
+            notification_type: 'transfer_failed',
+            title: 'Payment Transfer Failed',
+            message: `The payment transfer failed and funds remain in escrow. Please contact support.`,
+            metadata: {
+              transfer_id: transfer.id,
+              failure_reason: transfer.failure_message,
+            },
+          });
+        }
+        
+        if (transfer.metadata?.freelancer_id) {
+          notifications.push({
+            contract_id: transfer.metadata.contract_id,
+            user_id: transfer.metadata.freelancer_id,
+            notification_type: 'transfer_failed',
+            title: 'Payment Transfer Failed',
+            message: `The payment transfer to your account failed. Please check your account details and contact support.`,
+            metadata: {
+              transfer_id: transfer.id,
+              failure_reason: transfer.failure_message,
+            },
+          });
+        }
+
+        for (const notification of notifications) {
+          const { error: notificationError } = await supabase
+            .from('contract_notifications')
+            .insert(notification);
+
+          if (notificationError) {
+            console.error('Error creating transfer failed notification:', notificationError);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error handling transfer failed:', error);
+  }
+}
+
+async function handleAccountUpdated(account: any, supabase: any) {
+  try {
+    console.log(`Stripe Connect account ${account.id} updated`);
+    
+    // Update user profile with latest account status
+    if (account.metadata?.platform_user_id) {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          stripe_connect_enabled: account.details_submitted && account.charges_enabled && account.payouts_enabled,
+          stripe_connect_charges_enabled: account.charges_enabled,
+          stripe_connect_payouts_enabled: account.payouts_enabled,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', account.metadata.platform_user_id);
+
+      if (updateError) {
+        console.error('Error updating profile with account status:', updateError);
+        return;
+      }
+
+      // Create notification if account becomes fully enabled
+      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: account.metadata.platform_user_id,
+            type: 'account_verified',
+            title: 'Payment Account Verified',
+            message: 'Your payment account has been successfully verified and you can now receive payments.',
+            related_entity_type: 'stripe_account',
+            related_entity_id: account.id,
+          });
+
+        if (notificationError) {
+          console.error('Error creating account verified notification:', notificationError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error handling account updated:', error);
   }
 }
 
 async function handleRefundCreated(refund: any, supabase: any) {
   try {
+    console.log(`Refund ${refund.id} created for amount: ${refund.amount / 100}`);
     
     // Update escrow payment status if it's related to a contract refund
     if (refund.metadata?.escrow_payment_id) {
@@ -286,6 +469,45 @@ async function handleRefundCreated(refund: any, supabase: any) {
 
       if (updateError) {
         console.error('Error updating escrow payment for refund:', updateError);
+        return;
+      }
+
+      // Update contract status if this was a full refund
+      if (refund.metadata?.contract_id) {
+        const { error: contractError } = await supabase
+          .from('contracts')
+          .update({
+            status: 'cancelled',
+            is_funded: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', refund.metadata.contract_id);
+
+        if (contractError) {
+          console.error('Error updating contract status for refund:', contractError);
+        }
+      }
+
+      // Create notifications for refund completion
+      if (refund.metadata?.contract_id && refund.metadata?.requested_by) {
+        const { error: notificationError } = await supabase
+          .from('contract_notifications')
+          .insert({
+            contract_id: refund.metadata.contract_id,
+            user_id: refund.metadata.requested_by,
+            notification_type: 'refund_completed',
+            title: 'Refund Completed',
+            message: `Your refund of $${(refund.amount / 100).toFixed(2)} has been processed and will appear in your account within 5-10 business days.`,
+            metadata: {
+              refund_id: refund.id,
+              amount: refund.amount / 100,
+              reason: refund.metadata.refund_reason || 'Refund processed',
+            },
+          });
+
+        if (notificationError) {
+          console.error('Error creating refund completed notification:', notificationError);
+        }
       }
     }
   } catch (error) {

@@ -41,7 +41,7 @@ export async function POST(
     const body = await request.json();
     const { payment_method_id, return_url } = body;
 
-    // Fetch contract details
+    // Fetch contract details first
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
       .select("*")
@@ -61,11 +61,40 @@ export async function POST(
       );
     }
 
-    // Verify user is the client (only client can fund)
-    if (contract.client_id !== user.id) {
+    // Fetch contract parties separately
+    const { data: contractParties, error: partiesError } = await supabase
+      .from("contract_parties")
+      .select("user_id, role, status")
+      .eq("contract_id", contractId);
+
+    if (partiesError || !contractParties) {
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to fetch contract parties" },
+        { status: 500 }
+      );
+    }
+
+    // Check if user is the client (only client can fund)
+    const clientParty = contractParties.find(
+      (party: any) => party.role === 'client'
+    );
+    
+    if (!clientParty || clientParty.user_id !== user.id) {
       return NextResponse.json(
         { error: "FORBIDDEN", message: "Only the client can fund the contract" },
         { status: 403 }
+      );
+    }
+
+    // Get freelancer party for later use
+    const freelancerParty = contractParties.find(
+      (party: any) => party.role === 'freelancer'
+    );
+    
+    if (!freelancerParty) {
+      return NextResponse.json(
+        { error: "INVALID_CONTRACT", message: "Freelancer not found for this contract" },
+        { status: 400 }
       );
     }
 
@@ -117,7 +146,7 @@ export async function POST(
           stripe_fee: stripeFee,
           total_charge: totalToCharge,
           payer_id: user.id,
-          payee_id: contract.freelancer_id
+          payee_id: freelancerParty.user_id
         }
       })
       .select()
@@ -149,7 +178,7 @@ export async function POST(
             currency: (contract.currency || "USD").toLowerCase(),
             product_data: {
               name: `Contract Funding: ${contract.title}`,
-              description: `Escrow payment for contract with ${contract.freelancer_name || 'freelancer'}`,
+              description: `Escrow payment for contract`,
             },
             unit_amount: Math.round(contractAmount * 100), // Contract amount
           },
@@ -277,7 +306,7 @@ export async function GET(
 
     const { id: contractId } = await params;
 
-    // Fetch contract details
+    // Fetch contract details first
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
       .select("*")
@@ -291,11 +320,23 @@ export async function GET(
       );
     }
 
-    // Check access
-    const hasAccess = 
-      contract.creator_id === user.id ||
-      contract.client_id === user.id ||
-      contract.freelancer_id === user.id;
+    // Fetch contract parties separately
+    const { data: contractParties, error: partiesError } = await supabase
+      .from("contract_parties")
+      .select("user_id, role, status")
+      .eq("contract_id", contractId);
+
+    if (partiesError || !contractParties) {
+      return NextResponse.json(
+        { error: "DATABASE_ERROR", message: "Failed to fetch contract parties" },
+        { status: 500 }
+      );
+    }
+
+    // Check access - user must be a party to the contract
+    const hasAccess = contractParties.some(
+      (party: any) => party.user_id === user.id
+    );
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -340,7 +381,7 @@ export async function GET(
         stripe_payment_id: pendingPayment.stripe_payment_id,
         created_at: pendingPayment.created_at
       } : null,
-      can_fund: contract.client_id === user.id && contract.status === "pending_funding" && !fundedPayment,
+      can_fund: contractParties.some((party: any) => party.role === 'client' && party.user_id === user.id) && contract.status === "pending_funding" && !fundedPayment,
       payments: payments || []
     };
 
