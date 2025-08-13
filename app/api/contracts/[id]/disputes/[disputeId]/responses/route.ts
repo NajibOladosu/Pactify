@@ -9,7 +9,8 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const { id: contractId, disputeId } = params;
+    const resolvedParams = await params;
+    const { id: contractId, disputeId } = resolvedParams;
 
     // Get current user
     const {
@@ -48,7 +49,7 @@ export async function GET(
       .from("dispute_responses")
       .select(`
         *,
-        profiles:responder_id(email)
+        profiles!responder_id(display_name)
       `)
       .eq("dispute_id", disputeId)
       .order("created_at", { ascending: true });
@@ -58,10 +59,10 @@ export async function GET(
       return NextResponse.json({ error: "Failed to fetch responses" }, { status: 500 });
     }
 
-    // Format responses with responder email
+    // Format responses with responder display name
     const formattedResponses = responses?.map(response => ({
       ...response,
-      responder_email: response.profiles?.email || 'Unknown',
+      responder_email: response.profiles?.display_name || 'Unknown User',
     })) || [];
 
     return NextResponse.json({ responses: formattedResponses });
@@ -77,7 +78,8 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const { id: contractId, disputeId } = params;
+    const resolvedParams = await params;
+    const { id: contractId, disputeId } = resolvedParams;
     const body = await request.json();
 
     // Get current user
@@ -149,27 +151,26 @@ export async function POST(
       return NextResponse.json({ error: "Failed to create response" }, { status: 500 });
     }
 
-    // Update dispute status to investigating if it was just opened
+    // Update dispute status to in_progress if it was just opened
     if (dispute.status === 'open') {
       await supabase
         .from("contract_disputes")
-        .update({ status: 'investigating' })
+        .update({ status: 'in_progress' })
         .eq("id", disputeId);
     }
 
     // Log the activity
-    await auditLogger.log({
-      user_id: user.id,
-      action: 'dispute_response_added',
-      resource_id: contractId,
-      resource_type: 'contract',
-      metadata: {
+    await auditLogger.logContractEvent(
+      'dispute_response_added',
+      contractId,
+      user.id,
+      {
         dispute_id: disputeId,
         response_id: newResponse.id,
         response_type: body.response_type,
         content_length: body.content.length
       }
-    });
+    );
 
     // TODO: Send notification to other party
     

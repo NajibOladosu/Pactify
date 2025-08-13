@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 export async function POST(
   request: NextRequest,
@@ -27,8 +28,14 @@ export async function POST(
       );
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Fetch contract details
-    const { data: contract, error: contractError } = await supabase
+    const { data: contract, error: contractError } = await serviceSupabase
       .from("contracts")
       .select("*")
       .eq("id", contractId)
@@ -74,10 +81,28 @@ export async function POST(
     let signatureField: string;
     let signatureTimestampField: string;
     
-    if (contract.client_id === user.id || contract.client_email === user.email) {
+    // Check if user has access to both roles (same email/user)
+    const canSignAsClient = contract.client_id === user.id || contract.client_email === user.email;
+    const canSignAsFreelancer = contract.freelancer_id === user.id || contract.freelancer_email === user.email;
+    
+    if (canSignAsClient && canSignAsFreelancer) {
+      // User can sign as both - sign as whichever role hasn't been signed yet
+      if (!contract.client_signed_at) {
+        signatureField = "client_signed_at";
+        signatureTimestampField = "client_signed_at";
+      } else if (!contract.freelancer_signed_at) {
+        signatureField = "freelancer_signed_at";
+        signatureTimestampField = "freelancer_signed_at";
+      } else {
+        return NextResponse.json(
+          { error: "ALREADY_SIGNED", message: "Both parties have already signed this contract" },
+          { status: 400 }
+        );
+      }
+    } else if (canSignAsClient) {
       signatureField = "client_signed_at";
       signatureTimestampField = "client_signed_at";
-    } else if (contract.freelancer_id === user.id || contract.freelancer_email === user.email) {
+    } else if (canSignAsFreelancer) {
       signatureField = "freelancer_signed_at";
       signatureTimestampField = "freelancer_signed_at";
     } else {
@@ -110,7 +135,7 @@ export async function POST(
     const now = new Date().toISOString();
 
     // Store signature in contract_signatures table
-    const { error: signatureError } = await supabase
+    const { error: signatureError } = await serviceSupabase
       .from("contract_signatures")
       .insert({
         contract_id: contractId,
@@ -153,7 +178,7 @@ export async function POST(
       updateData.status = "pending_signatures";
     }
 
-    const { data: updatedContract, error: updateError } = await supabase
+    const { data: updatedContract, error: updateError } = await serviceSupabase
       .from("contracts")
       .update(updateData)
       .eq("id", contractId)
@@ -174,7 +199,7 @@ export async function POST(
       const role = contract.client_email === user.email ? 'client' : 'freelancer';
       
       // Check if record doesn't already exist
-      const { data: existingParty } = await supabase
+      const { data: existingParty } = await serviceSupabase
         .from("contract_parties")
         .select("id")
         .eq("contract_id", contractId)
@@ -183,7 +208,7 @@ export async function POST(
         .single();
 
       if (!existingParty) {
-        await supabase.from("contract_parties").insert({
+        await serviceSupabase.from("contract_parties").insert({
           contract_id: contractId,
           user_id: user.id,
           role,
@@ -194,7 +219,7 @@ export async function POST(
     }
 
     // Log the signing activity
-    await supabase.from("contract_activities").insert({
+    await serviceSupabase.from("contract_activities").insert({
       contract_id: contractId,
       user_id: user.id,
       activity_type: "contract_signed",
@@ -210,7 +235,7 @@ export async function POST(
     if (bothSigned) {
       // Notify client about funding requirement
       if (contract.client_id) {
-        await supabase.from("notifications").insert({
+        await serviceSupabase.from("notifications").insert({
           user_id: contract.client_id,
           type: "contract_ready_for_funding",
           title: "Contract Ready for Funding",
@@ -256,8 +281,14 @@ export async function GET(
       );
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Get signature status for the contract
-    const { data: signatures, error } = await supabase
+    const { data: signatures, error } = await serviceSupabase
       .from("contract_signatures")
       .select(`
         id, user_id, signed_at,
@@ -274,13 +305,15 @@ export async function GET(
     }
 
     // Get contract details for access control
-    const { data: contract, error: contractError } = await supabase
+    const { data: contract, error: contractError } = await serviceSupabase
       .from("contracts")
       .select("creator_id, client_id, freelancer_id, client_email, freelancer_email, client_signed_at, freelancer_signed_at, status")
       .eq("id", contractId)
       .single();
 
     if (contractError) {
+      console.error("Contract fetch error:", contractError);
+      console.error("Contract ID:", contractId);
       return NextResponse.json(
         { error: "NOT_FOUND", message: "Contract not found" },
         { status: 404 }
@@ -294,6 +327,17 @@ export async function GET(
       contract.freelancer_id === user.id ||
       contract.client_email === user.email ||
       contract.freelancer_email === user.email;
+
+    console.log("Access check:", {
+      userId: user.id,
+      userEmail: user.email,
+      creatorId: contract.creator_id,
+      clientId: contract.client_id,
+      freelancerId: contract.freelancer_id,
+      clientEmail: contract.client_email,
+      freelancerEmail: contract.freelancer_email,
+      hasAccess
+    });
 
     if (!hasAccess) {
       return NextResponse.json(

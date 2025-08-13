@@ -27,19 +27,17 @@ import { cn } from "@/lib/utils";
 interface Dispute {
   id: string;
   contract_id: string;
-  raised_by: string;
-  raised_by_email: string;
+  initiated_by: string;
+  initiated_by_email: string;
   dispute_type: 'quality' | 'timeline' | 'payment' | 'scope' | 'other';
-  status: 'open' | 'investigating' | 'mediation' | 'arbitration' | 'resolved' | 'closed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  title: string;
+  status: 'open' | 'in_progress' | 'resolved' | 'escalated';
   description: string;
   evidence_urls?: string[];
   resolution?: string;
   resolved_by?: string;
   resolved_at?: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 interface DisputeResponse {
@@ -68,21 +66,15 @@ const DISPUTE_TYPES = [
   { value: 'other', label: 'Other Issues', icon: AlertCircleIcon }
 ];
 
+// Updated status colors to match website theme with better contrast
 const STATUS_COLORS = {
-  open: 'bg-red-100 text-red-800 border-red-200',
-  investigating: 'bg-orange-100 text-orange-800 border-orange-200',
-  mediation: 'bg-blue-100 text-blue-800 border-blue-200',
-  arbitration: 'bg-purple-100 text-purple-800 border-purple-200',
-  resolved: 'bg-green-100 text-green-800 border-green-200',
-  closed: 'bg-gray-100 text-gray-600 border-gray-200'
+  open: 'bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20',
+  in_progress: 'bg-amber-500/10 text-amber-700 border-amber-500/30 hover:bg-amber-500/20 dark:text-amber-400', 
+  escalated: 'bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20 dark:text-red-400',
+  resolved: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/20 dark:text-emerald-400'
 };
 
-const PRIORITY_COLORS = {
-  low: 'bg-blue-100 text-blue-600',
-  medium: 'bg-yellow-100 text-yellow-600',
-  high: 'bg-orange-100 text-orange-600',
-  urgent: 'bg-red-100 text-red-600'
-};
+// Remove priority colors since priority field doesn't exist
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -109,8 +101,6 @@ export default function DisputeResolution({
   // New dispute form state
   const [newDispute, setNewDispute] = useState({
     type: 'other' as any,
-    priority: 'medium' as any,
-    title: '',
     description: ''
   });
   
@@ -133,7 +123,7 @@ export default function DisputeResolution({
         
         // Select the first open dispute if available
         const openDisputes = disputesData.disputes?.filter((d: Dispute) => 
-          ['open', 'investigating', 'mediation', 'arbitration'].includes(d.status)
+          ['open', 'in_progress', 'escalated'].includes(d.status)
         );
         if (openDisputes?.length > 0 && !selectedDispute) {
           setSelectedDispute(openDisputes[0]);
@@ -161,10 +151,10 @@ export default function DisputeResolution({
   };
 
   const handleCreateDispute = async () => {
-    if (!newDispute.title.trim() || !newDispute.description.trim()) {
+    if (!newDispute.description.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please provide a description of the dispute",
         variant: "destructive",
       });
       return;
@@ -188,8 +178,6 @@ export default function DisputeResolution({
         // Reset form
         setNewDispute({
           type: 'other',
-          priority: 'medium',
-          title: '',
           description: ''
         });
         
@@ -305,13 +293,13 @@ export default function DisputeResolution({
       </div>
 
       {/* Dispute Alert */}
-      {disputes.some(d => ['open', 'investigating'].includes(d.status)) && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+      {disputes.some(d => ['open', 'in_progress'].includes(d.status)) && (
+        <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
           <div className="flex items-start gap-3">
-            <AlertTriangleIcon className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertTriangleIcon className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="font-medium text-red-900 mb-1">Active Dispute</p>
-              <p className="text-red-700">
+              <p className="font-medium text-destructive mb-1">Active Dispute</p>
+              <p className="text-destructive/80">
                 This contract has an active dispute that needs to be resolved before proceeding.
               </p>
             </div>
@@ -367,20 +355,17 @@ export default function DisputeResolution({
                       <div
                         key={dispute.id}
                         className={cn(
-                          "p-4 border rounded-lg cursor-pointer transition-colors",
+                          "p-4 border rounded-lg cursor-pointer transition-all duration-200",
                           selectedDispute?.id === dispute.id
-                            ? "border-primary-500 bg-primary-50"
-                            : "border-border hover:border-muted-foreground"
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "border-border hover:border-primary/50 hover:shadow-sm hover:bg-muted/30"
                         )}
                         onClick={() => setSelectedDispute(dispute)}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <Badge className={cn(STATUS_COLORS[dispute.status])}>
+                            <Badge variant="outline" className={cn(STATUS_COLORS[dispute.status])}>
                               {dispute.status.replace('_', ' ')}
-                            </Badge>
-                            <Badge className={cn("text-xs", PRIORITY_COLORS[dispute.priority])}>
-                              {dispute.priority}
                             </Badge>
                           </div>
                           <span className="text-xs text-muted-foreground">
@@ -388,12 +373,14 @@ export default function DisputeResolution({
                           </span>
                         </div>
                         
-                        <h4 className="font-medium mb-1">{dispute.title}</h4>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Type: {DISPUTE_TYPES.find(t => t.value === dispute.dispute_type)?.label}
+                        <h4 className="font-medium mb-1">
+                          {DISPUTE_TYPES.find(t => t.value === dispute.dispute_type)?.label}
+                        </h4>
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                          {dispute.description}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Raised by: {dispute.raised_by_email}
+                          Initiated by: {dispute.initiated_by_email}
                         </p>
                       </div>
                     ))}
@@ -406,7 +393,7 @@ export default function DisputeResolution({
                 <CardHeader>
                   <CardTitle>Dispute Details</CardTitle>
                   <CardDescription>
-                    {selectedDispute ? selectedDispute.title : "Select a dispute to view details"}
+                    {selectedDispute ? DISPUTE_TYPES.find(t => t.value === selectedDispute.dispute_type)?.label : "Select a dispute to view details"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -417,22 +404,14 @@ export default function DisputeResolution({
                         <p className="text-sm">{selectedDispute.description}</p>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="font-medium mb-1">Type</h4>
-                          <p className="text-sm">{DISPUTE_TYPES.find(t => t.value === selectedDispute.dispute_type)?.label}</p>
-                        </div>
-                        <div>
-                          <h4 className="font-medium mb-1">Priority</h4>
-                          <Badge className={cn("text-xs", PRIORITY_COLORS[selectedDispute.priority])}>
-                            {selectedDispute.priority}
-                          </Badge>
-                        </div>
+                      <div>
+                        <h4 className="font-medium mb-1">Type</h4>
+                        <p className="text-sm">{DISPUTE_TYPES.find(t => t.value === selectedDispute.dispute_type)?.label}</p>
                       </div>
                       
                       <div>
                         <h4 className="font-medium mb-1">Status</h4>
-                        <Badge className={cn(STATUS_COLORS[selectedDispute.status])}>
+                        <Badge variant="outline" className={cn(STATUS_COLORS[selectedDispute.status])}>
                           {selectedDispute.status.replace('_', ' ')}
                         </Badge>
                       </div>
@@ -449,7 +428,7 @@ export default function DisputeResolution({
                         </div>
                       )}
                       
-                      {selectedDispute.status !== 'resolved' && selectedDispute.status !== 'closed' && (
+                      {selectedDispute.status !== 'resolved' && (
                         <div className="pt-4 border-t space-y-3">
                           <h4 className="font-medium">Actions</h4>
                           <div className="flex gap-2">
@@ -502,12 +481,12 @@ export default function DisputeResolution({
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <div className="flex items-start gap-3">
-                    <AlertCircleIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <AlertCircleIcon className="h-5 w-5 text-amber-700 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                     <div className="text-sm">
-                      <p className="font-medium text-amber-900 mb-1">Before Raising a Dispute</p>
-                      <p className="text-amber-700">
+                      <p className="font-medium text-amber-800 dark:text-amber-300 mb-1">Before Raising a Dispute</p>
+                      <p className="text-amber-700 dark:text-amber-400">
                         Try to resolve the issue through direct communication first. 
                         Disputes should be used when communication has failed to resolve the problem.
                       </p>
@@ -533,31 +512,6 @@ export default function DisputeResolution({
                   </div>
 
                   <div>
-                    <Label htmlFor="dispute-priority">Priority</Label>
-                    <select
-                      id="dispute-priority"
-                      className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={newDispute.priority}
-                      onChange={(e) => setNewDispute(prev => ({ ...prev, priority: e.target.value as any }))}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="dispute-title">Dispute Title</Label>
-                    <Input
-                      id="dispute-title"
-                      placeholder="Brief summary of the issue"
-                      value={newDispute.title}
-                      onChange={(e) => setNewDispute(prev => ({ ...prev, title: e.target.value }))}
-                    />
-                  </div>
-
-                  <div>
                     <Label htmlFor="dispute-description">Detailed Description</Label>
                     <Textarea
                       id="dispute-description"
@@ -571,7 +525,7 @@ export default function DisputeResolution({
 
                 <Button 
                   onClick={handleCreateDispute}
-                  disabled={!newDispute.title.trim() || !newDispute.description.trim()}
+                  disabled={!newDispute.description.trim()}
                   className="w-full"
                 >
                   <AlertTriangleIcon className="h-4 w-4 mr-2" />
@@ -619,8 +573,8 @@ export default function DisputeResolution({
                       </div>
                     ) : (
                       disputeResponses.map((response) => (
-                        <div key={response.id} className="flex gap-3 p-4 border rounded-lg">
-                          <div className="h-8 w-8 bg-primary-500 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                        <div key={response.id} className="flex gap-3 p-4 border rounded-lg bg-card hover:bg-muted/30 transition-colors">
+                          <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium flex-shrink-0">
                             {response.responder_email[0].toUpperCase()}
                           </div>
                           <div className="flex-1">

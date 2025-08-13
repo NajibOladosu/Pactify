@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auditLogger } from "@/utils/security/audit-logger";
@@ -31,8 +32,14 @@ export async function GET(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Fetch collaboration comments
-    const { data: comments, error } = await supabase
+    const { data: comments, error } = await serviceSupabase
       .from("contract_comments")
       .select(`
         *,
@@ -97,8 +104,14 @@ export async function POST(
       return NextResponse.json({ error: "Comment is too long" }, { status: 400 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Create new collaboration comment
-    const { data: newComment, error } = await supabase
+    const { data: newComment, error } = await serviceSupabase
       .from("contract_comments")
       .insert({
         contract_id: contractId,

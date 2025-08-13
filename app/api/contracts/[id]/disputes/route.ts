@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auditLogger } from "@/utils/security/audit-logger";
@@ -20,8 +21,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify user has access to this contract
-    const { data: contract } = await supabase
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("client_id, freelancer_id")
       .eq("id", contractId)
@@ -32,11 +39,11 @@ export async function GET(
     }
 
     // Fetch disputes for this contract
-    const { data: disputes, error } = await supabase
+    const { data: disputes, error } = await serviceSupabase
       .from("contract_disputes")
       .select(`
         *,
-        profiles:raised_by(email)
+        profiles!initiated_by(display_name)
       `)
       .eq("contract_id", contractId)
       .order("created_at", { ascending: false });
@@ -46,10 +53,10 @@ export async function GET(
       return NextResponse.json({ error: "Failed to fetch disputes" }, { status: 500 });
     }
 
-    // Format disputes with raiser email
+    // Format disputes with initiator display name
     const formattedDisputes = disputes?.map(dispute => ({
       ...dispute,
-      raised_by_email: dispute.profiles?.email || 'Unknown',
+      initiated_by_email: dispute.profiles?.display_name || 'Unknown User',
     })) || [];
 
     return NextResponse.json({ disputes: formattedDisputes });
@@ -67,6 +74,7 @@ export async function POST(
     const supabase = await createClient();
     const resolvedParams = await params; const contractId = resolvedParams.id;
     const body = await request.json();
+    
 
     // Get current user
     const {
@@ -77,8 +85,14 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify user has access to this contract
-    const { data: contract } = await supabase
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("*")
       .eq("id", contractId)
@@ -90,18 +104,9 @@ export async function POST(
 
     // Validate dispute data
     const validTypes = ['quality', 'timeline', 'payment', 'scope', 'other'];
-    const validPriorities = ['low', 'medium', 'high', 'urgent'];
 
     if (!validTypes.includes(body.type)) {
-      return NextResponse.json({ error: "Invalid dispute type" }, { status: 400 });
-    }
-
-    if (!validPriorities.includes(body.priority)) {
-      return NextResponse.json({ error: "Invalid priority level" }, { status: 400 });
-    }
-
-    if (!body.title || typeof body.title !== 'string' || body.title.trim().length === 0) {
-      return NextResponse.json({ error: "Dispute title is required" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid dispute type", received: body.type, valid: validTypes }, { status: 400 });
     }
 
     if (!body.description || typeof body.description !== 'string' || body.description.trim().length === 0) {
@@ -109,11 +114,11 @@ export async function POST(
     }
 
     // Check if there's already an open dispute for this contract
-    const { data: existingDispute } = await supabase
+    const { data: existingDispute } = await serviceSupabase
       .from("contract_disputes")
       .select("id")
       .eq("contract_id", contractId)
-      .in("status", ["open", "investigating", "mediation", "arbitration"])
+      .in("status", ["open", "in_progress", "escalated"])
       .limit(1)
       .single();
 
@@ -123,45 +128,45 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Create new dispute
-    const { data: newDispute, error } = await supabase
+    // Create new dispute - using correct database field names
+    const { data: newDispute, error } = await serviceSupabase
       .from("contract_disputes")
       .insert({
         contract_id: contractId,
-        raised_by: user.id,
+        initiated_by: user.id,  // Fixed: was 'raised_by', should be 'initiated_by'
         dispute_type: body.type,
-        priority: body.priority,
-        title: body.title.trim(),
         description: body.description.trim(),
         status: 'open'
+        // Removed: title and priority fields don't exist in database schema
       })
       .select()
       .single();
 
     if (error) {
       console.error("Error creating dispute:", error);
-      return NextResponse.json({ error: "Failed to create dispute" }, { status: 500 });
+      return NextResponse.json({ 
+        error: "Failed to create dispute", 
+        details: error.message,
+        code: error.code 
+      }, { status: 500 });
     }
 
     // Update contract status to disputed
-    await supabase
+    await serviceSupabase
       .from("contracts")
       .update({ status: 'disputed' })
       .eq("id", contractId);
 
     // Log the activity
-    await auditLogger.log({
-      user_id: user.id,
-      action: 'contract_dispute_created',
-      resource_id: contractId,
-      resource_type: 'contract',
-      metadata: {
+    await auditLogger.logContractEvent(
+      'dispute_created',
+      contractId,
+      user.id,
+      {
         dispute_id: newDispute.id,
-        dispute_type: body.type,
-        priority: body.priority,
-        title: body.title
+        dispute_type: body.type
       }
-    });
+    );
 
     // TODO: Send notification to other party
     

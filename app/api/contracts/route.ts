@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { Database } from "@/types/supabase";
 import { 
   SecurityMiddleware,
@@ -68,7 +69,14 @@ const secureHandler = SecurityMiddleware.withSecurity(
       }
 
       // Determine user role and set appropriate fields
-      const userRole = body.user_role || 'freelancer'; // Default to freelancer for backward compatibility
+      const userRole = body.user_role;
+      
+      if (!userRole || !['client', 'freelancer'].includes(userRole)) {
+        return NextResponse.json(
+          { error: "VALIDATION_ERROR", message: "user_role must be specified as either 'client' or 'freelancer'" },
+          { status: 400 }
+        );
+      }
       
       // Create contract data using validated input
       const contractData: ContractInsert = {
@@ -78,8 +86,8 @@ const secureHandler = SecurityMiddleware.withSecurity(
         // Set client/freelancer fields based on user role
         client_id: userRole === 'client' ? user.id : null,
         freelancer_id: userRole === 'freelancer' ? user.id : null,
-        client_email: userRole === 'freelancer' ? (validatedData.client_email || body.client_email) : null,
-        freelancer_email: userRole === 'client' ? (validatedData.client_email || body.client_email) : null,
+        client_email: userRole === 'freelancer' ? (validatedData.freelancer_email || body.freelancer_email) : null,
+        freelancer_email: userRole === 'client' ? (validatedData.freelancer_email || body.freelancer_email) : null,
         template_id: validatedData.template_id || null,
         content: validatedData.content || {
           template: "default",
@@ -95,8 +103,14 @@ const secureHandler = SecurityMiddleware.withSecurity(
         status: "draft"
       };
 
-      // Insert contract
-      const { data: contract, error: contractError } = await supabase
+      // Create service client for database operations to bypass RLS
+      const serviceSupabase = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE!
+      );
+
+      // Insert contract using service client
+      const { data: contract, error: contractError } = await serviceSupabase
         .from("contracts")
         .insert(contractData)
         .select()
@@ -132,14 +146,14 @@ const secureHandler = SecurityMiddleware.withSecurity(
           status: "pending" as const
         }));
 
-        const { error: milestonesError } = await supabase
+        const { error: milestonesError } = await serviceSupabase
           .from("contract_milestones")
           .insert(milestonesData);
 
         if (milestonesError) {
           console.error("Milestones creation error:", milestonesError);
           // Rollback contract creation
-          await supabase.from("contracts").delete().eq("id", contract.id);
+          await serviceSupabase.from("contracts").delete().eq("id", contract.id);
           
           await auditLogger.logSecurityEvent({
             userId: user.id,
@@ -171,7 +185,7 @@ const secureHandler = SecurityMiddleware.withSecurity(
       );
 
       // Log in contract_activities table
-      await supabase.from("contract_activities").insert({
+      await serviceSupabase.from("contract_activities").insert({
         contract_id: contract.id,
         user_id: user.id,
         activity_type: "contract_created",

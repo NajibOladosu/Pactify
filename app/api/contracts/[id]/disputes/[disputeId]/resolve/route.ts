@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auditLogger } from "@/utils/security/audit-logger";
@@ -22,8 +23,14 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify user has access to this contract
-    const { data: contract } = await supabase
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("*")
       .eq("id", contractId)
@@ -34,7 +41,7 @@ export async function POST(
     }
 
     // Verify dispute belongs to this contract
-    const { data: dispute } = await supabase
+    const { data: dispute } = await serviceSupabase
       .from("contract_disputes")
       .select("*")
       .eq("id", disputeId)
@@ -60,7 +67,7 @@ export async function POST(
     }
 
     // Resolve the dispute
-    const { error: disputeError } = await supabase
+    const { error: disputeError } = await serviceSupabase
       .from("contract_disputes")
       .update({
         status: 'resolved',
@@ -81,16 +88,16 @@ export async function POST(
     // If contract was disputed, try to restore to previous logical status
     if (contract.status === 'disputed') {
       // Check if there are signatures, funding, etc. to determine appropriate status
-      const { data: signatures } = await supabase
+      const { data: signatures } = await serviceSupabase
         .from("contract_signatures")
         .select("*")
         .eq("contract_id", contractId);
 
-      const { data: escrow } = await supabase
-        .from("escrow_payments")
+      const { data: escrow } = await serviceSupabase
+        .from("contract_payments")
         .select("*")
         .eq("contract_id", contractId)
-        .eq("status", "held");
+        .eq("status", "completed");
 
       if (signatures && signatures.length >= 2 && escrow && escrow.length > 0) {
         newContractStatus = 'active';
@@ -102,23 +109,22 @@ export async function POST(
     }
 
     // Update contract status
-    await supabase
+    await serviceSupabase
       .from("contracts")
       .update({ status: newContractStatus })
       .eq("id", contractId);
 
     // Log the activity
-    await auditLogger.log({
-      user_id: user.id,
-      action: 'contract_dispute_resolved',
-      resource_id: contractId,
-      resource_type: 'contract',
-      metadata: {
+    await auditLogger.logContractEvent(
+      'dispute_resolved',
+      contractId,
+      user.id,
+      {
         dispute_id: disputeId,
         resolution: body.resolution,
         new_contract_status: newContractStatus
       }
-    });
+    );
 
     // TODO: Send notification to other party
     

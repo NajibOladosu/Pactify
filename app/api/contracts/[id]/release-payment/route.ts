@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 export async function POST(
   request: NextRequest,
@@ -376,8 +377,14 @@ export async function GET(
 
     const { id: contractId } = await params;
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify access to contract
-    const { data: contract, error: contractError } = await supabase
+    const { data: contract, error: contractError } = await serviceSupabase
       .from("contracts")
       .select("creator_id, client_id, freelancer_id, status, is_funded, type, total_amount, currency")
       .eq("id", contractId)
@@ -403,7 +410,7 @@ export async function GET(
     }
 
     // Get all payment records for this contract
-    const { data: payments, error: paymentsError } = await supabase
+    const { data: payments, error: paymentsError } = await serviceSupabase
       .from("contract_payments")
       .select("*")
       .eq("contract_id", contractId)

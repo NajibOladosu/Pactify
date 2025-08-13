@@ -206,6 +206,8 @@ export async function POST(
         stripe_fee: stripeFee,
         total_charged: totalCharge,
         stripe_payment_intent_id: session.payment_intent || session.id,
+        freelancer_stripe_account: freelancerProfile.stripe_connect_account_id,
+        payment_flow: 'separate_charges_transfers',
         status: 'pending',
       })
       .select()

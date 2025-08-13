@@ -72,6 +72,7 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
       // Use the new platform escrow system that doesn't require freelancer setup
       const response = await fetch(`/api/contracts/${contract.id}/fund-escrow`, {
         method: 'POST',
+        credentials: 'include', // Ensure cookies are included
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success_url: `${window.location.origin}/dashboard/contracts/${contract.id}?funded=true`,
@@ -106,6 +107,7 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     try {
       const response = await fetch(`/api/contracts/${contract.id}/sign`, {
         method: 'POST',
+        credentials: 'include', // Ensure cookies are included
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           signature_data: 'digital_signature_placeholder' // In real implementation, this would be from a signature component
@@ -263,7 +265,7 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
             </Button>
           )}
 
-          {(contract.status === "active" || contract.status === "pending_completion") && (
+          {(contract.status === "active" || contract.status === "pending_completion") && userRole === "client" && (
             <Button
               size="sm"
               onClick={handleReleasePayment}

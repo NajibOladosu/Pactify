@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
+import { createClient } from "@/utils/supabase/client";
 import { 
   PenToolIcon, 
   RotateCcwIcon, 
@@ -69,15 +70,37 @@ export default function DigitalSignaturePad({
   const fetchSignatureStatus = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/contracts/${contractId}/sign`);
+      
+      // Check if user is authenticated first
+      const supabase = createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.error('User not authenticated:', authError);
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to view contract status",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch(`/api/contracts/${contractId}/sign`, {
+        credentials: 'include', // Ensure cookies are included
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
       const result = await response.json();
 
       if (response.ok) {
         setSignatureStatus(result.signature_status);
       } else {
+        console.error('API response error:', response.status, result);
         toast({
           title: "Error",
-          description: "Failed to fetch signature status",
+          description: result.message || "Failed to fetch signature status",
           variant: "destructive",
         });
       }
@@ -181,8 +204,24 @@ export default function DigitalSignaturePad({
 
     try {
       setIsSigning(true);
+      
+      // Check if user is authenticated first
+      const supabase = createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.error('User not authenticated:', authError);
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to submit signature",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch(`/api/contracts/${contractId}/sign`, {
         method: 'POST',
+        credentials: 'include', // Ensure cookies are included
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signature_data: signatureData })
       });

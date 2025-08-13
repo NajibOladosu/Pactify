@@ -269,8 +269,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             />
           )}
 
-          {/* Payment Release Section */}
-          {(['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status || '')) && (
+          {/* Payment Release Section - Only for clients */}
+          {userRole === 'client' && (['pending_funding', 'active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status || '')) && (
             <PaymentReleaseManager
               contractId={contractDetail.id}
               userId={user.id}
@@ -307,8 +307,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
             />
           )}
 
-          {/* Refund & Cancellation Section */}
-          {!['completed', 'cancelled'].includes(contractDetail.status || '') && (
+          {/* Refund & Cancellation Section - Only for clients */}
+          {userRole === 'client' && !['completed', 'cancelled'].includes(contractDetail.status || '') && (
             <RefundCancellationManager
               contractId={contractDetail.id}
               userId={user.id}

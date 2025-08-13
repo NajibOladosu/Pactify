@@ -88,10 +88,15 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Check if freelancer's Stripe Connect account is ready
-    if (!freelancerProfile.stripe_connect_charges_enabled || !freelancerProfile.stripe_connect_payouts_enabled) {
+    // Check if freelancer is ready for escrow using database function
+    const { data: isFreelancerReady, error: readyError } = await supabase
+      .rpc('is_freelancer_escrow_ready', { 
+        freelancer_id: freelancerParty.user_id 
+      });
+
+    if (readyError || !isFreelancerReady) {
       return NextResponse.json({ 
-        error: 'Freelancer payment account is not fully verified' 
+        error: 'Freelancer payment account is not ready for escrow payments. They need to complete verification.' 
       }, { status: 400 });
     }
 
