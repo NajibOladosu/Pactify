@@ -265,12 +265,41 @@ export default function DisputeResolution({
         fetchDisputeData();
         window.location.reload();
       } else {
-        throw new Error('Failed to resolve dispute');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to resolve dispute');
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to resolve dispute",
+        description: error instanceof Error ? error.message : "Failed to resolve dispute",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEscalateDispute = async (disputeId: string) => {
+    try {
+      const response = await fetch(`/api/contracts/${contractId}/disputes/${disputeId}/escalate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Dispute escalated to Pactify support team",
+        });
+        fetchDisputeData();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to escalate dispute');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to escalate dispute",
         variant: "destructive",
       });
     }
@@ -455,7 +484,7 @@ export default function DisputeResolution({
                               <MessageSquareIcon className="h-3 w-3 mr-1" />
                               Discuss
                             </Button>
-                            {(userRole === 'client' || userRole === 'freelancer') && (
+                            {selectedDispute.initiated_by === userId && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -468,6 +497,20 @@ export default function DisputeResolution({
                               >
                                 <CheckCircleIcon className="h-3 w-3 mr-1" />
                                 Resolve
+                              </Button>
+                            )}
+                            {selectedDispute.status !== 'escalated' && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to escalate this dispute to Pactify support? This will flag the issue for our team to review and potentially intervene.")) {
+                                    handleEscalateDispute(selectedDispute.id);
+                                  }
+                                }}
+                              >
+                                <AlertTriangleIcon className="h-3 w-3 mr-1" />
+                                Request Support
                               </Button>
                             )}
                           </div>

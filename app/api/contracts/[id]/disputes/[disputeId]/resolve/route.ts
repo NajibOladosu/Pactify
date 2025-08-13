@@ -52,6 +52,13 @@ export async function POST(
       return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
     }
 
+    // Check if the current user is the one who initiated the dispute
+    if (dispute.initiated_by !== user.id) {
+      return NextResponse.json({ 
+        error: "Only the user who raised this dispute can resolve it" 
+      }, { status: 403 });
+    }
+
     // Check if dispute is still active
     if (dispute.status === 'resolved' || dispute.status === 'closed') {
       return NextResponse.json({ error: "Dispute is already resolved" }, { status: 400 });
