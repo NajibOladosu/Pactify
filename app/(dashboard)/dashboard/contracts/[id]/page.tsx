@@ -1,6 +1,6 @@
 // Remove "use client" - Fetch data server-side
 
-import { Button } from "@/components/ui/button";
+// Remove unused Button import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +17,7 @@ import PaymentReleaseManager from '@/components/contracts/payment-release-manage
 import ContractCollaboration from '@/components/contracts/contract-collaboration';
 import DisputeResolution from '@/components/contracts/dispute-resolution';
 import RefundCancellationManager from '@/components/contracts/refund-cancellation-manager';
+import ContractDeliverables from '@/components/contracts/contract-deliverables';
 
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
@@ -519,19 +520,15 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
           <Card>
             <CardHeader>
-              <CardTitle>Payment Information</CardTitle>
+              <CardTitle>Deliverables</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground">
-                  Payment tracking is available on Professional and Business plans.
-                </p>
-                <Button variant="outline" size="sm" className="mt-4" asChild>
-                  <Link href="/dashboard/subscription">
-                    Upgrade Plan
-                  </Link>
-                </Button>
-              </div>
+              <ContractDeliverables
+                contractId={id}
+                userId={user.id}
+                userRole={userRole}
+                contractStatus={contract.status || 'draft'}
+              />
             </CardContent>
           </Card>
         </div>
