@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate overview metrics
     const totalContracts = contracts?.length || 0;
-    const activeContracts = contracts?.filter(c => ['active', 'pending_delivery', 'in_review'].includes(c.status)).length || 0;
+    const activeContracts = contracts?.filter(c => ['active', 'pending_delivery', 'in_review', 'disputed'].includes(c.status)).length || 0;
     const completedContracts = contracts?.filter(c => c.status === 'completed').length || 0;
     
     // Calculate revenue from escrow payments

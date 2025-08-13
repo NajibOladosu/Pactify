@@ -12,7 +12,7 @@ AS $$
   SELECT COUNT(*)::integer
   FROM public.contracts
   WHERE (creator_id = p_user_id OR client_id = p_user_id OR freelancer_id = p_user_id)
-  AND status IN ('draft', 'pending_signatures', 'pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion');
+  AND status IN ('draft', 'pending_signatures', 'pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion', 'disputed');
 $$;
 
 -- Function to count pending signatures for a user
@@ -36,7 +36,7 @@ AS $$
   SELECT COALESCE(SUM(total_amount), 0)
   FROM public.contracts
   WHERE (creator_id = p_user_id OR client_id = p_user_id OR freelancer_id = p_user_id)
-  AND status IN ('pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion');
+  AND status IN ('pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion', 'disputed');
 $$;
 
 -- Function to count unique clients/freelancers for a user

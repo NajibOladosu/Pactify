@@ -78,7 +78,7 @@ export function DashboardStats({
         if (contracts) {
           const pendingSignatures = contracts.filter((c: any) => c.status === 'pending_signatures').length;
           const pendingPayments = contracts
-            .filter((c: any) => ['pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion'].includes(c.status))
+            .filter((c: any) => ['pending_funding', 'active', 'pending_delivery', 'in_review', 'revision_requested', 'pending_completion', 'disputed'].includes(c.status))
             .reduce((sum: number, c: any) => sum + (c.total_amount || 0), 0);
 
           // Count unique contacts
