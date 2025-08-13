@@ -85,6 +85,14 @@ const formatDate = (dateString: string) => {
   });
 };
 
+const formatStatusText = (status: string) => {
+  return status
+    .replace('_', ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 export default function DisputeResolution({ 
   contractId, 
   userId, 
@@ -262,8 +270,12 @@ export default function DisputeResolution({
           title: "Success",
           description: "Dispute resolved successfully",
         });
-        fetchDisputeData();
-        window.location.reload();
+        // Refresh dispute data to show the resolved status
+        await fetchDisputeData();
+        // Update the selected dispute to show the resolution
+        if (selectedDispute?.id === disputeId) {
+          setSelectedDispute(prev => prev ? { ...prev, status: 'resolved', resolution: resolution, resolved_at: new Date().toISOString(), resolved_by: userId } : prev);
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to resolve dispute');
@@ -287,11 +299,17 @@ export default function DisputeResolution({
       });
 
       if (response.ok) {
+        const responseData = await response.json();
         toast({
           title: "Success",
-          description: "Dispute escalated to Pactify support team",
+          description: responseData.message || "Dispute escalated to Pactify support team",
         });
-        fetchDisputeData();
+        // Refresh dispute data to show the escalated status
+        await fetchDisputeData();
+        // Update the selected dispute to show the escalated status
+        if (selectedDispute?.id === disputeId) {
+          setSelectedDispute(prev => prev ? { ...prev, status: 'escalated', updated_at: new Date().toISOString() } : prev);
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to escalate dispute');
@@ -410,7 +428,7 @@ export default function DisputeResolution({
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className={cn(STATUS_COLORS[dispute.status])}>
-                              {dispute.status.replace('_', ' ')}
+                              {formatStatusText(dispute.status)}
                             </Badge>
                           </div>
                           <span className="text-xs text-muted-foreground">
@@ -457,7 +475,7 @@ export default function DisputeResolution({
                       <div>
                         <h4 className="font-medium mb-1">Status</h4>
                         <Badge variant="outline" className={cn(STATUS_COLORS[selectedDispute.status])}>
-                          {selectedDispute.status.replace('_', ' ')}
+                          {formatStatusText(selectedDispute.status)}
                         </Badge>
                       </div>
                       
