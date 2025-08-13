@@ -111,6 +111,28 @@ export default function DisputeResolution({
     fetchDisputeData();
   }, [contractId]);
 
+  useEffect(() => {
+    if (selectedDispute) {
+      fetchDisputeResponses(selectedDispute.id);
+    } else {
+      setDisputeResponses([]);
+    }
+  }, [selectedDispute, contractId]);
+
+  const fetchDisputeResponses = async (disputeId: string) => {
+    try {
+      const responsesResponse = await fetch(`/api/contracts/${contractId}/disputes/${disputeId}/responses`);
+      if (responsesResponse.ok) {
+        const responsesData = await responsesResponse.json();
+        setDisputeResponses(responsesData.responses || []);
+      } else {
+        console.error('Failed to fetch responses:', await responsesResponse.text());
+      }
+    } catch (error) {
+      console.error('Error fetching responses:', error);
+    }
+  };
+
   const fetchDisputeData = async () => {
     try {
       setLoading(true);
@@ -127,15 +149,6 @@ export default function DisputeResolution({
         );
         if (openDisputes?.length > 0 && !selectedDispute) {
           setSelectedDispute(openDisputes[0]);
-        }
-      }
-
-      // Fetch responses for selected dispute
-      if (selectedDispute) {
-        const responsesResponse = await fetch(`/api/contracts/${contractId}/disputes/${selectedDispute.id}/responses`);
-        if (responsesResponse.ok) {
-          const responsesData = await responsesResponse.json();
-          setDisputeResponses(responsesData.responses || []);
         }
       }
     } catch (error) {
@@ -218,8 +231,11 @@ export default function DisputeResolution({
           title: "Success",
           description: "Response added successfully",
         });
-        fetchDisputeData();
+        // Refetch disputes to capture any status changes (responses will refresh via useEffect)
+        await fetchDisputeData();
       } else {
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
         throw new Error('Failed to add response');
       }
     } catch (error) {

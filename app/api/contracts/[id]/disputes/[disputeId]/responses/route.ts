@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auditLogger } from "@/utils/security/audit-logger";
@@ -21,8 +22,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify user has access to this contract
-    const { data: contract } = await supabase
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("client_id, freelancer_id")
       .eq("id", contractId)
@@ -33,7 +40,7 @@ export async function GET(
     }
 
     // Verify dispute belongs to this contract
-    const { data: dispute } = await supabase
+    const { data: dispute } = await serviceSupabase
       .from("contract_disputes")
       .select("id")
       .eq("id", disputeId)
@@ -45,7 +52,7 @@ export async function GET(
     }
 
     // Fetch dispute responses
-    const { data: responses, error } = await supabase
+    const { data: responses, error } = await serviceSupabase
       .from("dispute_responses")
       .select(`
         *,
@@ -56,7 +63,11 @@ export async function GET(
 
     if (error) {
       console.error("Error fetching dispute responses:", error);
-      return NextResponse.json({ error: "Failed to fetch responses" }, { status: 500 });
+      return NextResponse.json({ 
+        error: "Failed to fetch responses", 
+        details: error.message,
+        code: error.code 
+      }, { status: 500 });
     }
 
     // Format responses with responder display name
@@ -91,8 +102,14 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Create service client for database operations
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
     // Verify user has access to this contract
-    const { data: contract } = await supabase
+    const { data: contract } = await serviceSupabase
       .from("contracts")
       .select("client_id, freelancer_id")
       .eq("id", contractId)
@@ -103,7 +120,7 @@ export async function POST(
     }
 
     // Verify dispute belongs to this contract and is still active
-    const { data: dispute } = await supabase
+    const { data: dispute } = await serviceSupabase
       .from("contract_disputes")
       .select("*")
       .eq("id", disputeId)
@@ -134,7 +151,7 @@ export async function POST(
     }
 
     // Create new dispute response
-    const { data: newResponse, error } = await supabase
+    const { data: newResponse, error } = await serviceSupabase
       .from("dispute_responses")
       .insert({
         dispute_id: disputeId,
@@ -148,12 +165,16 @@ export async function POST(
 
     if (error) {
       console.error("Error creating dispute response:", error);
-      return NextResponse.json({ error: "Failed to create response" }, { status: 500 });
+      return NextResponse.json({ 
+        error: "Failed to create response", 
+        details: error.message,
+        code: error.code 
+      }, { status: 500 });
     }
 
     // Update dispute status to in_progress if it was just opened
     if (dispute.status === 'open') {
-      await supabase
+      await serviceSupabase
         .from("contract_disputes")
         .update({ status: 'in_progress' })
         .eq("id", disputeId);
