@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   AlertTriangleIcon, 
   GavelIcon,
@@ -66,6 +68,39 @@ const DISPUTE_TYPES = [
   { value: 'other', label: 'Other Issues', icon: AlertCircleIcon }
 ];
 
+const RESOLUTION_OPTIONS = [
+  { 
+    value: 'agreement_reached', 
+    label: 'Agreement Reached with Other Party', 
+    description: 'Both parties have come to a mutual agreement to resolve the dispute'
+  },
+  { 
+    value: 'project_cancelled', 
+    label: 'Decided to Cancel Project', 
+    description: 'The project will be cancelled and any escrowed funds will be handled accordingly'
+  },
+  { 
+    value: 'work_completed', 
+    label: 'Work Has Been Completed Satisfactorily', 
+    description: 'The disputed work has been completed or revised to satisfaction'
+  },
+  { 
+    value: 'payment_resolved', 
+    label: 'Payment Issue Resolved', 
+    description: 'Payment dispute has been resolved through agreement or correction'
+  },
+  { 
+    value: 'scope_clarified', 
+    label: 'Scope Has Been Clarified', 
+    description: 'Project scope has been clarified and agreed upon by both parties'
+  },
+  { 
+    value: 'other_resolution', 
+    label: 'Other Resolution', 
+    description: 'Custom resolution - please provide details below'
+  }
+];
+
 // Updated status colors to match website theme with better contrast
 const STATUS_COLORS = {
   open: 'bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20',
@@ -114,6 +149,12 @@ export default function DisputeResolution({
   
   // New response form state
   const [newResponse, setNewResponse] = useState('');
+  
+  // Resolution modal state
+  const [showResolutionModal, setShowResolutionModal] = useState(false);
+  const [selectedResolution, setSelectedResolution] = useState('');
+  const [customResolutionDetails, setCustomResolutionDetails] = useState('');
+  const [resolvingDispute, setResolvingDispute] = useState<Dispute | null>(null);
 
   useEffect(() => {
     fetchDisputeData();
@@ -255,14 +296,38 @@ export default function DisputeResolution({
     }
   };
 
-  const handleResolveDispute = async (disputeId: string, resolution: string) => {
+  const openResolutionModal = (dispute: Dispute) => {
+    setResolvingDispute(dispute);
+    setShowResolutionModal(true);
+    setSelectedResolution('');
+    setCustomResolutionDetails('');
+  };
+
+  const handleResolveDispute = async () => {
+    if (!resolvingDispute || !selectedResolution) return;
+
+    // Build resolution text
+    const selectedOption = RESOLUTION_OPTIONS.find(opt => opt.value === selectedResolution);
+    let resolutionText = selectedOption?.label || selectedResolution;
+    
+    if (selectedResolution === 'other_resolution' && customResolutionDetails.trim()) {
+      resolutionText = `${resolutionText}: ${customResolutionDetails.trim()}`;
+    } else if (selectedResolution === 'other_resolution') {
+      toast({
+        title: "Error",
+        description: "Please provide details for custom resolution",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/contracts/${contractId}/disputes/${disputeId}/resolve`, {
+      const response = await fetch(`/api/contracts/${contractId}/disputes/${resolvingDispute.id}/resolve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ resolution }),
+        body: JSON.stringify({ resolution: resolutionText }),
       });
 
       if (response.ok) {
@@ -270,11 +335,14 @@ export default function DisputeResolution({
           title: "Success",
           description: "Dispute resolved successfully",
         });
+        // Close modal
+        setShowResolutionModal(false);
+        setResolvingDispute(null);
         // Refresh dispute data to show the resolved status
         await fetchDisputeData();
         // Update the selected dispute to show the resolution
-        if (selectedDispute?.id === disputeId) {
-          setSelectedDispute(prev => prev ? { ...prev, status: 'resolved', resolution: resolution, resolved_at: new Date().toISOString(), resolved_by: userId } : prev);
+        if (selectedDispute?.id === resolvingDispute.id) {
+          setSelectedDispute(prev => prev ? { ...prev, status: 'resolved', resolution: resolutionText, resolved_at: new Date().toISOString(), resolved_by: userId } : prev);
         }
       } else {
         const errorData = await response.json();
@@ -506,12 +574,7 @@ export default function DisputeResolution({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  const resolution = prompt("Enter resolution details:");
-                                  if (resolution) {
-                                    handleResolveDispute(selectedDispute.id, resolution);
-                                  }
-                                }}
+                                onClick={() => openResolutionModal(selectedDispute)}
                               >
                                 <CheckCircleIcon className="h-3 w-3 mr-1" />
                                 Resolve
@@ -676,6 +739,76 @@ export default function DisputeResolution({
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Resolution Modal */}
+      <Dialog open={showResolutionModal} onOpenChange={setShowResolutionModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Resolve Dispute</DialogTitle>
+            <DialogDescription>
+              Select the reason for resolving this dispute. This will close the dispute and notify the other party.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Resolution Reason</Label>
+              <RadioGroup value={selectedResolution} onValueChange={setSelectedResolution}>
+                <div className="space-y-3">
+                  {RESOLUTION_OPTIONS.map((option) => (
+                    <div key={option.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem value={option.value} id={option.value} className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor={option.value} className="cursor-pointer font-medium">
+                          {option.label}
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {option.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </RadioGroup>
+            </div>
+
+            {selectedResolution === 'other_resolution' && (
+              <div>
+                <Label htmlFor="custom-details" className="text-sm font-medium">
+                  Resolution Details
+                </Label>
+                <Textarea
+                  id="custom-details"
+                  placeholder="Please provide details about how this dispute was resolved..."
+                  value={customResolutionDetails}
+                  onChange={(e) => setCustomResolutionDetails(e.target.value)}
+                  className="mt-2"
+                  rows={4}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowResolutionModal(false);
+                setResolvingDispute(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleResolveDispute}
+              disabled={!selectedResolution}
+            >
+              <CheckCircleIcon className="h-4 w-4 mr-2" />
+              Resolve Dispute
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
