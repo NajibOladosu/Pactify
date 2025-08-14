@@ -198,23 +198,21 @@ export async function POST(
         (contract.freelancer_email === user.email && !contract.freelancer_id)) {
       const role = contract.client_email === user.email ? 'client' : 'freelancer';
       
-      // Check if record doesn't already exist
-      const { data: existingParty } = await serviceSupabase
+      // Use upsert to handle potential duplicates
+      const { error: partyError } = await serviceSupabase
         .from("contract_parties")
-        .select("id")
-        .eq("contract_id", contractId)
-        .eq("user_id", user.id)
-        .eq("role", role)
-        .single();
-
-      if (!existingParty) {
-        await serviceSupabase.from("contract_parties").insert({
+        .upsert({
           contract_id: contractId,
           user_id: user.id,
           role,
           status: 'signed',
           signature_date: now
+        }, {
+          onConflict: 'contract_id,user_id'
         });
+
+      if (partyError) {
+        console.error("Error upserting contract party:", partyError);
       }
     }
 

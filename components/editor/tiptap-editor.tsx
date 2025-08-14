@@ -25,6 +25,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
     ],
     content: initialContent, // Set initial content
     editable: editable, // Set editable state
+    immediatelyRender: false, // Fix SSR hydration issues
     onUpdate: ({ editor }) => {
       // Only call onContentChange if it's provided (i.e., in editable mode)
       if (editable && onContentChange) {
