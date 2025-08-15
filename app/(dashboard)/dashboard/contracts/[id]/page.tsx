@@ -71,6 +71,12 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     .select("*")
     .eq("contract_id", id);
 
+  // Fetch deliverables to check if any are approved
+  const { data: deliverables } = await supabase
+    .from("contract_deliverables")
+    .select("status, is_latest_version")
+    .eq("contract_id", id);
+
   // Calculate funded amount and escrow status
   const fundedAmount = payments?.reduce((total, payment) => {
     if (payment.status === 'completed' || payment.status === 'released') {
@@ -83,6 +89,9 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     payments?.some(p => p.status === 'released') ? 'released' :
     payments?.some(p => p.status === 'refunded') ? 'refunded' :
     payments?.some(p => p.status === 'completed') ? 'held' : 'pending';
+
+  // Check if there are any approved deliverables
+  const hasApprovedDeliverables = deliverables?.some(d => d.status === 'approved' && d.is_latest_version) || false;
 
   // Fetch contract template separately if template_id exists
   let contractTemplate = null;
@@ -208,7 +217,11 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
         </div>
 
         {/* Client Actions Component - This will handle action visibility based on user role/status */}
-        <ContractDetailClientActions contract={contractDetail} userRole={userRole} />
+        <ContractDetailClientActions 
+          contract={contractDetail} 
+          userRole={userRole} 
+          hasApprovedDeliverables={hasApprovedDeliverables}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

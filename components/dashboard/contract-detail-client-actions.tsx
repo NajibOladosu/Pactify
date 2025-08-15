@@ -24,12 +24,13 @@ import { deleteContractAction, sendContractAction } from "@/app/actions";
 interface ContractDetailClientActionsProps {
   contract: ContractDetail;
   userRole: 'client' | 'freelancer' | 'creator';
+  hasApprovedDeliverables?: boolean;
 }
 
 // Updated status type based on new workflow
 type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
-export function ContractDetailClientActions({ contract: initialContract, userRole }: ContractDetailClientActionsProps) {
+export function ContractDetailClientActions({ contract: initialContract, userRole, hasApprovedDeliverables = false }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
   const [isPending, startTransition] = useTransition(); // Add transition state
   const { toast } = useToast();
@@ -180,6 +181,43 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     }
   };
 
+  // Complete contract
+  const handleCompleteContract = async () => {
+    if (!confirm("Are you sure you want to mark this contract as completed? This action will finalize the contract and trigger payment release.")) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Contract completed successfully",
+          description: "The contract has been marked as completed and payment is being processed.",
+        });
+        window.location.reload();
+      } else {
+        toast({
+          title: "Failed to complete contract",
+          description: result.error || "Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Failed to complete contract:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete contract. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
  const handleDeleteContract = () => {
     if (isPending) return;
 
@@ -273,6 +311,21 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
             >
               <DollarSignIcon className="h-4 w-4 mr-2" />
               Release Payment
+            </Button>
+          )}
+
+          {/* Complete Contract Button - Show for clients when deliverables are approved */}
+          {(contract.status === "active" || contract.status === "in_review" || contract.status === "pending_delivery") && 
+           userRole === "client" && 
+           hasApprovedDeliverables && (
+            <Button
+              size="sm"
+              onClick={handleCompleteContract}
+              disabled={isPending}
+              className="bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-md hover:shadow-lg transition-all duration-200"
+            >
+              <CheckCircleIcon className="h-4 w-4 mr-2" />
+              Complete Contract
             </Button>
           )}
 

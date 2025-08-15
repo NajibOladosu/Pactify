@@ -303,74 +303,98 @@ export default function EnhancedContractWizard() {
       case 0: // Template Selection
         return (
           <div className="space-y-8">
-            <div className="text-center">
+            <div className="text-center max-w-3xl mx-auto">
               <h2 className="text-3xl font-serif font-bold mb-4">Choose Your Contract Template</h2>
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              <p className="text-muted-foreground text-lg leading-relaxed">
                 Select a pre-designed template that best matches your project type. Each template includes 
-                optimized terms and suggested contract structure for your industry.
+                industry-optimized terms and suggested payment structures.
               </p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
               {TEMPLATES.map(template => (
                 <Card 
                   key={template.id}
                   className={cn(
-                    "cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02]",
+                    "cursor-pointer transition-all duration-300 hover:shadow-xl border-2 group relative overflow-hidden",
                     selectedTemplate?.id === template.id 
-                      ? "border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20" 
-                      : "hover:border-primary/50"
+                      ? "border-primary bg-primary/5 shadow-xl ring-1 ring-primary/30 scale-[1.02]" 
+                      : "border-border hover:border-primary/40 hover:shadow-lg"
                   )}
                   onClick={() => handleTemplateSelect(template)}
                 >
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 relative">
                     <div className="flex items-start gap-4">
-                      <div className="text-4xl p-3 rounded-lg bg-muted/50">
+                      <div className={cn(
+                        "text-4xl p-4 rounded-xl transition-all duration-300",
+                        selectedTemplate?.id === template.id 
+                          ? "bg-primary/10 ring-2 ring-primary/20" 
+                          : "bg-muted/30 group-hover:bg-muted/50"
+                      )}>
                         {template.icon}
                       </div>
                       <div className="flex-1 space-y-3">
                         <div>
-                          <h3 className="text-xl font-semibold">{template.name}</h3>
-                          <p className="text-muted-foreground mt-1 leading-relaxed">
+                          <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {template.name}
+                          </h3>
+                          <p className="text-muted-foreground mt-2 leading-relaxed text-sm">
                             {template.description}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="secondary" className="px-3 py-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="secondary" className="text-xs font-medium">
                             {template.category}
                           </Badge>
-                          <Badge variant="outline" className="px-3 py-1 capitalize">
-                            {template.suggested_type} Rate
+                          <Badge variant="outline" className="text-xs font-medium capitalize">
+                            {template.suggested_type === 'fixed' ? 'Fixed Price' : 
+                             template.suggested_type === 'milestone' ? 'Milestone-based' : 
+                             'Hourly Rate'}
                           </Badge>
                         </div>
                       </div>
                       <div className="flex-shrink-0">
                         {selectedTemplate?.id === template.id ? (
-                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
                             <CheckCircleIcon className="h-5 w-5 text-primary-foreground" />
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/20" />
+                          <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/30 group-hover:border-primary/40 transition-colors" />
                         )}
                       </div>
                     </div>
+                    
+                    {/* Subtle gradient overlay for selected state */}
+                    {selectedTemplate?.id === template.id && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
+                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
             
             {selectedTemplate && (
-              <div className="mt-8 p-6 bg-muted/30 rounded-lg max-w-4xl mx-auto">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <FileTextIcon className="h-5 w-5" />
-                  Preview: Default Terms for {selectedTemplate.name}
-                </h4>
-                <div className="text-sm text-muted-foreground whitespace-pre-line bg-background p-4 rounded border">
-                  {selectedTemplate.default_terms}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  * These terms can be customized in the next steps
-                </p>
+              <div className="mt-8 max-w-5xl mx-auto">
+                <Card className="border-l-4 border-l-primary">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <FileTextIcon className="h-5 w-5 text-primary" />
+                      Template Preview: {selectedTemplate.name}
+                    </CardTitle>
+                    <CardDescription>
+                      Here are the default terms for this template. You can customize these in the next steps.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-background p-6 rounded-lg border text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+                      {selectedTemplate.default_terms}
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
+                      <AlertCircleIcon className="h-4 w-4" />
+                      <span>These terms are fully customizable and will be refined in the following steps</span>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
             
@@ -385,57 +409,66 @@ export default function EnhancedContractWizard() {
 
       case 1: // Basic Info
         return (
-          <div className="space-y-8">
-            <div className="text-center">
+          <div className="space-y-10">
+            <div className="text-center max-w-4xl mx-auto">
               <h2 className="text-3xl font-serif font-bold mb-4">Contract Information & Your Role</h2>
-              <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
+              <p className="text-muted-foreground text-lg leading-relaxed">
                 Let's establish the basic details of your contract and clarify your role in this agreement.
               </p>
             </div>
 
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-5xl mx-auto space-y-10">
               {/* Role Selection */}
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-xl font-semibold mb-2">Your Role</h3>
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold mb-2">What's Your Role?</h3>
                   <p className="text-muted-foreground">Are you the one providing services or hiring someone?</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
                   {[
                     { 
                       value: 'freelancer', 
                       label: 'Freelancer/Service Provider', 
                       desc: 'I am providing services to a client',
                       icon: '👨‍💻',
-                      details: 'You will be delivering work or services'
+                      details: 'You will be delivering work or services to a client'
                     },
                     { 
                       value: 'client', 
                       label: 'Client/Buyer', 
                       desc: 'I am hiring a freelancer for services',
                       icon: '🏢',
-                      details: 'You will be receiving work or services'
+                      details: 'You will be receiving work or services from a freelancer'
                     }
                   ].map(role => (
                     <Card 
                       key={role.value}
                       className={cn(
-                        "cursor-pointer transition-all duration-200 hover:shadow-lg relative",
+                        "cursor-pointer transition-all duration-300 hover:shadow-xl relative border-2 group",
                         formData.user_role === role.value 
-                          ? "border-primary bg-primary/5 shadow-lg ring-2 ring-primary/20" 
-                          : "hover:border-primary/50",
+                          ? "border-primary bg-primary/5 shadow-xl ring-1 ring-primary/30 scale-[1.02]" 
+                          : "border-border hover:border-primary/40 hover:shadow-lg",
                         errors.user_role ? "border-destructive" : ""
                       )}
                       onClick={() => setFormData(prev => ({ ...prev, user_role: role.value as any }))}
                     >
-                      <CardContent className="p-6 text-center">
-                        <div className="text-4xl mb-4 p-3 rounded-lg bg-muted/30 inline-block">{role.icon}</div>
-                        <h4 className="text-lg font-semibold mb-2">{role.label}</h4>
+                      <CardContent className="p-8 text-center">
+                        <div className={cn(
+                          "text-4xl mb-4 p-4 rounded-xl inline-block transition-all duration-300",
+                          formData.user_role === role.value 
+                            ? "bg-primary/10 ring-2 ring-primary/20" 
+                            : "bg-muted/30 group-hover:bg-muted/50"
+                        )}>
+                          {role.icon}
+                        </div>
+                        <h4 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
+                          {role.label}
+                        </h4>
                         <p className="text-muted-foreground text-sm mb-2">{role.desc}</p>
-                        <p className="text-xs text-muted-foreground">{role.details}</p>
+                        <p className="text-xs text-muted-foreground/80">{role.details}</p>
                         {formData.user_role === role.value && (
-                          <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                            <CheckCircleIcon className="h-4 w-4 text-primary-foreground" />
+                          <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                            <CheckCircleIcon className="h-5 w-5 text-primary-foreground" />
                           </div>
                         )}
                       </CardContent>
@@ -443,7 +476,7 @@ export default function EnhancedContractWizard() {
                   ))}
                 </div>
                 {errors.user_role && (
-                  <div className="flex items-center gap-2 text-destructive justify-center">
+                  <div className="flex items-center gap-2 text-destructive justify-center mt-4">
                     <XCircleIcon className="h-4 w-4" />
                     <span className="text-sm">{errors.user_role}</span>
                   </div>
@@ -451,60 +484,68 @@ export default function EnhancedContractWizard() {
               </div>
 
               {/* Contract Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4">Contract Details</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="title" className="text-base font-medium">Contract Title *</Label>
-                        <Input
-                          id="title"
-                          value={formData.title}
-                          onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                          placeholder="e.g., Website Redesign for ABC Company"
-                          className={cn("mt-2 h-12", errors.title ? "border-destructive" : "")}
-                        />
-                        {errors.title && (
-                          <div className="flex items-center gap-2 text-destructive mt-2">
-                            <XCircleIcon className="h-4 w-4" />
-                            <span className="text-sm">{errors.title}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="client_email" className="text-base font-medium">
-                          {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
-                        </Label>
-                        <Input
-                          id="client_email"
-                          type="email"
-                          value={formData.client_email}
-                          onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
-                          placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
-                          className={cn("mt-2 h-12", errors.client_email ? "border-destructive" : "")}
-                        />
-                        <p className="text-sm text-muted-foreground mt-2">
-                          {formData.user_role === 'freelancer' 
-                            ? 'The client will receive an invitation to review and sign the contract.'
-                            : 'The freelancer will receive an invitation to review and sign the contract.'
-                          }
-                        </p>
-                        {errors.client_email && (
-                          <div className="flex items-center gap-2 text-destructive mt-2">
-                            <XCircleIcon className="h-4 w-4" />
-                            <span className="text-sm">{errors.client_email}</span>
-                          </div>
-                        )}
-                      </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-semibold">Contract Details</CardTitle>
+                    <CardDescription>
+                      Provide the basic information about your contract and the parties involved.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <Label htmlFor="title" className="text-base font-medium">Contract Title *</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="e.g., Website Redesign for ABC Company"
+                        className={cn("mt-2 h-12 text-base", errors.title ? "border-destructive" : "")}
+                      />
+                      {errors.title && (
+                        <div className="flex items-center gap-2 text-destructive mt-2">
+                          <XCircleIcon className="h-4 w-4" />
+                          <span className="text-sm">{errors.title}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4">Project Description</h3>
+                    <div>
+                      <Label htmlFor="client_email" className="text-base font-medium">
+                        {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
+                      </Label>
+                      <Input
+                        id="client_email"
+                        type="email"
+                        value={formData.client_email}
+                        onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
+                        placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
+                        className={cn("mt-2 h-12 text-base", errors.client_email ? "border-destructive" : "")}
+                      />
+                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                        {formData.user_role === 'freelancer' 
+                          ? 'The client will receive an invitation to review and sign the contract.'
+                          : 'The freelancer will receive an invitation to review and sign the contract.'
+                        }
+                      </p>
+                      {errors.client_email && (
+                        <div className="flex items-center gap-2 text-destructive mt-2">
+                          <XCircleIcon className="h-4 w-4" />
+                          <span className="text-sm">{errors.client_email}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-border/50">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-semibold">Project Description</CardTitle>
+                    <CardDescription>
+                      Provide a clear and detailed description of the work to be performed.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
                     <div>
                       <Label htmlFor="description" className="text-base font-medium">Describe the Project *</Label>
                       <Textarea
@@ -513,10 +554,10 @@ export default function EnhancedContractWizard() {
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="Describe the project scope, objectives, key requirements, and expected deliverables..."
                         rows={8}
-                        className={cn("mt-2 resize-none", errors.description ? "border-destructive" : "")}
+                        className={cn("mt-2 resize-none text-base", errors.description ? "border-destructive" : "")}
                       />
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Be as detailed as possible to avoid misunderstandings later.
+                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                        Be as detailed as possible to avoid misunderstandings later. Include scope, deliverables, and any specific requirements.
                       </p>
                       {errors.description && (
                         <div className="flex items-center gap-2 text-destructive mt-2">
@@ -525,8 +566,8 @@ export default function EnhancedContractWizard() {
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>
@@ -534,92 +575,161 @@ export default function EnhancedContractWizard() {
 
       case 2: // Payment & Type
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Payment Structure</h3>
-              <p className="text-muted-foreground">Define how you'll be paid for this project.</p>
+          <div className="space-y-8">
+            <div className="text-center max-w-3xl mx-auto">
+              <h2 className="text-3xl font-serif font-bold mb-4">Payment Structure</h2>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                Choose the payment model that works best for your project and define the compensation details.
+              </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="max-w-4xl mx-auto space-y-8">
               <div>
-                <Label className="text-sm font-medium">Contract Type</Label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-semibold mb-2">Contract Type</h3>
+                  <p className="text-muted-foreground">Select the payment structure that best fits your project</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {[
-                    { value: 'fixed', label: 'Fixed Price', desc: 'One-time payment for the entire project' },
-                    { value: 'milestone', label: 'Milestone-based', desc: 'Split into multiple payments based on deliverables' },
-                    { value: 'hourly', label: 'Hourly Rate', desc: 'Payment based on time worked' }
+                    { 
+                      value: 'fixed', 
+                      label: 'Fixed Price', 
+                      desc: 'One-time payment for the entire project',
+                      icon: '💰',
+                      features: ['Single payment', 'Clear budget', 'Best for defined scope']
+                    },
+                    { 
+                      value: 'milestone', 
+                      label: 'Milestone-based', 
+                      desc: 'Split into multiple payments based on deliverables',
+                      icon: '🎯',
+                      features: ['Phased payments', 'Risk mitigation', 'Progress tracking']
+                    },
+                    { 
+                      value: 'hourly', 
+                      label: 'Hourly Rate', 
+                      desc: 'Payment based on time worked',
+                      icon: '⏱️',
+                      features: ['Flexible scope', 'Time tracking', 'Ongoing projects']
+                    }
                   ].map(type => (
                     <Card 
                       key={type.value}
                       className={cn(
-                        "cursor-pointer transition-all hover:border-primary p-3",
-                        formData.type === type.value ? "border-primary bg-primary/5" : ""
+                        "cursor-pointer transition-all duration-300 hover:shadow-lg border-2 group",
+                        formData.type === type.value 
+                          ? "border-primary bg-primary/5 shadow-lg ring-1 ring-primary/30" 
+                          : "border-border hover:border-primary/40"
                       )}
                       onClick={() => setFormData(prev => ({ ...prev, type: type.value as any }))}
                     >
-                      <div className="text-center">
-                        <h4 className="font-medium text-sm">{type.label}</h4>
-                        <p className="text-xs text-muted-foreground mt-1">{type.desc}</p>
-                      </div>
+                      <CardContent className="p-6 text-center">
+                        <div className={cn(
+                          "text-3xl mb-4 p-3 rounded-lg inline-block transition-all duration-300",
+                          formData.type === type.value 
+                            ? "bg-primary/10 ring-2 ring-primary/20" 
+                            : "bg-muted/30 group-hover:bg-muted/50"
+                        )}>
+                          {type.icon}
+                        </div>
+                        <h4 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
+                          {type.label}
+                        </h4>
+                        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                          {type.desc}
+                        </p>
+                        <div className="space-y-1">
+                          {type.features.map((feature, idx) => (
+                            <div key={idx} className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                              <span className="w-1 h-1 bg-current rounded-full"></span>
+                              {feature}
+                            </div>
+                          ))}
+                        </div>
+                        {formData.type === type.value && (
+                          <div className="mt-4">
+                            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center mx-auto">
+                              <CheckCircleIcon className="h-4 w-4 text-primary-foreground" />
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="total_amount">
-                    {formData.type === 'hourly' ? 'Hourly Rate' : 'Total Amount'} *
-                  </Label>
-                  <div className="relative">
-                    <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="total_amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.total_amount || ''}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        total_amount: parseFloat(e.target.value) || 0 
-                      }))}
-                      placeholder="0.00"
-                      className={cn("pl-10", errors.total_amount ? "border-destructive" : "")}
-                    />
-                  </div>
-                  {errors.total_amount && <p className="text-sm text-destructive mt-1">{errors.total_amount}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="currency">Currency</Label>
-                  <select
-                    id="currency"
-                    value={formData.currency}
-                    onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="USD">USD - US Dollar</option>
-                    <option value="EUR">EUR - Euro</option>
-                    <option value="GBP">GBP - British Pound</option>
-                    <option value="CAD">CAD - Canadian Dollar</option>
-                    <option value="AUD">AUD - Australian Dollar</option>
-                  </select>
-                </div>
-              </div>
-
-              {formData.type === 'milestone' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircleIcon className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Card className="border-2 border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold">Compensation Details</CardTitle>
+                  <CardDescription>
+                    Set the {formData.type === 'hourly' ? 'hourly rate' : 'total amount'} and currency for this contract.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="text-sm font-medium text-blue-900">Milestone-based Contract</h4>
-                      <p className="text-xs text-blue-700 mt-1">
-                        You'll be able to define specific milestones and their amounts in the next step. 
-                        This helps ensure payment is tied to deliverables.
-                      </p>
+                      <Label htmlFor="total_amount" className="text-base font-medium">
+                        {formData.type === 'hourly' ? 'Hourly Rate' : 'Total Amount'} *
+                      </Label>
+                      <div className="relative mt-2">
+                        <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          id="total_amount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.total_amount || ''}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            total_amount: parseFloat(e.target.value) || 0 
+                          }))}
+                          placeholder="0.00"
+                          className={cn("pl-12 h-12 text-lg font-medium", errors.total_amount ? "border-destructive" : "")}
+                        />
+                      </div>
+                      {errors.total_amount && (
+                        <div className="flex items-center gap-2 text-destructive mt-2">
+                          <XCircleIcon className="h-4 w-4" />
+                          <span className="text-sm">{errors.total_amount}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="currency" className="text-base font-medium">Currency</Label>
+                      <select
+                        id="currency"
+                        value={formData.currency}
+                        onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+                        className="w-full mt-2 h-12 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="GBP">GBP - British Pound</option>
+                        <option value="CAD">CAD - Canadian Dollar</option>
+                        <option value="AUD">AUD - Australian Dollar</option>
+                      </select>
                     </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+
+              {formData.type === 'milestone' && (
+                <Card className="border-l-4 border-l-blue-500 bg-blue-50/50">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-3">
+                      <AlertCircleIcon className="h-6 w-6 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="text-base font-semibold text-blue-900 mb-2">Milestone-based Contract</h4>
+                        <p className="text-sm text-blue-700 leading-relaxed">
+                          In the next step, you'll define specific milestones with individual payment amounts. 
+                          This approach helps ensure payment is tied to deliverables and provides better project management.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
           </div>
