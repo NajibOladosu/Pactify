@@ -44,7 +44,7 @@ export async function GET(
       .from("contract_deliverables")
       .select(`
         *,
-        profiles!submitted_by(display_name)
+        profiles!uploaded_by(display_name)
       `)
       .eq("contract_id", contractId)
       .order("created_at", { ascending: false });
@@ -107,11 +107,21 @@ export async function POST(
       return NextResponse.json({ error: "Only the freelancer can submit deliverables" }, { status: 403 });
     }
 
+    // Add logging to debug the issue
+    console.log('Received deliverable submission:', {
+      deliverable_type: body.deliverable_type,
+      title: body.title,
+      hasDescription: !!body.description,
+      hasLinkUrl: !!body.link_url,
+      hasTextContent: !!body.text_content
+    });
+
     // Validate deliverable data
     const validDeliverableTypes = ['file', 'link', 'text'];
     
     if (!validDeliverableTypes.includes(body.deliverable_type)) {
-      return NextResponse.json({ error: "Invalid deliverable type" }, { status: 400 });
+      console.error('Invalid deliverable type:', body.deliverable_type);
+      return NextResponse.json({ error: `Invalid deliverable type: ${body.deliverable_type}` }, { status: 400 });
     }
 
     if (!body.title || typeof body.title !== 'string' || body.title.trim().length === 0) {
@@ -170,21 +180,50 @@ export async function POST(
         .eq("title", body.title.trim());
     }
 
+    // Prepare the deliverable data based on type
+    const deliverableData: any = {
+      contract_id: contractId,
+      version: nextVersion,
+      title: body.title.trim(),
+      description: body.description?.trim() || null,
+      deliverable_type: body.deliverable_type,
+      uploaded_by: user.id,
+      submitted_by: user.id,
+      status: 'pending',
+      is_latest_version: true
+    };
+
+    // Handle different deliverable types with required fields
+    if (body.deliverable_type === 'file') {
+      // For file type, all file fields are required by the schema
+      deliverableData.file_url = body.file_url?.trim() || '';
+      deliverableData.file_name = body.file_name?.trim() || 'Unknown File';
+      deliverableData.file_size = body.file_size || 0;
+      deliverableData.file_type = body.file_type?.trim() || 'application/octet-stream';
+      deliverableData.link_url = null;
+      deliverableData.text_content = null;
+    } else if (body.deliverable_type === 'link') {
+      // For link type, provide default values for required file fields
+      deliverableData.file_url = '';
+      deliverableData.file_name = '';
+      deliverableData.file_size = 0;
+      deliverableData.file_type = '';
+      deliverableData.link_url = body.link_url?.trim() || null;
+      deliverableData.text_content = null;
+    } else if (body.deliverable_type === 'text') {
+      // For text type, provide default values for required file fields
+      deliverableData.file_url = '';
+      deliverableData.file_name = '';
+      deliverableData.file_size = 0;
+      deliverableData.file_type = '';
+      deliverableData.link_url = null;
+      deliverableData.text_content = body.text_content?.trim() || null;
+    }
+
     // Create new deliverable
     const { data: newDeliverable, error } = await serviceSupabase
       .from("contract_deliverables")
-      .insert({
-        contract_id: contractId,
-        version: nextVersion,
-        title: body.title.trim(),
-        description: body.description?.trim() || null,
-        deliverable_type: body.deliverable_type,
-        link_url: body.link_url?.trim() || null,
-        text_content: body.text_content?.trim() || null,
-        submitted_by: user.id,
-        status: 'pending',
-        is_latest_version: true
-      })
+      .insert(deliverableData)
       .select()
       .single();
 

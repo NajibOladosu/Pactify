@@ -40,7 +40,7 @@ interface Deliverable {
   file_size?: number;
   link_url?: string;
   text_content?: string;
-  submitted_by: string;
+  uploaded_by: string;
   submitted_by_email: string;
   submitted_at: string;
   status: 'pending' | 'approved' | 'rejected' | 'revision_requested';
@@ -150,6 +150,13 @@ export default function ContractDeliverables({
     textContent: ''
   });
   const [uploading, setUploading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{
+    name: string;
+    size: number;
+    type: string;
+    url: string;
+    path: string;
+  } | null>(null);
   
   // Feedback form
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -177,13 +184,25 @@ export default function ContractDeliverables({
       setLoading(true);
       const response = await fetch(`/api/contracts/${contractId}/deliverables`);
       if (response.ok) {
-        const data = await response.json();
-        setDeliverables(data.deliverables || []);
+        const text = await response.text();
+        if (text) {
+          const data = JSON.parse(text);
+          setDeliverables(data.deliverables || []);
+        } else {
+          setDeliverables([]);
+        }
       } else {
-        console.error('Failed to fetch deliverables');
+        console.error('Failed to fetch deliverables:', response.status, response.statusText);
+        setDeliverables([]);
       }
     } catch (error) {
       console.error('Error fetching deliverables:', error);
+      setDeliverables([]);
+      toast({
+        title: "Error",
+        description: "Failed to load deliverables. Please refresh the page.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -193,11 +212,53 @@ export default function ContractDeliverables({
     try {
       const response = await fetch(`/api/contracts/${contractId}/deliverables/${deliverableId}/comments`);
       if (response.ok) {
-        const data = await response.json();
-        setComments(data.comments || []);
+        const text = await response.text();
+        if (text) {
+          const data = JSON.parse(text);
+          setComments(data.comments || []);
+        } else {
+          setComments([]);
+        }
+      } else {
+        console.error('Failed to fetch comments:', response.status, response.statusText);
+        setComments([]);
       }
     } catch (error) {
       console.error('Error fetching comments:', error);
+      setComments([]);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUploadedFile(data.file);
+        toast({
+          title: "Success",
+          description: "File uploaded successfully",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload file",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -206,6 +267,15 @@ export default function ContractDeliverables({
       toast({
         title: "Validation Error",
         description: "Please provide a title for the deliverable",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newDeliverable.type === 'file' && !uploadedFile) {
+      toast({
+        title: "Validation Error",
+        description: "Please upload a file",
         variant: "destructive",
       });
       return;
@@ -242,6 +312,10 @@ export default function ContractDeliverables({
           deliverable_type: newDeliverable.type,
           link_url: newDeliverable.type === 'link' ? newDeliverable.linkUrl : undefined,
           text_content: newDeliverable.type === 'text' ? newDeliverable.textContent : undefined,
+          file_url: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.url : undefined,
+          file_name: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.name : undefined,
+          file_size: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.size : undefined,
+          file_type: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.type : undefined,
         }),
       });
 
@@ -258,14 +332,16 @@ export default function ContractDeliverables({
           linkUrl: '',
           textContent: ''
         });
+        setUploadedFile(null);
         fetchDeliverables();
       } else {
-        throw new Error('Failed to submit deliverable');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit deliverable');
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to submit deliverable",
+        description: error instanceof Error ? error.message : "Failed to submit deliverable",
         variant: "destructive",
       });
     } finally {
@@ -366,14 +442,10 @@ export default function ContractDeliverables({
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <RefreshCwIcon className="h-6 w-6 animate-spin mr-2" />
-            <span>Loading deliverables...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center p-6">
+        <RefreshCwIcon className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading deliverables...</span>
+      </div>
     );
   }
 
@@ -400,72 +472,66 @@ export default function ContractDeliverables({
 
       {/* Deliverables List */}
       {Object.keys(groupedDeliverables).length === 0 ? (
-        <Card>
-          <CardContent className="p-8">
-            <div className="text-center">
-              <PackageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h4 className="text-lg font-medium mb-2">No Deliverables</h4>
-              <p className="text-muted-foreground mb-4">
-                {userRole === 'freelancer' 
-                  ? "You haven't submitted any deliverables yet." 
-                  : "No deliverables have been submitted yet."
-                }
-              </p>
-              {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review'].includes(contractStatus) && (
-                <Button onClick={() => setShowSubmitModal(true)}>
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  Submit First Deliverable
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="text-center py-8">
+          <PackageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <h4 className="font-medium mb-2">No Deliverables</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            {userRole === 'freelancer' 
+              ? "You haven't submitted any deliverables yet." 
+              : "No deliverables have been submitted yet."
+            }
+          </p>
+          {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review'].includes(contractStatus) && (
+            <Button size="sm" onClick={() => setShowSubmitModal(true)}>
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Submit First Deliverable
+            </Button>
+          )}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
           {/* Deliverables List */}
-          <div className="space-y-4">
-            {Object.entries(groupedDeliverables).map(([title, versions]) => {
-              const latestVersion = versions[0];
-              const FileIconComponent = getFileIcon(latestVersion.file_name);
-              
-              return (
-                <Card key={title} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <FileIconComponent className="h-8 w-8 text-primary-500 flex-shrink-0 mt-1" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium truncate">{title}</h4>
-                            <Badge variant="outline">
-                              v{latestVersion.version}
-                            </Badge>
-                            {versions.length > 1 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {versions.length} versions
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                            {latestVersion.description || 'No description'}
-                          </p>
-                          
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span>
-                              Submitted {new Date(latestVersion.submitted_at).toLocaleDateString()}
-                            </span>
-                            {latestVersion.file_size && (
-                              <span>{formatFileSize(latestVersion.file_size)}</span>
-                            )}
-                          </div>
-                        </div>
+          {Object.entries(groupedDeliverables).map(([title, versions]) => {
+            const latestVersion = versions[0];
+            const FileIconComponent = getFileIcon(latestVersion.file_name);
+            
+            return (
+              <div key={title} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <FileIconComponent className="h-6 w-6 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-sm truncate">{title}</h4>
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        v{latestVersion.version}
+                      </Badge>
+                      {versions.length > 1 && (
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                          {versions.length} versions
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {latestVersion.description && (
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
+                        {latestVersion.description}
+                      </p>
+                    )}
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>
+                          {new Date(latestVersion.submitted_at).toLocaleDateString()}
+                        </span>
+                        {latestVersion.file_size && latestVersion.file_size > 0 && (
+                          <span>{formatFileSize(latestVersion.file_size)}</span>
+                        )}
                       </div>
                       
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-2">
                         <Badge 
                           variant="outline" 
-                          className={cn(STATUS_COLORS[latestVersion.status])}
+                          className={cn(STATUS_COLORS[latestVersion.status], "text-xs px-1.5 py-0.5")}
                         >
                           {formatStatusText(latestVersion.status)}
                         </Badge>
@@ -473,7 +539,8 @@ export default function ContractDeliverables({
                         <div className="flex gap-1">
                           <Button
                             size="sm"
-                            variant="outline"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
                             onClick={() => setSelectedDeliverable(latestVersion)}
                           >
                             <EyeIcon className="h-3 w-3" />
@@ -482,7 +549,8 @@ export default function ContractDeliverables({
                           {userRole === 'client' && latestVersion.status === 'pending' && (
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
                               onClick={() => {
                                 setFeedbackDeliverable(latestVersion);
                                 setShowFeedbackModal(true);
@@ -494,175 +562,175 @@ export default function ContractDeliverables({
                         </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Deliverable Details */}
-          {selectedDeliverable && (
-            <Card className="lg:sticky lg:top-4">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    Deliverable Details
-                    <Badge variant="outline">v{selectedDeliverable.version}</Badge>
-                  </CardTitle>
-                  <Badge 
-                    variant="outline" 
-                    className={cn(STATUS_COLORS[selectedDeliverable.status])}
-                  >
-                    {formatStatusText(selectedDeliverable.status)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Deliverable Info */}
-                <div>
-                  <h4 className="font-medium mb-2">{selectedDeliverable.title}</h4>
-                  {selectedDeliverable.description && (
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {selectedDeliverable.description}
-                    </p>
-                  )}
-                  
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Type:</span>
-                      <span className="capitalize">{selectedDeliverable.deliverable_type}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Submitted by:</span>
-                      <span>{selectedDeliverable.submitted_by_email}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Submitted on:</span>
-                      <span>{new Date(selectedDeliverable.submitted_at).toLocaleDateString()}</span>
-                    </div>
                   </div>
                 </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-                {/* Content based on type */}
-                {selectedDeliverable.deliverable_type === 'link' && selectedDeliverable.link_url && (
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ExternalLinkIcon className="h-4 w-4" />
-                      <span className="font-medium text-sm">External Link</span>
-                    </div>
+      {/* Deliverable Details */}
+      {selectedDeliverable && (
+        <Card className="lg:sticky lg:top-4">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                Deliverable Details
+                <Badge variant="outline">v{selectedDeliverable.version}</Badge>
+              </CardTitle>
+              <Badge 
+                variant="outline" 
+                className={cn(STATUS_COLORS[selectedDeliverable.status])}
+              >
+                {formatStatusText(selectedDeliverable.status)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Deliverable Info */}
+            <div>
+              <h4 className="font-medium mb-2">{selectedDeliverable.title}</h4>
+              {selectedDeliverable.description && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  {selectedDeliverable.description}
+                </p>
+              )}
+              
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="capitalize">{selectedDeliverable.deliverable_type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Submitted by:</span>
+                  <span>{selectedDeliverable.submitted_by_email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Submitted on:</span>
+                  <span>{new Date(selectedDeliverable.submitted_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Content based on type */}
+            {selectedDeliverable.deliverable_type === 'link' && selectedDeliverable.link_url && (
+              <div className="p-3 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <ExternalLinkIcon className="h-4 w-4" />
+                  <span className="font-medium text-sm">External Link</span>
+                </div>
+                <a 
+                  href={selectedDeliverable.link_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm break-all"
+                >
+                  {selectedDeliverable.link_url}
+                </a>
+              </div>
+            )}
+
+            {selectedDeliverable.deliverable_type === 'text' && selectedDeliverable.text_content && (
+              <div className="p-3 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileTextIcon className="h-4 w-4" />
+                  <span className="font-medium text-sm">Text Content</span>
+                </div>
+                <div className="text-sm whitespace-pre-wrap">
+                  {selectedDeliverable.text_content}
+                </div>
+              </div>
+            )}
+
+            {selectedDeliverable.deliverable_type === 'file' && selectedDeliverable.file_url && (
+              <div className="p-3 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DownloadIcon className="h-4 w-4" />
+                    <span className="font-medium text-sm">
+                      {selectedDeliverable.file_name || 'Download File'}
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline" asChild>
                     <a 
-                      href={selectedDeliverable.link_url}
+                      href={selectedDeliverable.file_url} 
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary hover:underline text-sm break-all"
                     >
-                      {selectedDeliverable.link_url}
+                      Download
                     </a>
-                  </div>
-                )}
-
-                {selectedDeliverable.deliverable_type === 'text' && selectedDeliverable.text_content && (
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileTextIcon className="h-4 w-4" />
-                      <span className="font-medium text-sm">Text Content</span>
-                    </div>
-                    <div className="text-sm whitespace-pre-wrap">
-                      {selectedDeliverable.text_content}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDeliverable.deliverable_type === 'file' && selectedDeliverable.file_url && (
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <DownloadIcon className="h-4 w-4" />
-                        <span className="font-medium text-sm">
-                          {selectedDeliverable.file_name || 'Download File'}
-                        </span>
-                      </div>
-                      <Button size="sm" variant="outline" asChild>
-                        <a 
-                          href={selectedDeliverable.file_url} 
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Download
-                        </a>
-                      </Button>
-                    </div>
-                    {selectedDeliverable.file_size && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Size: {formatFileSize(selectedDeliverable.file_size)}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Client Feedback */}
-                {selectedDeliverable.client_feedback && (
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MessageSquareIcon className="h-4 w-4" />
-                      <span className="font-medium text-sm">Client Feedback</span>
-                    </div>
-                    <p className="text-sm">{selectedDeliverable.client_feedback}</p>
-                    {selectedDeliverable.feedback_at && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(selectedDeliverable.feedback_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Comments Section */}
-                <div className="border-t pt-4">
-                  <h5 className="font-medium mb-3">Comments</h5>
-                  
-                  {/* Add Comment */}
-                  <div className="space-y-2 mb-4">
-                    <Textarea
-                      placeholder="Add a comment..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      rows={3}
-                    />
-                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
-                      Add Comment
-                    </Button>
-                  </div>
-
-                  {/* Comments List */}
-                  {comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No comments yet
-                    </p>
-                  ) : (
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
-                      {comments.map((comment) => (
-                        <div key={comment.id} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
-                          <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium flex-shrink-0">
-                            {comment.commenter_email[0].toUpperCase()}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-sm">{comment.commenter_email}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(comment.created_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-sm">{comment.comment}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                {selectedDeliverable.file_size && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Size: {formatFileSize(selectedDeliverable.file_size)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Client Feedback */}
+            {selectedDeliverable.client_feedback && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquareIcon className="h-4 w-4" />
+                  <span className="font-medium text-sm">Client Feedback</span>
+                </div>
+                <p className="text-sm">{selectedDeliverable.client_feedback}</p>
+                {selectedDeliverable.feedback_at && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(selectedDeliverable.feedback_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Comments Section */}
+            <div className="border-t pt-4">
+              <h5 className="font-medium mb-3">Comments</h5>
+              
+              {/* Add Comment */}
+              <div className="space-y-2 mb-4">
+                <Textarea
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                />
+                <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
+                  Add Comment
+                </Button>
+              </div>
+
+              {/* Comments List */}
+              {comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No comments yet
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="flex gap-3 p-3 bg-muted/30 rounded-lg">
+                      <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium flex-shrink-0">
+                        {comment.commenter_email[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">{comment.commenter_email}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(comment.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-sm">{comment.comment}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Submit Deliverable Modal */}
@@ -751,20 +819,88 @@ export default function ContractDeliverables({
             )}
 
             {newDeliverable.type === 'file' && (
-              <div className="p-6 border-2 border-dashed rounded-lg text-center">
-                <UploadIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  File upload functionality will be implemented in the next phase
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  For now, please use the link option to share files via cloud storage
-                </p>
+              <div className="space-y-4">
+                {!uploadedFile ? (
+                  <div className="p-6 border-2 border-dashed rounded-lg text-center">
+                    <UploadIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Click to upload or drag and drop your file
+                    </p>
+                    <input
+                      type="file"
+                      id="file-upload"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleFileUpload(file);
+                        }
+                      }}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.jpg,.jpeg,.png,.gif,.webp,.svg"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <>
+                          <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <UploadIcon className="h-4 w-4 mr-2" />
+                          Choose File
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Supported: Images, PDF, Office docs, text files, archives (max 10MB)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CheckIcon className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-green-800 dark:text-green-200">
+                            {uploadedFile.name}
+                          </p>
+                          <p className="text-sm text-green-600 dark:text-green-400">
+                            {formatFileSize(uploadedFile.size)} • {uploadedFile.type}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setUploadedFile(null)}
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSubmitModal(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowSubmitModal(false);
+              setNewDeliverable({
+                title: '',
+                description: '',
+                type: 'file',
+                linkUrl: '',
+                textContent: ''
+              });
+              setUploadedFile(null);
+            }}>
               Cancel
             </Button>
             <Button 

@@ -523,12 +523,28 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
               <CardTitle>Deliverables</CardTitle>
             </CardHeader>
             <CardContent>
-              <ContractDeliverables
-                contractId={id}
-                userId={user.id}
-                userRole={userRole}
-                contractStatus={contract.status || 'draft'}
-              />
+              {/* Wrap deliverables in error boundary */}
+              {(() => {
+                try {
+                  return (
+                    <ContractDeliverables
+                      contractId={id}
+                      userId={user.id}
+                      userRole={userRole}
+                      contractStatus={contract.status || 'draft'}
+                    />
+                  );
+                } catch (error) {
+                  console.error('Error rendering deliverables:', error);
+                  return (
+                    <div className="text-center p-6">
+                      <p className="text-muted-foreground">
+                        Unable to load deliverables at this time. Please refresh the page.
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
             </CardContent>
           </Card>
         </div>

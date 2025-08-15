@@ -112,7 +112,10 @@ export async function linkUserContracts(userId: string, userEmail: string) {
     });
 
     if (error) {
-      console.error('Error linking user contracts:', error);
+      // Only log actual errors, not constraint violations which are expected
+      if (error.code !== '23505') {
+        console.error('Error linking user contracts:', error);
+      }
     } else {
       console.log(`Successfully linked contracts for user ${userId} with email ${userEmail}`);
     }
