@@ -456,186 +456,134 @@ export default function ContractDeliverables({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header Section */}
-      <div className="border-b pb-6">
-        <div className="flex justify-between items-start gap-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <PackageIcon className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-serif font-bold text-foreground">
-                  Deliverables
-                </h3>
-                <p className="text-base text-muted-foreground leading-relaxed">
-                  {contractStatus === 'pending_delivery' && userRole === 'freelancer' 
-                    ? "Submit all final deliverables to complete the project and enable payment release"
-                    : contractStatus === 'pending_delivery' && userRole === 'client'
-                    ? "Pending final deliverables from freelancer before payment can be released"
-                    : "Submit and review project deliverables"
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-          {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
-            <Button 
-              onClick={() => setShowSubmitModal(true)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
-              size="lg"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              {contractStatus === 'pending_completion' ? 'Submit Final Deliverable' : 'Submit Deliverable'}
-            </Button>
-          )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-serif font-semibold flex items-center gap-2 mb-1">
+            <PackageIcon className="h-5 w-5 text-muted-foreground" />
+            Deliverables
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {contractStatus === 'pending_delivery' && userRole === 'freelancer' 
+              ? "Submit all final deliverables to complete the project and enable payment release"
+              : contractStatus === 'pending_delivery' && userRole === 'client'
+              ? "Pending final deliverables from freelancer before payment can be released"
+              : "Submit and review project deliverables"
+            }
+          </p>
         </div>
+        {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
+          <Button 
+            onClick={() => setShowSubmitModal(true)}
+            size="sm"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Submit Deliverable
+          </Button>
+        )}
       </div>
 
-      {/* Status Notice Section */}
-      {contractStatus === 'pending_delivery' && (
-        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/80 to-blue-50/40 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <ClockIcon className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-lg font-serif font-semibold text-blue-900">
-                  {userRole === 'freelancer' ? 'Final Deliverables Required' : 'Awaiting Final Deliverables'}
-                </h4>
-                <p className="text-sm text-blue-700 leading-relaxed">
-                  {userRole === 'freelancer' 
-                    ? 'Please submit your final deliverables to complete the project. Mark deliverables as "final" to enable payment release.'
-                    : 'The freelancer is preparing final deliverables. Payment will be available for release once submitted.'
-                  }
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Deliverables List */}
       {Object.keys(groupedDeliverables).length === 0 ? (
-        <Card className="border-2 border-dashed border-muted-foreground/20">
-          <CardContent className="text-center py-16">
-            <div className="mx-auto w-20 h-20 bg-muted/30 rounded-full flex items-center justify-center mb-6">
-              <PackageIcon className="h-10 w-10 text-muted-foreground" />
-            </div>
-            <h4 className="text-xl font-serif font-semibold mb-3 text-foreground">No Deliverables Yet</h4>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto leading-relaxed">
-              {userRole === 'freelancer' 
-                ? "Start by submitting your first deliverable to showcase your progress on this project." 
-                : "Deliverables will appear here once the freelancer begins submitting their work."
-              }
-            </p>
-            {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
-              <Button 
-                onClick={() => setShowSubmitModal(true)}
-                className="bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-200"
-                size="lg"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                {contractStatus === 'pending_completion' ? 'Submit Final Deliverable' : 'Submit First Deliverable'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        <div className="text-center py-8">
+          <PackageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+          <h4 className="font-medium mb-2">No Deliverables</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            {userRole === 'freelancer' 
+              ? "You haven't submitted any deliverables yet." 
+              : "No deliverables have been submitted yet."
+            }
+          </p>
+          {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
+            <Button size="sm" onClick={() => setShowSubmitModal(true)}>
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Submit First Deliverable
+            </Button>
+          )}
+        </div>
       ) : (
-        <div className="grid gap-6">
+        <div className="space-y-4">
           {/* Deliverables List */}
           {Object.entries(groupedDeliverables).map(([title, versions]) => {
             const latestVersion = versions[0];
             const FileIconComponent = getFileIcon(latestVersion.file_name);
             
             return (
-              <Card key={title} className="group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary/20 hover:border-l-primary">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
-                      <FileIconComponent className="h-8 w-8 text-primary" />
+              <div key={title} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <FileIconComponent className="h-6 w-6 text-primary flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-sm truncate">{title}</h4>
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        v{latestVersion.version}
+                      </Badge>
+                      {versions.length > 1 && (
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                          {versions.length} versions
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0 space-y-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <h4 className="text-lg font-serif font-semibold text-foreground truncate">{title}</h4>
-                            <Badge variant="outline" className="text-xs px-2 py-1 bg-primary/5 border-primary/20">
-                              v{latestVersion.version}
-                            </Badge>
-                            {versions.length > 1 && (
-                              <Badge variant="secondary" className="text-xs px-2 py-1">
-                                {versions.length} versions
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          {latestVersion.description && (
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {latestVersion.description}
-                            </p>
-                          )}
-                        </div>
-                        
+                    
+                    {latestVersion.description && (
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
+                        {latestVersion.description}
+                      </p>
+                    )}
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>
+                          {new Date(latestVersion.submitted_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </span>
+                        {latestVersion.file_size && latestVersion.file_size > 0 && (
+                          <span>{formatFileSize(latestVersion.file_size)}</span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
                         <Badge 
                           variant="outline" 
-                          className={cn(STATUS_COLORS[latestVersion.status], "text-sm px-3 py-1 font-medium")}
+                          className={cn(STATUS_COLORS[latestVersion.status], "text-xs px-1.5 py-0.5")}
                         >
                           {formatStatusText(latestVersion.status)}
                         </Badge>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <ClockIcon className="h-4 w-4" />
-                            {new Date(latestVersion.submitted_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </span>
-                          {latestVersion.file_size && latestVersion.file_size > 0 && (
-                            <span className="flex items-center gap-1">
-                              <FileTextIcon className="h-4 w-4" />
-                              {formatFileSize(latestVersion.file_size)}
-                            </span>
-                          )}
-                        </div>
                         
-                          <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setSelectedDeliverable(latestVersion)}
+                          >
+                            <EyeIcon className="h-3 w-3" />
+                          </Button>
+                          
+                          {userRole === 'client' && latestVersion.status === 'pending' && (
                             <Button
-                              variant="outline"
                               size="sm"
-                              onClick={() => setSelectedDeliverable(latestVersion)}
-                              className="h-9 px-3 bg-white hover:bg-gray-50 shadow-sm border-gray-200"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => {
+                                setFeedbackDeliverable(latestVersion);
+                                setShowFeedbackModal(true);
+                              }}
                             >
-                              <EyeIcon className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                            
-                            {userRole === 'client' && latestVersion.status === 'pending' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setFeedbackDeliverable(latestVersion);
-                                  setShowFeedbackModal(true);
-                                }}
-                                className="h-9 px-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                              >
-                                <MessageSquareIcon className="h-4 w-4 mr-1" />
-                                Review
+                              <MessageSquareIcon className="h-3 w-3" />
                               </Button>
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
-                </CardContent>
-              </Card>
+                  </div>
+                </div>
             );
           })}
         </div>
@@ -974,36 +922,27 @@ export default function ContractDeliverables({
 
           {/* Final deliverable checkbox - only show for pending_delivery status */}
           {contractStatus === 'pending_delivery' && userRole === 'freelancer' && (
-            <Card className="border-l-4 border-l-green-500 bg-gradient-to-r from-green-50/80 to-green-50/40 mt-6">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="p-2 bg-green-100 rounded-lg mt-1">
-                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <Checkbox 
-                        id="final-deliverable"
-                        checked={newDeliverable.isFinal}
-                        onCheckedChange={(checked) => 
-                          setNewDeliverable(prev => ({ ...prev, isFinal: !!checked }))
-                        }
-                        className="mt-1 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                      />
-                      <Label htmlFor="final-deliverable" className="cursor-pointer">
-                        <span className="text-base font-serif font-semibold text-green-900 block">
-                          Mark as final deliverable
-                        </span>
-                        <span className="text-sm text-green-700 leading-relaxed mt-1 block">
-                          Check this box if this is the final deliverable for project completion. 
-                          This will automatically enable the client to release payment.
-                        </span>
-                      </Label>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="border rounded-lg p-4 mt-4 bg-muted/30">
+              <div className="flex items-start gap-3">
+                <Checkbox 
+                  id="final-deliverable"
+                  checked={newDeliverable.isFinal}
+                  onCheckedChange={(checked) => 
+                    setNewDeliverable(prev => ({ ...prev, isFinal: !!checked }))
+                  }
+                  className="mt-0.5"
+                />
+                <Label htmlFor="final-deliverable" className="cursor-pointer flex-1">
+                  <span className="text-sm font-medium block">
+                    Mark as final deliverable
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-1 block">
+                    Check this box if this is the final deliverable for project completion. 
+                    This will automatically enable the client to release payment.
+                  </span>
+                </Label>
+              </div>
+            </div>
           )}
 
           <DialogFooter>
