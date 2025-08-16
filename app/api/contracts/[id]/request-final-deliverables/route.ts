@@ -31,7 +31,7 @@ export async function POST(
     // Verify user has access to this contract and is the client
     const { data: contract } = await serviceSupabase
       .from("contracts")
-      .select("client_id, freelancer_id, status, total_amount")
+      .select("client_id, freelancer_id, status")
       .eq("id", contractId)
       .single();
 
@@ -40,26 +40,15 @@ export async function POST(
     }
 
     if (contract.client_id !== user.id) {
-      return NextResponse.json({ error: "Only the client can complete the contract" }, { status: 403 });
+      return NextResponse.json({ error: "Only the client can request final deliverables" }, { status: 403 });
     }
 
-    // Check if contract is in a valid state for completion
-    const validStatuses = ['active', 'in_review', 'pending_delivery', 'pending_completion'];
-    if (!validStatuses.includes(contract.status)) {
-      return NextResponse.json({ 
-        error: `Contract cannot be completed from status: ${contract.status}` 
-      }, { status: 400 });
-    }
-
-    // New simplified workflow: active -> pending_delivery -> pending_completion
-    // Only allow transition from active to pending_delivery
+    // Check if contract is in a valid state
     if (contract.status !== 'active') {
       return NextResponse.json({ 
-        error: `Complete Project action only available for active contracts, not ${contract.status}` 
+        error: `Cannot request final deliverables from status: ${contract.status}` 
       }, { status: 400 });
     }
-
-    const nextStatus = 'pending_delivery';
 
     // Check if there are any deliverables
     const { data: deliverables } = await serviceSupabase
@@ -70,46 +59,43 @@ export async function POST(
 
     if (!deliverables || deliverables.length === 0) {
       return NextResponse.json({ 
-        error: "Cannot complete contract without any deliverables" 
+        error: "Cannot request final deliverables without any existing deliverables" 
       }, { status: 400 });
     }
 
-    // Update contract status to the determined next status
+    // Update contract status to pending_completion to signal final deliverables needed
     const { error: updateError } = await serviceSupabase
       .from("contracts")
       .update({ 
-        status: nextStatus
+        status: 'pending_completion'
       })
       .eq("id", contractId);
 
     if (updateError) {
       console.error("Error updating contract status:", updateError);
-      return NextResponse.json({ error: "Failed to complete contract" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to request final deliverables" }, { status: 500 });
     }
 
     // Log the activity
     await auditLogger.logContractEvent(
-      'project_completion_requested',
+      'final_deliverables_requested',
       contractId,
       user.id,
       {
-        status: nextStatus,
-        completed_by: 'client',
-        message: 'Client requested project completion - awaiting final deliverables'
+        requested_by: 'client'
       }
     );
 
-    // TODO: Send notification to freelancer about final deliverables requirement
+    // TODO: Send notification to freelancer about final deliverables request
 
     revalidatePath(`/dashboard/contracts/${contractId}`);
     
     return NextResponse.json({ 
       success: true,
-      message: "Project marked for completion. Freelancer must submit final deliverables before payment can be released.",
-      nextStatus: nextStatus
+      message: "Final deliverables requested. The freelancer has been notified." 
     });
   } catch (error) {
-    console.error("Contract completion error:", error);
+    console.error("Request final deliverables error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

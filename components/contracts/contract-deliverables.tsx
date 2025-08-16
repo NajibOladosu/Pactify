@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
@@ -24,7 +25,9 @@ import {
   XIcon,
   ClockIcon,
   RefreshCwIcon,
-  ExternalLinkIcon
+  ExternalLinkIcon,
+  AlertCircleIcon,
+  CheckCircleIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +150,8 @@ export default function ContractDeliverables({
     description: '',
     type: 'file' as 'file' | 'link' | 'text',
     linkUrl: '',
-    textContent: ''
+    textContent: '',
+    isFinal: false
   });
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{
@@ -316,6 +320,7 @@ export default function ContractDeliverables({
           file_name: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.name : undefined,
           file_size: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.size : undefined,
           file_type: newDeliverable.type === 'file' && uploadedFile ? uploadedFile.type : undefined,
+          is_final: newDeliverable.isFinal,
         }),
       });
 
@@ -330,7 +335,8 @@ export default function ContractDeliverables({
           description: '',
           type: 'file',
           linkUrl: '',
-          textContent: ''
+          textContent: '',
+          isFinal: false
         });
         setUploadedFile(null);
         fetchDeliverables();
@@ -450,121 +456,186 @@ export default function ContractDeliverables({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <PackageIcon className="h-5 w-5" />
-            Deliverables
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Submit and review project deliverables
-          </p>
-        </div>
-        {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review'].includes(contractStatus) && (
-          <Button onClick={() => setShowSubmitModal(true)}>
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Submit Deliverable
-          </Button>
-        )}
-      </div>
-
-      {/* Deliverables List */}
-      {Object.keys(groupedDeliverables).length === 0 ? (
-        <div className="text-center py-8">
-          <PackageIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <h4 className="font-medium mb-2">No Deliverables</h4>
-          <p className="text-sm text-muted-foreground mb-4">
-            {userRole === 'freelancer' 
-              ? "You haven't submitted any deliverables yet." 
-              : "No deliverables have been submitted yet."
-            }
-          </p>
-          {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review'].includes(contractStatus) && (
-            <Button size="sm" onClick={() => setShowSubmitModal(true)}>
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Submit First Deliverable
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="border-b pb-6">
+        <div className="flex justify-between items-start gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <PackageIcon className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-serif font-bold text-foreground">
+                  Deliverables
+                </h3>
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  {contractStatus === 'pending_delivery' && userRole === 'freelancer' 
+                    ? "Submit all final deliverables to complete the project and enable payment release"
+                    : contractStatus === 'pending_delivery' && userRole === 'client'
+                    ? "Pending final deliverables from freelancer before payment can be released"
+                    : "Submit and review project deliverables"
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+          {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
+            <Button 
+              onClick={() => setShowSubmitModal(true)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
+              size="lg"
+            >
+              <PlusIcon className="h-5 w-5 mr-2" />
+              {contractStatus === 'pending_completion' ? 'Submit Final Deliverable' : 'Submit Deliverable'}
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Status Notice Section */}
+      {contractStatus === 'pending_delivery' && (
+        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/80 to-blue-50/40 shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <ClockIcon className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-lg font-serif font-semibold text-blue-900">
+                  {userRole === 'freelancer' ? 'Final Deliverables Required' : 'Awaiting Final Deliverables'}
+                </h4>
+                <p className="text-sm text-blue-700 leading-relaxed">
+                  {userRole === 'freelancer' 
+                    ? 'Please submit your final deliverables to complete the project. Mark deliverables as "final" to enable payment release.'
+                    : 'The freelancer is preparing final deliverables. Payment will be available for release once submitted.'
+                  }
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Deliverables List */}
+      {Object.keys(groupedDeliverables).length === 0 ? (
+        <Card className="border-2 border-dashed border-muted-foreground/20">
+          <CardContent className="text-center py-16">
+            <div className="mx-auto w-20 h-20 bg-muted/30 rounded-full flex items-center justify-center mb-6">
+              <PackageIcon className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h4 className="text-xl font-serif font-semibold mb-3 text-foreground">No Deliverables Yet</h4>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto leading-relaxed">
+              {userRole === 'freelancer' 
+                ? "Start by submitting your first deliverable to showcase your progress on this project." 
+                : "Deliverables will appear here once the freelancer begins submitting their work."
+              }
+            </p>
+            {userRole === 'freelancer' && ['active', 'pending_delivery', 'in_review', 'pending_completion'].includes(contractStatus) && (
+              <Button 
+                onClick={() => setShowSubmitModal(true)}
+                className="bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-200"
+                size="lg"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                {contractStatus === 'pending_completion' ? 'Submit Final Deliverable' : 'Submit First Deliverable'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-6">
           {/* Deliverables List */}
           {Object.entries(groupedDeliverables).map(([title, versions]) => {
             const latestVersion = versions[0];
             const FileIconComponent = getFileIcon(latestVersion.file_name);
             
             return (
-              <div key={title} className="border rounded-lg p-4 hover:bg-muted/30 transition-colors">
-                <div className="flex items-start gap-3">
-                  <FileIconComponent className="h-6 w-6 text-primary flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium text-sm truncate">{title}</h4>
-                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                        v{latestVersion.version}
-                      </Badge>
-                      {versions.length > 1 && (
-                        <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
-                          {versions.length} versions
-                        </Badge>
-                      )}
+              <Card key={title} className="group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary/20 hover:border-l-primary">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                      <FileIconComponent className="h-8 w-8 text-primary" />
                     </div>
-                    
-                    {latestVersion.description && (
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
-                        {latestVersion.description}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>
-                          {new Date(latestVersion.submitted_at).toLocaleDateString()}
-                        </span>
-                        {latestVersion.file_size && latestVersion.file_size > 0 && (
-                          <span>{formatFileSize(latestVersion.file_size)}</span>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0 space-y-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <h4 className="text-lg font-serif font-semibold text-foreground truncate">{title}</h4>
+                            <Badge variant="outline" className="text-xs px-2 py-1 bg-primary/5 border-primary/20">
+                              v{latestVersion.version}
+                            </Badge>
+                            {versions.length > 1 && (
+                              <Badge variant="secondary" className="text-xs px-2 py-1">
+                                {versions.length} versions
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          {latestVersion.description && (
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                              {latestVersion.description}
+                            </p>
+                          )}
+                        </div>
+                        
                         <Badge 
                           variant="outline" 
-                          className={cn(STATUS_COLORS[latestVersion.status], "text-xs px-1.5 py-0.5")}
+                          className={cn(STATUS_COLORS[latestVersion.status], "text-sm px-3 py-1 font-medium")}
                         >
                           {formatStatusText(latestVersion.status)}
                         </Badge>
-                        
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setSelectedDeliverable(latestVersion)}
-                          >
-                            <EyeIcon className="h-3 w-3" />
-                          </Button>
-                          
-                          {userRole === 'client' && latestVersion.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0"
-                              onClick={() => {
-                                setFeedbackDeliverable(latestVersion);
-                                setShowFeedbackModal(true);
-                              }}
-                            >
-                              <MessageSquareIcon className="h-3 w-3" />
-                            </Button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <ClockIcon className="h-4 w-4" />
+                            {new Date(latestVersion.submitted_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                          {latestVersion.file_size && latestVersion.file_size > 0 && (
+                            <span className="flex items-center gap-1">
+                              <FileTextIcon className="h-4 w-4" />
+                              {formatFileSize(latestVersion.file_size)}
+                            </span>
                           )}
+                        </div>
+                        
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedDeliverable(latestVersion)}
+                              className="h-9 px-3 bg-white hover:bg-gray-50 shadow-sm border-gray-200"
+                            >
+                              <EyeIcon className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                            
+                            {userRole === 'client' && latestVersion.status === 'pending' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setFeedbackDeliverable(latestVersion);
+                                  setShowFeedbackModal(true);
+                                }}
+                                className="h-9 px-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                              >
+                                <MessageSquareIcon className="h-4 w-4 mr-1" />
+                                Review
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
@@ -608,7 +679,11 @@ export default function ContractDeliverables({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Submitted on:</span>
-                  <span>{new Date(selectedDeliverable.submitted_at).toLocaleDateString()}</span>
+                  <span>{new Date(selectedDeliverable.submitted_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}</span>
                 </div>
               </div>
             </div>
@@ -680,7 +755,11 @@ export default function ContractDeliverables({
                 <p className="text-sm">{selectedDeliverable.client_feedback}</p>
                 {selectedDeliverable.feedback_at && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(selectedDeliverable.feedback_at).toLocaleDateString()}
+                    {new Date(selectedDeliverable.feedback_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
                   </p>
                 )}
               </div>
@@ -719,7 +798,11 @@ export default function ContractDeliverables({
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-sm">{comment.commenter_email}</span>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(comment.created_at).toLocaleDateString()}
+                            {new Date(comment.created_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
                           </span>
                         </div>
                         <p className="text-sm">{comment.comment}</p>
@@ -889,6 +972,40 @@ export default function ContractDeliverables({
             )}
           </div>
 
+          {/* Final deliverable checkbox - only show for pending_delivery status */}
+          {contractStatus === 'pending_delivery' && userRole === 'freelancer' && (
+            <Card className="border-l-4 border-l-green-500 bg-gradient-to-r from-green-50/80 to-green-50/40 mt-6">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-2 bg-green-100 rounded-lg mt-1">
+                    <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Checkbox 
+                        id="final-deliverable"
+                        checked={newDeliverable.isFinal}
+                        onCheckedChange={(checked) => 
+                          setNewDeliverable(prev => ({ ...prev, isFinal: !!checked }))
+                        }
+                        className="mt-1 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <Label htmlFor="final-deliverable" className="cursor-pointer">
+                        <span className="text-base font-serif font-semibold text-green-900 block">
+                          Mark as final deliverable
+                        </span>
+                        <span className="text-sm text-green-700 leading-relaxed mt-1 block">
+                          Check this box if this is the final deliverable for project completion. 
+                          This will automatically enable the client to release payment.
+                        </span>
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setShowSubmitModal(false);
@@ -897,7 +1014,8 @@ export default function ContractDeliverables({
                 description: '',
                 type: 'file',
                 linkUrl: '',
-                textContent: ''
+                textContent: '',
+                isFinal: false
               });
               setUploadedFile(null);
             }}>

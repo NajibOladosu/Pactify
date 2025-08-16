@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   PrinterIcon, 
   DownloadIcon, 
@@ -25,12 +26,13 @@ interface ContractDetailClientActionsProps {
   contract: ContractDetail;
   userRole: 'client' | 'freelancer' | 'creator';
   hasApprovedDeliverables?: boolean;
+  hasAnyDeliverables?: boolean;
 }
 
 // Updated status type based on new workflow
 type ContractStatus = 'draft' | 'pending_signatures' | 'pending_funding' | 'active' | 'pending_delivery' | 'in_review' | 'revision_requested' | 'pending_completion' | 'completed' | 'cancelled' | 'disputed';
 
-export function ContractDetailClientActions({ contract: initialContract, userRole, hasApprovedDeliverables = false }: ContractDetailClientActionsProps) {
+export function ContractDetailClientActions({ contract: initialContract, userRole, hasApprovedDeliverables = false, hasAnyDeliverables = false }: ContractDetailClientActionsProps) {
   const [contract, setContract] = useState<ContractDetail>(initialContract); // Local state if status changes locally
   const [isPending, startTransition] = useTransition(); // Add transition state
   const { toast } = useToast();
@@ -181,12 +183,11 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
     }
   };
 
+
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+
   // Complete contract
   const handleCompleteContract = async () => {
-    if (!confirm("Are you sure you want to mark this contract as completed? This action will finalize the contract and trigger payment release.")) {
-      return;
-    }
-    
     try {
       const response = await fetch(`/api/contracts/${contract.id}/complete`, {
         method: 'POST',
@@ -197,13 +198,13 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
       
       if (result.success) {
         toast({
-          title: "Contract completed successfully",
-          description: "The contract has been marked as completed and payment is being processed.",
+          title: "Success",
+          description: result.message,
         });
         window.location.reload();
       } else {
         toast({
-          title: "Failed to complete contract",
+          title: "Failed to complete project",
           description: result.error || "Please try again.",
           variant: "destructive"
         });
@@ -255,6 +256,7 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
 
 
   return (
+    <>
     <div className="flex flex-wrap items-center gap-2">
         {/* Primary Actions - Left Side */}
         <div className="flex flex-wrap items-center gap-2">
@@ -303,31 +305,42 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
             </Button>
           )}
 
-          {(contract.status === "active" || contract.status === "pending_completion") && userRole === "client" && (
-            <Button
-              size="sm"
-              onClick={handleReleasePayment}
-              disabled={isPending}
-            >
-              <DollarSignIcon className="h-4 w-4 mr-2" />
-              Release Payment
-            </Button>
-          )}
-
-          {/* Complete Contract Button - Show for clients when deliverables are approved */}
-          {(contract.status === "active" || contract.status === "in_review" || contract.status === "pending_delivery") && 
+          {/* Complete Project Button - Show only when active and has deliverables */}
+          {contract.status === "active" && 
            userRole === "client" && 
-           hasApprovedDeliverables && (
+           hasAnyDeliverables && (
             <Button
               size="sm"
-              onClick={handleCompleteContract}
+              onClick={() => setShowCompleteDialog(true)}
               disabled={isPending}
               className="bg-green-600 hover:bg-green-700 text-white border-green-600 shadow-md hover:shadow-lg transition-all duration-200"
             >
               <CheckCircleIcon className="h-4 w-4 mr-2" />
-              Complete Contract
+              Complete Project
             </Button>
           )}
+
+          {/* Release Payment Button - Show from pending_delivery onwards */}
+          {(contract.status === "pending_delivery" || contract.status === "in_review" || contract.status === "pending_completion") && 
+           userRole === "client" && (
+            <Button
+              size="sm"
+              onClick={handleReleasePayment}
+              disabled={isPending || contract.status !== "pending_completion"}
+              className={`shadow-md hover:shadow-lg transition-all duration-200 ${
+                contract.status === "pending_completion" 
+                  ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                  : "bg-gray-400 text-gray-600 border-gray-400 cursor-not-allowed"
+              }`}
+            >
+              <DollarSignIcon className="h-4 w-4 mr-2" />
+              Release Payment
+              {contract.status !== "pending_completion" && (
+                <span className="ml-2 text-xs">(Pending final deliverables)</span>
+              )}
+            </Button>
+          )}
+
 
           {contract.status === "completed" && (
             <Button variant="outline" size="sm" disabled>
@@ -336,13 +349,6 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
             </Button>
           )}
 
-          {/* Edit Button (locked for non-draft) */}
-          {contract.status !== 'draft' && (
-            <Button variant="outline" size="sm" disabled>
-              <PenIcon className="h-4 w-4 mr-2" />
-              Edit (Locked)
-            </Button>
-          )}
         </div>
 
         {/* Separator */}
@@ -407,5 +413,33 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
           )}
         </div>
       </div>
+
+      {/* Complete Project Confirmation Dialog */}
+      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to mark this project as completed? This will move the project towards completion and prepare it for payment release.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowCompleteDialog(false);
+                handleCompleteContract();
+              }}
+              disabled={isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isPending ? "Processing..." : "Complete Project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

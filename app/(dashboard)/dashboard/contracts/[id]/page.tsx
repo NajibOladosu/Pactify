@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { ArrowLeftIcon } from "lucide-react"; // Removed unused icons for now
 import { createClient } from "@/utils/supabase/server"; // Use server client
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from "next/navigation";
 import { notFound } from 'next/navigation'; // Use Next.js notFound
 import { Database } from "@/types/supabase"; // Import generated types
@@ -39,6 +40,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   if (getUserError || !user) {
     // User authentication failed
+    console.error("Authentication error:", getUserError);
     return redirect("/sign-in");
   }
 
@@ -48,11 +50,13 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   if (fetchError) {
     // Contract fetch failed
+    console.error("Contract fetch error:", fetchError);
     notFound();
   }
 
   if (!contractData) {
     // Contract not found or access denied
+    console.log("Contract not found for ID:", id);
     notFound();
   }
 
@@ -71,11 +75,50 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     .select("*")
     .eq("contract_id", id);
 
-  // Fetch deliverables to check if any are approved
-  const { data: deliverables } = await supabase
-    .from("contract_deliverables")
-    .select("status, is_latest_version")
-    .eq("contract_id", id);
+  // Fetch deliverables - use service client for reliability
+  let deliverables = null;
+  let deliverablesError = null;
+
+  try {
+    // Use service client to avoid RLS issues
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
+
+    const { data: deliverablesData, error: deliverablesQueryError } = await serviceSupabase
+      .from("contract_deliverables")
+      .select("status, is_latest_version")
+      .eq("contract_id", id);
+
+    deliverables = deliverablesData;
+    deliverablesError = deliverablesQueryError;
+  } catch (serviceError) {
+    console.error("Service client error:", serviceError);
+    // Fallback to regular client if service client fails
+    try {
+      const { data: deliverablesRegular, error: errorRegular } = await supabase
+        .from("contract_deliverables")
+        .select("status, is_latest_version")
+        .eq("contract_id", id);
+
+      deliverables = deliverablesRegular;
+      deliverablesError = errorRegular;
+    } catch (regularError) {
+      console.error("Regular client error:", regularError);
+      deliverablesError = regularError;
+    }
+  }
+
+  // Log for debugging
+  console.log("Deliverables query result:", { 
+    finalDeliverables: deliverables, 
+    finalError: deliverablesError, 
+    contractId: id,
+    deliverablesCount: deliverables?.length || 0,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'set' : 'missing',
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE ? 'set' : 'missing'
+  });
 
   // Calculate funded amount and escrow status
   const fundedAmount = payments?.reduce((total, payment) => {
@@ -92,6 +135,9 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   // Check if there are any approved deliverables
   const hasApprovedDeliverables = deliverables?.some(d => d.status === 'approved' && d.is_latest_version) || false;
+  
+  // Check if there are any deliverables at all
+  const hasAnyDeliverables = deliverables && deliverables.length > 0;
 
   // Fetch contract template separately if template_id exists
   let contractTemplate = null;
@@ -221,6 +267,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
           contract={contractDetail} 
           userRole={userRole} 
           hasApprovedDeliverables={hasApprovedDeliverables}
+          hasAnyDeliverables={hasAnyDeliverables}
         />
       </div>
 

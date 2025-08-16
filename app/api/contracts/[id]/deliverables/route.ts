@@ -95,7 +95,7 @@ export async function POST(
     // Verify user has access to this contract and is the freelancer
     const { data: contract } = await serviceSupabase
       .from("contracts")
-      .select("client_id, freelancer_id")
+      .select("client_id, freelancer_id, status")
       .eq("id", contractId)
       .single();
 
@@ -232,6 +232,31 @@ export async function POST(
       return NextResponse.json({ error: "Failed to create deliverable" }, { status: 500 });
     }
 
+    // Check if this is a final deliverable submission for a pending_delivery contract
+    if (contract.status === 'pending_delivery' && body.is_final === true) {
+      // Move contract to pending_completion to enable payment release
+      const { error: statusUpdateError } = await serviceSupabase
+        .from("contracts")
+        .update({ status: 'pending_completion' })
+        .eq("id", contractId);
+
+      if (statusUpdateError) {
+        console.error("Error updating contract status to pending_completion:", statusUpdateError);
+      } else {
+        // Log the status change
+        await auditLogger.logContractEvent(
+          'final_deliverable_submitted',
+          contractId,
+          user.id,
+          {
+            deliverable_id: newDeliverable.id,
+            title: body.title,
+            message: 'Final deliverable submitted - contract ready for payment release'
+          }
+        );
+      }
+    }
+
     // Log the activity
     await auditLogger.logContractEvent(
       'deliverable_submitted',
@@ -241,7 +266,8 @@ export async function POST(
         deliverable_id: newDeliverable.id,
         title: body.title,
         version: nextVersion,
-        type: body.deliverable_type
+        type: body.deliverable_type,
+        is_final: body.is_final || false
       }
     );
 
@@ -251,7 +277,9 @@ export async function POST(
     
     return NextResponse.json({ 
       deliverable: newDeliverable,
-      message: "Deliverable submitted successfully" 
+      message: body.is_final 
+        ? "Final deliverable submitted successfully. Contract is ready for payment release." 
+        : "Deliverable submitted successfully" 
     });
   } catch (error) {
     console.error("Deliverable creation error:", error);
