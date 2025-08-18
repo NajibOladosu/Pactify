@@ -6,35 +6,93 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCardIcon, ArrowUpRightIcon, ArrowDownLeftIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/utils/supabase/client";
 
 interface Payment {
   id: string;
   amount: number;
+  net_amount: number;
+  fee: number;
   currency: string;
-  date: string;
-  status: "paid" | "pending" | "failed";
-  type: "incoming" | "outgoing";
-  contractTitle: string;
-  clientName: string;
+  status: string;
+  payment_type: string;
+  completed_at: string;
+  created_at: string;
+  contract: {
+    title: string;
+  } | null;
+  payer: {
+    display_name: string;
+  } | null;
+  payee: {
+    display_name: string;
+  } | null;
+}
+
+interface PaymentStats {
+  totalIncoming: number;
+  totalOutgoing: number;
+  totalPending: number;
 }
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [stats, setStats] = useState<PaymentStats>({ totalIncoming: 0, totalOutgoing: 0, totalPending: 0 });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    // Simulate loading payments
-    const loadPayments = () => {
-      setTimeout(() => {
-        // In a real app, this would come from an API
-        setPayments([]);
-        setLoading(false);
-      }, 500);
-    };
-
     loadPayments();
   }, []);
+
+  const loadPayments = async () => {
+    try {
+      const supabase = createClient();
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch payments where user is either payer or payee
+      const { data: paymentsData, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          contract:contracts(title),
+          payer:profiles!payer_id(display_name),
+          payee:profiles!payee_id(display_name)
+        `)
+        .or(`payer_id.eq.${user.id},payee_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching payments:', error);
+        return;
+      }
+
+      setPayments(paymentsData || []);
+
+      // Calculate stats
+      const incoming = paymentsData
+        ?.filter(p => p.payee_id === user.id && p.status === 'released')
+        .reduce((sum, p) => sum + Number(p.net_amount || p.amount), 0) || 0;
+
+      const outgoing = paymentsData
+        ?.filter(p => p.payer_id === user.id && p.status === 'released')
+        .reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+      const pending = paymentsData
+        ?.filter(p => (p.payee_id === user.id || p.payer_id === user.id) && p.status === 'pending')
+        .reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+      setStats({ totalIncoming: incoming, totalOutgoing: outgoing, totalPending: pending });
+
+    } catch (error) {
+      console.error('Error loading payments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredPayments = payments.filter(payment => 
     payment.contractTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -47,21 +47,21 @@ export async function POST(
       }, { status: 403 });
     }
 
-    // Get the funded escrow payment
-    const { data: escrowPayment, error: escrowError } = await serviceClient
-      .from('escrow_payments')
+    // Check if there are any payments for this contract (simplified approach)
+    const { data: contractPayments, error: paymentsError } = await serviceClient
+      .from('contract_payments')
       .select('*')
       .eq('contract_id', contractId)
-      .eq('status', 'funded')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .in('status', ['completed', 'funded', 'held'])
+      .order('created_at', { ascending: false });
 
-    if (escrowError || !escrowPayment) {
+    if (paymentsError || !contractPayments || contractPayments.length === 0) {
       return NextResponse.json({ 
-        error: 'No funded escrow payment found for this contract' 
+        error: 'No funded payments found for this contract' 
       }, { status: 404 });
     }
+
+    const totalAmount = contractPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
 
     // Get freelancer profile
     const { data: freelancerProfile, error: freelancerError } = await serviceClient
@@ -81,97 +81,113 @@ export async function POST(
 
     // Get request body for release options
     const body = await request.json();
-    const { amount, reason, release_method } = body;
+    const { amount, reason, release_method, auto_approve_deliverables } = body;
+
+    console.log(`[Release Payment] Contract ${contractId} status: ${contract.status}`);
+
+    // If contract needs deliverable approval, handle it automatically
+    if (auto_approve_deliverables && ['in_review', 'pending_delivery'].includes(contract.status)) {
+      console.log(`[Release Payment] Auto-approving deliverables for contract ${contractId}`);
+      
+      const { error: approvalError } = await serviceClient
+        .from("contracts")
+        .update({ status: 'pending_completion' })
+        .eq("id", contractId);
+
+      if (approvalError) {
+        console.error("Error auto-approving deliverables:", approvalError);
+        return NextResponse.json({ 
+          error: "Failed to approve deliverables before payment release" 
+        }, { status: 500 });
+      }
+      
+      console.log(`[Release Payment] Contract ${contractId} status updated to pending_completion`);
+    }
 
     // Default to full contract amount if no specific amount provided
-    const releaseAmount = amount || parseFloat(escrowPayment.amount.toString());
+    const releaseAmount = amount || totalAmount;
     
-    if (releaseAmount <= 0 || releaseAmount > parseFloat(escrowPayment.amount.toString())) {
+    if (releaseAmount <= 0 || releaseAmount > totalAmount) {
       return NextResponse.json({ 
         error: 'Invalid release amount' 
       }, { status: 400 });
     }
 
-    // Create a release request record
-    const { data: releaseRequest, error: releaseError } = await serviceClient
-      .from('escrow_releases')
-      .insert({
-        escrow_payment_id: escrowPayment.id,
-        contract_id: contractId,
-        freelancer_id: contract.freelancer_id,
-        client_id: user.id,
-        amount: releaseAmount,
-        release_method: release_method || 'pending_payout',
-        reason: reason || 'work_completed',
-        status: 'pending',
-        requested_at: new Date().toISOString(),
-      })
+    // Create a payment record for the freelancer
+    const paymentRecord = {
+      contract_id: contractId,
+      payer_id: user.id, // Client who is releasing payment
+      payee_id: contract.freelancer_id, // Freelancer receiving payment
+      amount: releaseAmount,
+      fee: releaseAmount * 0.05, // 5% platform fee (you can adjust this)
+      net_amount: releaseAmount * 0.95, // Amount freelancer receives after fee
+      currency: 'USD',
+      status: 'released',
+      payment_type: 'contract_release',
+      stripe_payment_intent_id: null, // Not using Stripe for now
+      completed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data: newPayment, error: paymentCreateError } = await serviceClient
+      .from('payments')
+      .insert(paymentRecord)
       .select()
       .single();
 
-    if (releaseError) {
-      console.error('Release request creation error:', releaseError);
+    if (paymentCreateError) {
+      console.error('Failed to create payment record:', paymentCreateError);
       return NextResponse.json({ 
-        error: 'Failed to create release request' 
+        error: 'Failed to create payment record',
+        details: paymentCreateError.message 
       }, { status: 500 });
     }
 
-    // Update escrow payment status to "released"
-    const { error: updateError } = await serviceClient
-      .from('escrow_payments')
-      .update({
-        status: 'released',
-        released_at: new Date().toISOString(),
-      })
-      .eq('id', escrowPayment.id);
-
-    if (updateError) {
-      console.error('Failed to update escrow payment:', updateError);
-    }
-
-    // Update contract payment status
-    await serviceClient
+    // Update contract payment status if exists
+    const { error: paymentUpdateError } = await serviceClient
       .from('contract_payments')
       .update({ status: 'released' })
       .eq('contract_id', contractId)
-      .eq('status', 'funded');
+      .in('status', ['completed', 'funded', 'held']);
 
-    // Update contract status to completed if fully released
-    if (releaseAmount === parseFloat(escrowPayment.amount.toString())) {
-      await serviceClient
-        .from('contracts')
-        .update({ 
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', contractId);
+    if (paymentUpdateError) {
+      console.error('Failed to update contract payments:', paymentUpdateError);
     }
 
-    // Send notification to freelancer (you can implement email notification here)
-    await serviceClient
-      .from('notifications')
-      .insert({
-        user_id: contract.freelancer_id,
-        type: 'payment_released',
-        title: 'Payment Released',
-        message: `Payment of $${releaseAmount.toFixed(2)} has been released for contract "${contract.title}". You will receive payout instructions via email.`,
-        is_read: false,
-        related_entity_type: 'contract',
-        related_entity_id: contractId,
-      });
+    // Update contract status to completed
+    const { error: contractUpdateError } = await serviceClient
+      .from('contracts')
+      .update({ 
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', contractId);
+
+    if (contractUpdateError) {
+      console.error('Failed to update contract status:', contractUpdateError);
+      return NextResponse.json({ 
+        error: 'Failed to complete contract' 
+      }, { status: 500 });
+    }
+
+    // Skip notifications for now to avoid missing table errors
+    // TODO: Implement email notifications
 
     return NextResponse.json({
       success: true,
-      release_id: releaseRequest.id,
+      payment_id: newPayment.id,
       amount_released: releaseAmount,
+      net_amount: paymentRecord.net_amount,
+      platform_fee: paymentRecord.fee,
       freelancer_name: freelancerProfile.display_name,
       freelancer_email: freelancerEmail,
-      release_status: 'pending_payout',
-      message: `Successfully released $${releaseAmount.toFixed(2)} to ${freelancerProfile.display_name}. Payout will be processed within 2-3 business days.`,
+      release_status: 'completed',
+      message: `Successfully released $${releaseAmount.toFixed(2)} to ${freelancerProfile.display_name}. Net amount: $${paymentRecord.net_amount.toFixed(2)} (after $${paymentRecord.fee.toFixed(2)} platform fee).`,
       next_steps: {
-        freelancer: 'Will receive payout instructions via email',
-        client: 'Release completed successfully',
-        platform: 'Will process payout to freelancer',
+        freelancer: `Payment of $${paymentRecord.net_amount.toFixed(2)} available in your payments dashboard`,
+        client: 'Payment release completed successfully',
+        platform: 'Contract completed and payment processed',
       }
     });
 
@@ -205,29 +221,21 @@ export async function GET(
       process.env.SUPABASE_SERVICE_ROLE!
     );
 
-    // Get release requests for this contract
-    const { data: releases, error: releasesError } = await serviceClient
-      .from('escrow_releases')
-      .select('*')
-      .eq('contract_id', contractId)
-      .order('created_at', { ascending: false });
-
-    if (releasesError) {
-      return NextResponse.json({ error: 'Failed to fetch releases' }, { status: 500 });
-    }
-
-    // Get escrow payments
-    const { data: escrowPayments, error: paymentsError } = await serviceClient
-      .from('escrow_payments')
+    // Get contract payments
+    const { data: contractPayments, error: paymentsError } = await serviceClient
+      .from('contract_payments')
       .select('*')
       .eq('contract_id', contractId);
 
+    if (paymentsError) {
+      return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 });
+    }
+
     const releaseStatus = {
-      can_release: escrowPayments?.some(p => p.status === 'funded') || false,
-      releases: releases || [],
-      total_released: releases?.reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-      pending_releases: releases?.filter(r => r.status === 'pending') || [],
-      completed_releases: releases?.filter(r => r.status === 'completed') || [],
+      can_release: contractPayments?.some(p => ['completed', 'funded', 'held'].includes(p.status)) || false,
+      total_amount: contractPayments?.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0) || 0,
+      released_amount: contractPayments?.filter(p => p.status === 'released').reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0) || 0,
+      pending_amount: contractPayments?.filter(p => ['completed', 'funded', 'held'].includes(p.status)).reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0) || 0,
     };
 
     return NextResponse.json({

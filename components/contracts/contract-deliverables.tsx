@@ -305,6 +305,7 @@ export default function ContractDeliverables({
 
     try {
       setUploading(true);
+      
       const response = await fetch(`/api/contracts/${contractId}/deliverables`, {
         method: 'POST',
         headers: {
@@ -325,9 +326,10 @@ export default function ContractDeliverables({
       });
 
       if (response.ok) {
+        const result = await response.json();
         toast({
           title: "Success",
-          description: "Deliverable submitted successfully",
+          description: result.message || "Deliverable submitted successfully",
         });
         setShowSubmitModal(false);
         setNewDeliverable({
@@ -339,7 +341,13 @@ export default function ContractDeliverables({
           isFinal: false
         });
         setUploadedFile(null);
-        fetchDeliverables();
+        
+        // If this was a final deliverable, refresh the entire page to update contract status
+        if (newDeliverable.isFinal) {
+          window.location.reload();
+        } else {
+          fetchDeliverables();
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to submit deliverable');
@@ -776,12 +784,14 @@ export default function ContractDeliverables({
 
           <div className="space-y-6">
             <div>
-              <Label htmlFor="deliverable-title">Title</Label>
+              <Label htmlFor="deliverable-title">Title *</Label>
               <Input
                 id="deliverable-title"
                 placeholder="e.g., Website Design Mockups, Final Report, etc."
                 value={newDeliverable.title}
                 onChange={(e) => setNewDeliverable(prev => ({ ...prev, title: e.target.value }))}
+                autoComplete="off"
+                autoFocus
               />
             </div>
 
@@ -825,7 +835,7 @@ export default function ContractDeliverables({
 
             {newDeliverable.type === 'link' && (
               <div>
-                <Label htmlFor="deliverable-url">URL</Label>
+                <Label htmlFor="deliverable-url">URL *</Label>
                 <Input
                   id="deliverable-url"
                   type="url"
@@ -833,12 +843,15 @@ export default function ContractDeliverables({
                   value={newDeliverable.linkUrl}
                   onChange={(e) => setNewDeliverable(prev => ({ ...prev, linkUrl: e.target.value }))}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Provide a link to your deliverable (Google Drive, GitHub, etc.)
+                </p>
               </div>
             )}
 
             {newDeliverable.type === 'text' && (
               <div>
-                <Label htmlFor="deliverable-text">Content</Label>
+                <Label htmlFor="deliverable-text">Content *</Label>
                 <Textarea
                   id="deliverable-text"
                   placeholder="Paste your text content here..."
@@ -846,13 +859,17 @@ export default function ContractDeliverables({
                   onChange={(e) => setNewDeliverable(prev => ({ ...prev, textContent: e.target.value }))}
                   rows={6}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the text content of your deliverable
+                </p>
               </div>
             )}
 
             {newDeliverable.type === 'file' && (
               <div className="space-y-4">
+                <Label className="text-sm font-medium">File Upload *</Label>
                 {!uploadedFile ? (
-                  <div className="p-6 border-2 border-dashed rounded-lg text-center">
+                  <div className="p-6 border-2 border-dashed rounded-lg text-center hover:border-primary/50 transition-colors">
                     <UploadIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground mb-4">
                       Click to upload or drag and drop your file
@@ -945,7 +962,30 @@ export default function ContractDeliverables({
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2">
+            {/* Validation helper text */}
+            {!newDeliverable.title.trim() && (
+              <p className="text-xs text-muted-foreground text-center">
+                Please enter a title for your deliverable
+              </p>
+            )}
+            {newDeliverable.title.trim() && newDeliverable.type === 'file' && !uploadedFile && (
+              <p className="text-xs text-muted-foreground text-center">
+                Please upload a file
+              </p>
+            )}
+            {newDeliverable.title.trim() && newDeliverable.type === 'link' && !newDeliverable.linkUrl.trim() && (
+              <p className="text-xs text-muted-foreground text-center">
+                Please enter a valid URL
+              </p>
+            )}
+            {newDeliverable.title.trim() && newDeliverable.type === 'text' && !newDeliverable.textContent.trim() && (
+              <p className="text-xs text-muted-foreground text-center">
+                Please enter text content
+              </p>
+            )}
+            
+            <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => {
               setShowSubmitModal(false);
               setNewDeliverable({
@@ -962,7 +1002,13 @@ export default function ContractDeliverables({
             </Button>
             <Button 
               onClick={handleSubmitDeliverable}
-              disabled={uploading || !newDeliverable.title.trim()}
+              disabled={
+                uploading || 
+                !newDeliverable.title.trim() ||
+                (newDeliverable.type === 'file' && !uploadedFile) ||
+                (newDeliverable.type === 'link' && !newDeliverable.linkUrl.trim()) ||
+                (newDeliverable.type === 'text' && !newDeliverable.textContent.trim())
+              }
             >
               {uploading ? (
                 <>
@@ -976,6 +1022,7 @@ export default function ContractDeliverables({
                 </>
               )}
             </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

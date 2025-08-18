@@ -144,17 +144,14 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
 
   // Release payment using platform escrow system
   const handleReleasePayment = async () => {
-    if (!confirm("Are you sure you want to release the payment? This action cannot be undone. The freelancer will receive payout instructions via email.")) {
-      return;
-    }
-    
     try {
       const response = await fetch(`/api/contracts/${contract.id}/release-escrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reason: 'work_completed',
-          release_method: 'pending_payout'
+          release_method: 'pending_payout',
+          auto_approve_deliverables: true // Let the API handle approval automatically
         })
       });
       
@@ -185,6 +182,7 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
 
 
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showReleasePaymentDialog, setShowReleasePaymentDialog] = useState(false);
 
   // Complete contract
   const handleCompleteContract = async () => {
@@ -325,19 +323,16 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
            userRole === "client" && (
             <Button
               size="sm"
-              onClick={handleReleasePayment}
-              disabled={isPending || contract.status !== "pending_completion"}
+              onClick={() => setShowReleasePaymentDialog(true)}
+              disabled={isPending || !["in_review", "pending_completion"].includes(contract.status)}
               className={`shadow-md hover:shadow-lg transition-all duration-200 ${
-                contract.status === "pending_completion" 
+                ["in_review", "pending_completion"].includes(contract.status) 
                   ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
                   : "bg-gray-400 text-gray-600 border-gray-400 cursor-not-allowed"
               }`}
             >
               <DollarSignIcon className="h-4 w-4 mr-2" />
               Release Payment
-              {contract.status !== "pending_completion" && (
-                <span className="ml-2 text-xs">(Pending final deliverables)</span>
-              )}
             </Button>
           )}
 
@@ -436,6 +431,33 @@ export function ContractDetailClientActions({ contract: initialContract, userRol
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               {isPending ? "Processing..." : "Complete Project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Release Payment Confirmation Dialog */}
+      <Dialog open={showReleasePaymentDialog} onOpenChange={setShowReleasePaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Release Payment</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to release the payment? This action cannot be undone. The freelancer will receive payout instructions via email.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReleasePaymentDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowReleasePaymentDialog(false);
+                handleReleasePayment();
+              }}
+              disabled={isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {isPending ? "Processing..." : "Release Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>

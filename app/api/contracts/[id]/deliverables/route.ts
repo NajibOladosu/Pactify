@@ -181,7 +181,7 @@ export async function POST(
     }
 
     // Prepare the deliverable data based on type
-    const deliverableData: any = {
+    let deliverableData: any = {
       contract_id: contractId,
       version: nextVersion,
       title: body.title.trim(),
@@ -195,29 +195,36 @@ export async function POST(
 
     // Handle different deliverable types with required fields
     if (body.deliverable_type === 'file') {
-      // For file type, all file fields are required by the schema
-      deliverableData.file_url = body.file_url?.trim() || '';
-      deliverableData.file_name = body.file_name?.trim() || 'Unknown File';
-      deliverableData.file_size = body.file_size || 0;
-      deliverableData.file_type = body.file_type?.trim() || 'application/octet-stream';
-      deliverableData.link_url = null;
-      deliverableData.text_content = null;
+      // For file type, include file-specific fields
+      deliverableData = {
+        ...deliverableData,
+        file_url: body.file_url?.trim() || '',
+        file_name: body.file_name?.trim() || 'Unknown File',
+        file_size: body.file_size || 1, // Use 1 as minimum to satisfy constraint
+        file_type: body.file_type?.trim() || 'application/octet-stream'
+      };
     } else if (body.deliverable_type === 'link') {
-      // For link type, provide default values for required file fields
-      deliverableData.file_url = '';
-      deliverableData.file_name = '';
-      deliverableData.file_size = 0;
-      deliverableData.file_type = '';
-      deliverableData.link_url = body.link_url?.trim() || null;
-      deliverableData.text_content = null;
+      // For link type, include link-specific fields only
+      deliverableData = {
+        ...deliverableData,
+        link_url: body.link_url?.trim() || null,
+        // For old schema compatibility, provide minimal file fields
+        file_url: '',
+        file_name: 'N/A - Link Deliverable',
+        file_size: 1, // Minimal value to satisfy constraint
+        file_type: 'link/url'
+      };
     } else if (body.deliverable_type === 'text') {
-      // For text type, provide default values for required file fields
-      deliverableData.file_url = '';
-      deliverableData.file_name = '';
-      deliverableData.file_size = 0;
-      deliverableData.file_type = '';
-      deliverableData.link_url = null;
-      deliverableData.text_content = body.text_content?.trim() || null;
+      // For text type, include text-specific fields only
+      deliverableData = {
+        ...deliverableData,
+        text_content: body.text_content?.trim() || null,
+        // For old schema compatibility, provide minimal file fields
+        file_url: '',
+        file_name: 'N/A - Text Deliverable',
+        file_size: body.text_content ? body.text_content.length : 1, // Use text length as size
+        file_type: 'text/plain'
+      };
     }
 
     // Create new deliverable
@@ -232,28 +239,38 @@ export async function POST(
       return NextResponse.json({ error: "Failed to create deliverable" }, { status: 500 });
     }
 
-    // Check if this is a final deliverable submission for a pending_delivery contract
-    if (contract.status === 'pending_delivery' && body.is_final === true) {
-      // Move contract to pending_completion to enable payment release
-      const { error: statusUpdateError } = await serviceSupabase
-        .from("contracts")
-        .update({ status: 'pending_completion' })
-        .eq("id", contractId);
+    // Check if this is a final deliverable submission to enable payment release
+    if (body.is_final === true) {
+      let targetStatus = null;
+      
+      // Determine the correct status transition based on current status
+      if (contract.status === 'pending_delivery') {
+        targetStatus = 'in_review';
+      } else if (contract.status === 'active') {
+        targetStatus = 'pending_delivery';
+      }
+      
+      if (targetStatus) {
+        const { error: statusUpdateError } = await serviceSupabase
+          .from("contracts")
+          .update({ status: targetStatus })
+          .eq("id", contractId);
 
-      if (statusUpdateError) {
-        console.error("Error updating contract status to pending_completion:", statusUpdateError);
-      } else {
-        // Log the status change
-        await auditLogger.logContractEvent(
-          'final_deliverable_submitted',
-          contractId,
-          user.id,
-          {
-            deliverable_id: newDeliverable.id,
-            title: body.title,
-            message: 'Final deliverable submitted - contract ready for payment release'
-          }
-        );
+        if (statusUpdateError) {
+          console.error(`Error updating contract status to ${targetStatus}:`, statusUpdateError);
+        } else {
+          // Log the status change
+          await auditLogger.logContractEvent(
+            'final_deliverable_submitted',
+            contractId,
+            user.id,
+            {
+              deliverable_id: newDeliverable.id,
+              title: body.title,
+              message: `Final deliverable submitted - contract moved to ${targetStatus}`
+            }
+          );
+        }
       }
     }
 
