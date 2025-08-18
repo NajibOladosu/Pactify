@@ -18,6 +18,8 @@ interface Payment {
   payment_type: string;
   completed_at: string;
   created_at: string;
+  payer_id: string;
+  payee_id: string;
   contract: {
     title: string;
   } | null;
@@ -40,6 +42,7 @@ export default function PaymentsPage() {
   const [stats, setStats] = useState<PaymentStats>({ totalIncoming: 0, totalOutgoing: 0, totalPending: 0 });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadPayments();
@@ -47,43 +50,30 @@ export default function PaymentsPage() {
 
   const loadPayments = async () => {
     try {
-      const supabase = createClient();
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const response = await fetch('/api/payments');
+      const result = await response.json();
 
-      // Fetch payments where user is either payer or payee
-      const { data: paymentsData, error } = await supabase
-        .from('payments')
-        .select(`
-          *,
-          contract:contracts(title),
-          payer:profiles!payer_id(display_name),
-          payee:profiles!payee_id(display_name)
-        `)
-        .or(`payer_id.eq.${user.id},payee_id.eq.${user.id}`)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching payments:', error);
+      if (!response.ok) {
+        console.error('Error fetching payments:', result.error);
         return;
       }
 
-      setPayments(paymentsData || []);
+      const paymentsData = result.payments || [];
+      setCurrentUserId(result.user_id);
+      setPayments(paymentsData);
 
       // Calculate stats
       const incoming = paymentsData
-        ?.filter(p => p.payee_id === user.id && p.status === 'released')
-        .reduce((sum, p) => sum + Number(p.net_amount || p.amount), 0) || 0;
+        .filter(p => p.payee_id === result.user_id && p.status === 'released')
+        .reduce((sum, p) => sum + Number(p.net_amount || p.amount), 0);
 
       const outgoing = paymentsData
-        ?.filter(p => p.payer_id === user.id && p.status === 'released')
-        .reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+        .filter(p => p.payer_id === result.user_id && p.status === 'released')
+        .reduce((sum, p) => sum + Number(p.amount), 0);
 
       const pending = paymentsData
-        ?.filter(p => (p.payee_id === user.id || p.payer_id === user.id) && p.status === 'pending')
-        .reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+        .filter(p => (p.payee_id === result.user_id || p.payer_id === result.user_id) && p.status === 'pending')
+        .reduce((sum, p) => sum + Number(p.amount), 0);
 
       setStats({ totalIncoming: incoming, totalOutgoing: outgoing, totalPending: pending });
 
@@ -95,8 +85,9 @@ export default function PaymentsPage() {
   };
 
   const filteredPayments = payments.filter(payment => 
-    payment.contractTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.clientName.toLowerCase().includes(searchTerm.toLowerCase())
+    payment.contract?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.payer?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.payee?.display_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -119,7 +110,7 @@ export default function PaymentsPage() {
               <p className="text-sm font-medium text-muted-foreground">Incoming</p>
               <ArrowDownLeftIcon className="h-5 w-5 text-green-500" />
             </div>
-            <h3 className="text-2xl font-bold">$0.00</h3>
+            <h3 className="text-2xl font-bold">${stats.totalIncoming.toFixed(2)}</h3>
             <p className="text-xs text-muted-foreground mt-1">Available for withdrawal</p>
           </CardContent>
         </Card>
@@ -130,7 +121,7 @@ export default function PaymentsPage() {
               <p className="text-sm font-medium text-muted-foreground">Outgoing</p>
               <ArrowUpRightIcon className="h-5 w-5 text-red-500" />
             </div>
-            <h3 className="text-2xl font-bold">$0.00</h3>
+            <h3 className="text-2xl font-bold">${stats.totalOutgoing.toFixed(2)}</h3>
             <p className="text-xs text-muted-foreground mt-1">Sent to freelancers</p>
           </CardContent>
         </Card>
@@ -141,7 +132,7 @@ export default function PaymentsPage() {
               <p className="text-sm font-medium text-muted-foreground">Pending</p>
               <CreditCardIcon className="h-5 w-5 text-amber-500" />
             </div>
-            <h3 className="text-2xl font-bold">$0.00</h3>
+            <h3 className="text-2xl font-bold">${stats.totalPending.toFixed(2)}</h3>
             <p className="text-xs text-muted-foreground mt-1">Awaiting release or payment</p>
           </CardContent>
         </Card>
@@ -170,7 +161,52 @@ export default function PaymentsPage() {
             </div>
           ) : filteredPayments.length > 0 ? (
             <div className="space-y-4">
-              {/* Payments list would go here */}
+              {filteredPayments.map((payment) => {
+                const isIncoming = currentUserId && payment.payee_id === currentUserId;
+                const otherParty = isIncoming ? payment.payer : payment.payee;
+                
+                return (
+                  <div key={payment.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-2 rounded-full ${
+                        isIncoming ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {isIncoming ? (
+                          <ArrowDownLeftIcon className="h-4 w-4" />
+                        ) : (
+                          <ArrowUpRightIcon className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium">
+                          {payment.contract?.title || 'Contract Payment'}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {isIncoming ? 'From' : 'To'}: {otherParty?.display_name || 'Unknown User'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Type: {payment.payment_type === 'contract_release' ? 'Contract Payment' : payment.payment_type}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(payment.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`font-semibold ${
+                        isIncoming ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {isIncoming ? '+' : '-'}${(
+                          isIncoming ? payment.net_amount || payment.amount : payment.amount
+                        ).toFixed(2)}
+                      </div>
+                      <Badge variant={payment.status === 'released' ? 'default' : 'secondary'}>
+                        {payment.status}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
