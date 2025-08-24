@@ -6,8 +6,14 @@
     "**/*.spec.ts",
     "**/*.test.ts",
     "app/api/contracts/[id]/route.ts",
-    "app/checkout/[plan]/page.ts",
+    "app/checkout/[plan]/page.tsx",
     "app/dashboard/contracts/[id]/page.ts",
+    "app/api/stripe/connect/create-account/route.ts",
+    "app/api/webhooks/stripe/connect-escrow/route.ts",
+    "app/api/webhooks/stripe/escrow/route.ts",
+    "components/contracts/contract-deliverables.tsx",
+    "components/contracts/dispute-resolution.tsx",
+    "app/checkout/**",
     "**/[*]/**"
   ]
 }

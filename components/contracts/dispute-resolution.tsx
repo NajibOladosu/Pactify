@@ -683,7 +683,7 @@ export default function DisputeResolution({
               <CardHeader>
                 <CardTitle>Dispute Discussion</CardTitle>
                 <CardDescription>
-                  Communicate with the other party to resolve: {selectedDispute.title}
+                  Communicate with the other party to resolve: {(selectedDispute as any).title || 'this dispute'}
                 </CardDescription>
               </CardHeader>
               <CardContent>

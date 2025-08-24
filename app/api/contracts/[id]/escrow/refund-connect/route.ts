@@ -138,7 +138,6 @@ export async function POST(
         .eq('contract_id', resolvedParams.id)
         .eq('status', 'released');
 
-      let refund;
       let transferReversal = null;
 
       if (releasedPayments && releasedPayments.length > 0) {
@@ -170,7 +169,7 @@ export async function POST(
       }
 
       // Create refund - only refund the contract amount, platform keeps fees
-      refund = await stripe.refunds.create({
+      const refund = await stripe.refunds.create({
         payment_intent: targetPayment.stripe_payment_intent_id,
         amount: Math.round(refundAmount * 100), // Convert to cents
         reason: 'requested_by_customer',

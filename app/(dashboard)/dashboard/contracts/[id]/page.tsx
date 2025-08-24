@@ -137,7 +137,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
   const hasApprovedDeliverables = deliverables?.some(d => d.status === 'approved' && d.is_latest_version) || false;
   
   // Check if there are any deliverables at all
-  const hasAnyDeliverables = deliverables && deliverables.length > 0;
+  const hasAnyDeliverables = Boolean(deliverables && deliverables.length > 0);
 
   // Fetch contract template separately if template_id exists
   let contractTemplate = null;
@@ -590,7 +590,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                     <ContractDeliverables
                       contractId={id}
                       userId={user.id}
-                      userRole={userRole}
+                      userRole={userRole === 'creator' ? 'freelancer' : userRole}
                       contractStatus={contract.status || 'draft'}
                     />
                   );

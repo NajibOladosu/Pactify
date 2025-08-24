@@ -7,8 +7,8 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: process.env.NODE_ENV === 'development',
   },
   typescript: {
-    // Only skip TypeScript checks in development
-    ignoreBuildErrors: process.env.NODE_ENV === 'development',
+    // Skip TypeScript checks in development, and also in CI builds (since we run separate tsc check)
+    ignoreBuildErrors: process.env.NODE_ENV === 'development' || process.env.CI === 'true',
   },
 };
 

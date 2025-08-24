@@ -820,7 +820,7 @@ export default function ContractDeliverables({
                           ? "border-primary bg-primary/5 shadow-sm"
                           : "border-border hover:border-primary/50 hover:shadow-sm"
                       )}
-                      onClick={() => setNewDeliverable(prev => ({ ...prev, type: type.value }))}
+                      onClick={() => setNewDeliverable(prev => ({ ...prev, type: type.value as "file" | "link" | "text" }))}
                     >
                       <div className="flex flex-col items-center text-center">
                         <IconComponent className="h-8 w-8 mb-2" />

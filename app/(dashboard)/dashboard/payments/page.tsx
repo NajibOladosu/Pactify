@@ -64,16 +64,16 @@ export default function PaymentsPage() {
 
       // Calculate stats
       const incoming = paymentsData
-        .filter(p => p.payee_id === result.user_id && p.status === 'released')
-        .reduce((sum, p) => sum + Number(p.net_amount || p.amount), 0);
+        .filter((p: any) => p.payee_id === result.user_id && p.status === 'released')
+        .reduce((sum: number, p: any) => sum + Number(p.net_amount || p.amount), 0);
 
       const outgoing = paymentsData
-        .filter(p => p.payer_id === result.user_id && p.status === 'released')
-        .reduce((sum, p) => sum + Number(p.amount), 0);
+        .filter((p: any) => p.payer_id === result.user_id && p.status === 'released')
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
 
       const pending = paymentsData
-        .filter(p => (p.payee_id === result.user_id || p.payer_id === result.user_id) && p.status === 'pending')
-        .reduce((sum, p) => sum + Number(p.amount), 0);
+        .filter((p: any) => (p.payee_id === result.user_id || p.payer_id === result.user_id) && p.status === 'pending')
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
 
       setStats({ totalIncoming: incoming, totalOutgoing: outgoing, totalPending: pending });
 
