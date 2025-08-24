@@ -43,11 +43,20 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/',
 }))
 
-// Mock environment variables
-process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
-process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_123'
-process.env.STRIPE_SECRET_KEY = 'sk_test_123'
+// Don't override environment variables if they're already set (for real data testing)
+// Only set mock values if real credentials aren't available
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('test.supabase.co')) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === 'test-anon-key') {
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+}
+if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === 'pk_test_123') {
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_123'
+}
+if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_123') {
+  process.env.STRIPE_SECRET_KEY = 'sk_test_123'
+}
 
 // Mock fetch
 global.fetch = jest.fn()

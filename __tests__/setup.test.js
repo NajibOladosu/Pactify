@@ -18,9 +18,16 @@ describe('Jest Setup Test', () => {
     expect(typeof router.push).toBe('function')
   })
 
-  it('should have mocked environment variables', () => {
-    expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe('https://test.supabase.co')
-    expect(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe('test-anon-key')
+  it('should have environment variables configured', () => {
+    // In real data testing mode, we expect real URLs
+    if (process.env.ENABLE_REAL_DATA_TESTING === 'true') {
+      expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toContain('supabase.co')
+      expect(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBeDefined()
+      expect(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length).toBeGreaterThan(20)
+    } else {
+      expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe('https://test.supabase.co')
+      expect(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe('test-anon-key')
+    }
   })
 
   it('should have mocked fetch', () => {

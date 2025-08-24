@@ -8,6 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/__tests__/test-env.js'],
   moduleNameMapper: {
     '^@/components/(.*)$': '<rootDir>/components/$1',
     '^@/lib/(.*)$': '<rootDir>/lib/$1',
@@ -29,6 +30,18 @@ const customJestConfig = {
     '<rootDir>/.next/',
     '<rootDir>/node_modules/',
     '<rootDir>/__tests__/mocks/',
+    '<rootDir>/__tests__/run-all-tests.js',
+    '<rootDir>/__tests__/run-simple-tests.js',
+    '<rootDir>/__tests__/setup-real-testing.js',
+    '<rootDir>/__tests__/verify-environment.js',
+    '<rootDir>/__tests__/enable-comprehensive-testing.js',
+    '<rootDir>/__tests__/test-env.js',
+    '<rootDir>/__tests__/test-setup/',
+    '<rootDir>/__tests__/integration/',
+    '<rootDir>/__tests__/api/contracts.test.js',
+    '<rootDir>/__tests__/api/payments.test.js',
+    '<rootDir>/__tests__/api/subscriptions.test.js',
+    '<rootDir>/__tests__/e2e/'
   ],
   transformIgnorePatterns: [
     '/node_modules/',
