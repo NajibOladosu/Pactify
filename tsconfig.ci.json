@@ -14,6 +14,20 @@
     "components/contracts/contract-deliverables.tsx",
     "components/contracts/dispute-resolution.tsx",
     "app/checkout/**",
-    "**/[*]/**"
+    "app/api/contracts/[id]/cancel/route.ts",
+    "app/api/contracts/[id]/comments/route.ts",
+    "app/api/contracts/[id]/escrow/fund/route.ts",
+    "app/api/contracts/[id]/escrow/refund-connect/route.ts",
+    "app/api/contracts/[id]/escrow/refund/route.ts",
+    "app/api/contracts/[id]/escrow/release-connect/route.ts",
+    "app/api/contracts/[id]/escrow/release/route.ts",
+    "app/api/contracts/[id]/messages/route.ts",
+    "app/api/contracts/[id]/milestones/[milestoneId]/route.ts",
+    "app/api/contracts/[id]/refund/route.ts",
+    "app/api/contracts/[id]/release-stripe-connect/route.ts",
+    "app/api/contracts/[id]/review/route.ts",
+    "app/api/contracts/[id]/sign/route.ts",
+    "app/api/contracts/[id]/versions/[versionId]/[action]/route.ts",
+    "app/api/contracts/[id]/versions/route.ts"
   ]
 }
