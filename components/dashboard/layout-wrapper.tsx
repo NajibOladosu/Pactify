@@ -29,23 +29,33 @@ export function DashboardLayoutWrapper({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar - Desktop */}
-      <DashboardNav
-        userType={userType}
-        displayName={displayName}
-        userInitial={userInitial}
-        currentPlan={currentPlan} // Pass the prop down
-      />
+      <div className="hidden lg:block">
+        <DashboardNav
+          userType={userType}
+          displayName={displayName}
+          userInitial={userInitial}
+          currentPlan={currentPlan} // Pass the prop down
+        />
+      </div>
 
-      {/* Mobile Navigation */}
-      <MobileNav
-        open={mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-        userType={userType}
-        currentPlan={currentPlan} // Pass the prop down
-      />
+      {/* Mobile Navigation Overlay */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div 
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <MobileNav
+            open={mobileNavOpen}
+            onClose={() => setMobileNavOpen(false)}
+            userType={userType}
+            currentPlan={currentPlan} // Pass the prop down
+          />
+        </div>
+      )}
       
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Header */}
         <DashboardHeader
           userType={userType}
@@ -56,8 +66,10 @@ export function DashboardLayoutWrapper({
         />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-background/95">
-          {children}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-background/95">
+          <div className="max-w-7xl mx-auto w-full">
+            {children}
+          </div>
         </main>
       </div>
     </div>

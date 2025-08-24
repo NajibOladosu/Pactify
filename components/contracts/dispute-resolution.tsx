@@ -458,22 +458,23 @@ export default function DisputeResolution({
         <TabsContent value="overview">
           {disputes.length === 0 ? (
             <Card>
-              <CardContent className="p-8">
+              <CardContent className="p-4 sm:p-8">
                 <div className="text-center">
-                  <ScaleIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">No Disputes</h3>
-                  <p className="text-muted-foreground mb-4">
+                  <ScaleIcon className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-base sm:text-lg font-medium mb-2">No Disputes</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4">
                     This contract has no disputes. If you encounter issues, you can raise a dispute.
                   </p>
-                  <Button onClick={() => setActiveTab('create')}>
+                  <Button onClick={() => setActiveTab('create')} size="sm" className="sm:size-default">
                     <AlertTriangleIcon className="h-4 w-4 mr-2" />
-                    Raise Dispute
+                    <span className="hidden sm:inline">Raise Dispute</span>
+                    <span className="sm:hidden">Raise</span>
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Dispute List */}
               <Card>
                 <CardHeader>
