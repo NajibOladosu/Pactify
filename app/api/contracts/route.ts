@@ -11,46 +11,37 @@ import {
   ErrorHandler
 } from '@/utils/security';
 import type { ContractCreate } from '@/utils/security';
+import { withAuth } from '@/utils/api/with-auth';
 
 type ContractInsert = Database["public"]["Tables"]["contracts"]["Insert"];
 
-// Apply security middleware and validation
-const secureHandler = SecurityMiddleware.withSecurity(
-  async (request: NextRequest) => {
-    try {
-      const supabase = await createClient();
-      
-      // Get authenticated user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Authentication required" },
-          { status: 401 }
-        );
-      }
+// Optimized handler using auth middleware
+const handleContractCreation = async (request: NextRequest, user: any) => {
+  try {
 
-      const body = await request.json();
-      
-      // Validate and sanitize input using schema
-      // Set defaults for empty fields
-      const processedBody = {
-        ...body,
-        description: body.description || "Contract description to be added.",
-        type: body.type || "fixed",
-        total_amount: body.total_amount || 0,
-        start_date: body.start_date || null,
-        end_date: body.end_date || null,
-        milestones: body.milestones || [],
-      };
-      
-      const validatedData = validateAndSanitize(ContractCreateSchema, processedBody);
+    const supabase = await createClient();
+    const body = await request.json();
+    
+    // Validate and sanitize input using schema
+    // Set defaults for empty fields
+    const processedBody = {
+      ...body,
+      description: body.description || "Contract description to be added.",
+      type: body.type || "fixed",
+      total_amount: body.total_amount || 0,
+      start_date: body.start_date || null,
+      end_date: body.end_date || null,
+      milestones: body.milestones || [],
+    };
+    
+    const validatedData = validateAndSanitize(ContractCreateSchema, processedBody);
 
-      // Check user's contract limits based on subscription
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("subscription_tier, available_contracts")
-        .eq("id", user.id)
-        .single();
+    // Check user's contract limits based on subscription
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("subscription_tier, available_contracts")
+      .eq("id", user.id)
+      .single();
 
       if (profile?.subscription_tier === "free" && profile?.available_contracts <= 0) {
         await auditLogger.logSecurityEvent({
@@ -203,46 +194,26 @@ const secureHandler = SecurityMiddleware.withSecurity(
         message: "Contract created successfully"
       });
 
-    } catch (error) {
-      return ErrorHandler.handleApiError(error, request);
-    }
-  },
-  {
-    rateLimit: { requests: 20, windowMs: 60 * 60 * 1000 }, // 20 contracts per hour
-    validateInput: true,
-    requireAuth: true,
-    maxBodySize: 5 * 1024 * 1024, // 5MB for contract content
-    allowedMethods: ['POST']
+  } catch (error) {
+    return ErrorHandler.handleApiError(error, request);
   }
-);
+};
 
-export async function POST(request: NextRequest) {
-  return secureHandler(request);
-}
+export const POST = withAuth(handleContractCreation);
 
-// Secure GET handler
-const secureGetHandler = SecurityMiddleware.withSecurity(
-  async (request: NextRequest) => {
-    try {
-      const supabase = await createClient();
-      
-      // Get authenticated user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Authentication required" },
-          { status: 401 }
-        );
-      }
+// Optimized GET handler using auth middleware
+const handleContractList = async (request: NextRequest, user: any) => {
+  try {
+    const supabase = await createClient();
 
-      const { searchParams } = new URL(request.url);
-      
-      // Parse and validate query parameters
-      const status = searchParams.get("status");
-      const type = searchParams.get("type");
-      const includeProgress = searchParams.get("include_progress") === "true";
-      const limit = parseInt(searchParams.get("limit") || (includeProgress ? "100" : "10"), 10);
-      const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const { searchParams } = new URL(request.url);
+    
+    // Parse and validate query parameters
+    const status = searchParams.get("status");
+    const type = searchParams.get("type");
+    const includeProgress = searchParams.get("include_progress") === "true";
+    const limit = parseInt(searchParams.get("limit") || (includeProgress ? "100" : "10"), 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
 
       // Validate parameters
       if (limit < 1 || limit > 100) {
@@ -351,18 +322,9 @@ const secureGetHandler = SecurityMiddleware.withSecurity(
         }
       });
 
-    } catch (error) {
-      return ErrorHandler.handleApiError(error, request);
-    }
-  },
-  {
-    rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 }, // 100 requests per 15 minutes
-    validateInput: false, // Only query params, no body
-    requireAuth: true,
-    allowedMethods: ['GET']
+  } catch (error) {
+    return ErrorHandler.handleApiError(error, request);
   }
-);
+};
 
-export async function GET(request: NextRequest) {
-  return secureGetHandler(request);
-}
+export const GET = withAuth(handleContractList);

@@ -1,39 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { withAuth } from "@/utils/api/with-auth";
+import type { User } from "@supabase/supabase-js";
 
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+async function handleProgressRequest(request: NextRequest, user: User) {
+  const supabase = await createClient();
 
-    // Get authenticated user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+  // Get user profile to determine role
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("user_type, display_name")
+    .eq("id", user.id)
+    .single();
 
-    console.log("DEBUG - Auth check:", { user: user?.id, authError });
+  if (profileError) {
+    console.error(`[PROGRESS API] Failed to fetch user profile:`, profileError);
+    return NextResponse.json({ 
+      success: false, 
+      error: "Failed to fetch user profile" 
+    }, { status: 500 });
+  }
 
-    if (authError || !user) {
-      console.log("DEBUG - Authentication failed:", authError);
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get user profile to determine role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("user_type, display_name")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      console.error(`[PROGRESS API] Failed to fetch user profile:`, profileError);
-      return NextResponse.json({ 
-        success: false, 
-        error: "Failed to fetch user profile" 
-      }, { status: 500 });
-    }
-
-    const userType = profile?.user_type || "both";
+  const userType = profile?.user_type || "both";
 
     // Use the same RPC function that the contracts page uses to ensure consistent data
     const { data: contractsFromRPC, error: contractsError } = await supabase
@@ -56,7 +44,7 @@ export async function GET(request: NextRequest) {
     let contracts = contractsFromRPC || [];
     
     // Add empty arrays for related data that the progress calculation expects
-    contracts = contracts.map(contract => ({
+    contracts = contracts.map((contract: any) => ({
       ...contract,
       milestones: [], // Will be populated separately if needed
       deliverables: [], // Will be populated separately if needed
@@ -64,15 +52,6 @@ export async function GET(request: NextRequest) {
     }));
 
     console.log(`[PROGRESS API] User ${user.id} (${userType}) found ${contracts?.length || 0} contracts`);
-    
-    if (contractsError) {
-      console.error(`[PROGRESS API] Database error:`, contractsError);
-      return NextResponse.json({ 
-        success: false, 
-        error: "Database query failed", 
-        details: contractsError.message 
-      }, { status: 500 });
-    }
 
     // Calculate comprehensive metrics
     const progressData = calculateProgressMetrics(contracts || [], userType, user.id);
@@ -112,11 +91,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-  } catch (error) {
-    console.error("Progress API error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
 }
+
+// Export the wrapped handler
+export const GET = withAuth(handleProgressRequest);
 
 function calculateProgressMetrics(contracts: any[], userType: string, userId: string) {
   // Basic counts

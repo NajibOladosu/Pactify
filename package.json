@@ -72,6 +72,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "debug": "^4.4.1",
     "framer-motion": "^12.6.3",
     "isomorphic-dompurify": "^2.25.0",
     "jest": "^30.0.4",

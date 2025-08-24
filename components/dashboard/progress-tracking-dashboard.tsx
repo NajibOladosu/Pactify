@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { RefreshCwIcon } from "lucide-react";
+import Link from "next/link";
 
 // Import our new components
 import { ProgressMetricsCards, DetailedMetricsCards } from "@/components/dashboard/progress/progress-metrics-cards";
@@ -59,7 +60,7 @@ interface ProgressTrackingDashboardProps {
 
 
 
-export default function ProgressTrackingDashboard({ userId, userType = "both" }: ProgressTrackingDashboardProps) {
+const ProgressTrackingDashboard = memo(function ProgressTrackingDashboard({ userId, userType = "both" }: ProgressTrackingDashboardProps) {
   const { toast } = useToast();
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,14 +69,7 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
 
   console.log("CLIENT - Component render with userId:", userId, "userType:", userType);
 
-  useEffect(() => {
-    console.log("CLIENT - useEffect triggered with userId:", userId);
-    // Always try to fetch data, even if userId is not passed from props
-    // The API will handle authentication
-    fetchProgressData();
-  }, []);
-
-  const fetchProgressData = async () => {
+  const fetchProgressData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -99,8 +93,22 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
+  useEffect(() => {
+    console.log("CLIENT - useEffect triggered with userId:", userId);
+    // Always try to fetch data, even if userId is not passed from props
+    // The API will handle authentication
+    fetchProgressData();
+  }, [fetchProgressData]);
+
+  // Memoize expensive calculations (moved before early returns to comply with React hooks rules)
+  const hasNoContracts = useMemo(() => 
+    progressData?.overview?.totalContracts === 0, 
+    [progressData?.overview?.totalContracts]
+  );
+
+  const memoizedProgressData = useMemo(() => progressData, [progressData]);
 
   if (loading) {
     return <ProgressMetricsCards metrics={{} as any} userType={userType} loading={true} />;
@@ -121,9 +129,6 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
       </Card>
     );
   }
-
-  // Check if user has no contracts at all
-  const hasNoContracts = progressData.overview.totalContracts === 0;
 
   if (hasNoContracts) {
     return (
@@ -158,10 +163,10 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
               </div>
               <div className="flex gap-2 justify-center pt-4">
                 <Button asChild>
-                  <a href="/dashboard/contracts/create">Create Your First Contract</a>
+                  <Link href="/dashboard/contracts/create">Create Your First Contract</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <a href="/dashboard/contracts">View All Contracts</a>
+                  <Link href="/dashboard/contracts">View All Contracts</Link>
                 </Button>
               </div>
             </div>
@@ -194,8 +199,8 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
 
       {/* Key Metrics Cards */}
       <ProgressMetricsCards 
-        metrics={progressData} 
-        userType={progressData.userType} 
+        metrics={memoizedProgressData || {} as any} 
+        userType={memoizedProgressData?.userType || 'both'} 
         loading={loading} 
       />
 
@@ -277,4 +282,6 @@ export default function ProgressTrackingDashboard({ userId, userType = "both" }:
       </Tabs>
     </div>
   );
-}
+});
+
+export default ProgressTrackingDashboard;
