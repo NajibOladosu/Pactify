@@ -1,143 +1,370 @@
 # Pactify
 
-Pactify is a modern platform for freelancers and clients to create legally binding contracts and manage secure escrow payments. The platform streamlines the contract creation process, provides electronic signatures, and ensures secure payment handling.
+Pactify is a comprehensive platform for freelancers and clients to create legally binding contracts, manage secure escrow payments, and streamline project workflows. The platform provides electronic signatures, milestone-based payments, dispute resolution, and complete project management tools.
 
-## Features
+## 🚀 Features
 
-### Contract Management
-- Create custom contracts or use pre-made templates
-- Electronic signatures with legal validity
-- Contract status tracking and management
-- Contract template library
+### 📄 Contract Management
+- **Smart Contract Creation**: AI-enhanced contract wizard with customizable templates
+- **Digital Signatures**: Legally binding electronic signatures with HTML5 canvas
+- **Contract Templates**: Pre-built templates for web development, design, consulting, and more
+- **Contract Analytics**: Comprehensive tracking and reporting
+- **Contract Revisions**: Version control and change tracking
 
-### Escrow Payments
-- Secure milestone-based payments
-- Payment release upon work completion
-- Transaction history and reporting
-- Multiple payment method support (planned)
+### 💰 Escrow & Payment System
+- **Secure Milestone Payments**: Stripe-powered escrow with automatic release
+- **Multi-Currency Support**: Global payment processing capabilities
+- **Fee Management**: Transparent fee calculation and processing
+- **Payment Analytics**: Detailed transaction history and reporting
+- **Refund & Dispute Handling**: Automated dispute resolution system
 
-### User Roles
-- Freelancer accounts
-- Client accounts
-- Dual role accounts (both freelancer and client)
+### 👥 User Management
+- **Multi-Role Support**: Freelancer, client, or dual-role accounts
+- **Profile Verification**: KYC verification with document upload
+- **Stripe Connect Integration**: Seamless payout management for freelancers
+- **User Analytics**: Activity tracking and performance metrics
 
-### Subscription Plans
-- Free tier with basic features
-- Professional tier with advanced features
-- Business tier with team collaboration and API access
+### 📊 Subscription System
+- **Free Tier**: Basic contract management (3 contracts/month)
+- **Professional Tier**: Advanced features and unlimited contracts
+- **Business Tier**: Team collaboration, API access, and priority support
+- **Flexible Billing**: Monthly or yearly subscription options
 
-## Technology Stack
+### 🔧 Advanced Features
+- **Deliverable Management**: File uploads, version tracking, and approval workflows
+- **Real-time Messaging**: Built-in communication system with notifications
+- **Dispute Resolution**: Comprehensive dispute handling with escalation
+- **Mobile Responsive**: Fully optimized for mobile devices
+- **API Access**: RESTful API for business tier users
 
-- **Frontend**: Next.js 14 with App Router, React, TypeScript
-- **Styling**: Tailwind CSS with shadcn/ui components
-- **Backend**: Supabase (PostgreSQL database, Auth, Storage)
-- **Authentication**: Email/Password, Google OAuth
-- **Payments**: Stripe integration (planned)
+## 🛠 Technology Stack
 
-## Project Structure
+- **Frontend**: Next.js 14 with App Router, React 19, TypeScript
+- **Styling**: Tailwind CSS with shadcn/ui component library
+- **Database**: Supabase (PostgreSQL with Row Level Security)
+- **Authentication**: Supabase Auth with Google OAuth integration
+- **Payments**: Stripe with Connect for escrow and payouts
+- **File Storage**: Supabase Storage for contracts and deliverables
+- **Email**: Nodemailer with SMTP integration
+- **Testing**: Jest with comprehensive test suite (200+ tests)
+
+## 📁 Project Structure
 
 ```
 pactify/
-├── app/                  # Next.js App Router
-│   ├── (auth-pages)/     # Authentication pages
-│   ├── dashboard/        # User dashboard
-│   ├── api/              # API routes
-│   └── ...               # Other app pages
-├── components/           # Reusable React components
-├── lib/                  # Utility functions
-├── public/               # Static assets
-├── database/             # Database schema and migrations
-├── scripts/              # Utility scripts for setup and maintenance
-├── supabase/             # Supabase migrations and configuration
-└── utils/                # Helper functions
-    └── supabase/         # Supabase client utilities
+├── app/                      # Next.js App Router
+│   ├── (auth-pages)/         # Authentication pages
+│   ├── (dashboard)/          # Protected dashboard routes
+│   │   └── dashboard/        # Main dashboard pages
+│   ├── api/                  # API routes
+│   │   ├── auth/             # Authentication endpoints
+│   │   ├── contracts/        # Contract management
+│   │   ├── payments/         # Payment processing
+│   │   ├── subscriptions/    # Subscription management
+│   │   └── webhooks/         # Stripe webhooks
+│   └── globals.css           # Global styles
+├── components/               # Reusable React components
+│   ├── ui/                   # shadcn/ui components
+│   ├── contract/             # Contract-specific components
+│   ├── payment/              # Payment-related components
+│   └── dashboard/            # Dashboard components
+├── lib/                      # Utility functions and configurations
+│   ├── validations/          # Zod validation schemas
+│   ├── utils/                # Helper functions
+│   └── constants/            # Application constants
+├── utils/                    # Core utilities
+│   ├── supabase/             # Supabase client configurations
+│   ├── profile-helpers.ts    # User profile management
+│   └── send-email.ts         # Email utilities
+├── __tests__/                # Comprehensive test suite
+│   ├── integration/          # Integration tests
+│   ├── api/                  # API endpoint tests
+│   ├── e2e/                  # End-to-end tests
+│   ├── utils/                # Utility function tests
+│   └── components/           # Component tests
+├── scripts/                  # Development and deployment scripts
+├── database/                 # Database schema and migrations
+├── docs/                     # Project documentation
+│   ├── Documentation.md      # Complete project documentation
+│   ├── IMPLEMENTATION_PROGRESS.md  # Development progress
+│   └── API.md               # API documentation
+└── public/                   # Static assets
 ```
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- Supabase account with project created
-- Google OAuth credentials (for Google sign-in)
-- Stripe account (for payment processing, optional for initial setup)
+- **Node.js 18+** and npm
+- **Supabase account** with project created
+- **Stripe account** with test mode enabled
+- **Email service** (Gmail, SendGrid, etc.) for notifications
 
 ### Environment Setup
 
-1. Copy the `.env.example` file to `.env.local`:
+1. **Clone the repository**:
    ```bash
-   cp .env.example .env.local
+   git clone <repository-url>
+   cd pactify
    ```
 
-2. Fill in the required environment variables:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-   ```
-
-3. For Google OAuth, add your Google credentials to the Supabase Auth settings.
-
-### Installation
-
-1. Install dependencies:
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-2. Run the development server:
+3. **Set up environment variables**:
+   ```bash
+   cp .env.test.template .env.local
+   ```
+
+4. **Configure your `.env.local` file**:
+   ```env
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   SUPABASE_SERVICE_ROLE=your_service_role_key
+
+   # Stripe Configuration (Test Mode)
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_key
+   STRIPE_SECRET_KEY=sk_test_your_key
+   STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+   # Email Configuration
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=your-email@gmail.com
+   SMTP_PASS=your-app-password
+
+   # Application URLs
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   NEXTAUTH_URL=http://localhost:3000
+   ```
+
+### Database Setup
+
+1. **Apply the database schema**:
+   ```bash
+   npm run db:schema
+   ```
+
+2. **Set up Row Level Security policies** in your Supabase dashboard
+
+### Development
+
+1. **Start the development server**:
    ```bash
    npm run dev
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. **Open your browser** to [http://localhost:3000](http://localhost:3000)
 
-### Database Setup
+## 🧪 Testing
 
-1. Run the schema setup script to create all necessary database tables:
+Pactify includes a comprehensive test suite with **200+ tests** covering all functionality.
+
+### Basic Testing
+```bash
+npm test                    # Run 57 basic tests (always works)
+npm run test:simple         # Enhanced test runner with better reporting
+npm run test:coverage       # Generate coverage reports
+```
+
+### Comprehensive Testing
+```bash
+npm run test:comprehensive  # Run all 200+ tests with real database
+npm run test:auth          # Authentication tests
+npm run test:contracts     # Contract workflow tests
+npm run test:payments      # Payment processing tests
+npm run test:subscriptions # Subscription management tests
+npm run test:e2e           # End-to-end workflow tests
+```
+
+### Test Environment Setup
+```bash
+npm run test:setup          # Interactive test environment setup
+node __tests__/verify-environment.js  # Verify test configuration
+```
+
+**Testing Features:**
+- ✅ **Real Database Testing**: Uses actual Supabase and Stripe (no mocks)
+- ✅ **Complete Coverage**: All features tested from authentication to payment
+- ✅ **Integration Testing**: Real API endpoints and external service integration
+- ✅ **End-to-End Testing**: Complete user workflows validated
+- ✅ **Security Testing**: Authentication, authorization, and data protection
+
+## 🔧 Development Commands
+
+### Build & Deployment
+```bash
+npm run build              # Production build
+npm run build:ci           # CI build with full checks
+npm run start              # Start production server
+npm run lint               # Run ESLint
+npm run type-check         # Run TypeScript compiler
+```
+
+### Database Management
+```bash
+npm run db:schema          # Apply database schema
+```
+
+### Testing Commands
+```bash
+npm test                   # Basic tests
+npm run test:watch         # Watch mode for development
+npm run test:coverage      # Generate coverage reports
+npm run test:comprehensive # Full test suite with real data
+```
+
+## 📖 Usage
+
+### For Freelancers
+
+1. **Create Your Profile**
+   - Sign up and complete profile setup
+   - Enable Stripe Connect for payments
+   - Complete KYC verification
+
+2. **Create Contracts**
+   - Use the contract wizard with AI enhancement
+   - Choose from professional templates
+   - Set up milestone-based payments
+
+3. **Manage Projects**
+   - Track contract status and payments
+   - Upload deliverables and get approvals
+   - Communicate with clients via built-in messaging
+
+### For Clients
+
+1. **Review and Sign Contracts**
+   - Receive contract invitations via email
+   - Review terms and digital signature
+   - Set up secure escrow payments
+
+2. **Project Management**
+   - Monitor project progress and milestones
+   - Review and approve deliverables
+   - Release payments upon completion
+
+3. **Payment Protection**
+   - Funds held securely in escrow
+   - Dispute resolution if issues arise
+   - Transparent fee structure
+
+### Admin Features
+
+1. **User Management**
+   - View all users and their activity
+   - Handle KYC verification requests
+   - Manage subscription tiers
+
+2. **System Monitoring**
+   - Track payments and transactions
+   - Monitor platform usage and performance
+   - Handle disputes and escalations
+
+## 🔐 Security Features
+
+- **Row Level Security (RLS)**: Database-level access control
+- **JWT Authentication**: Secure token-based authentication
+- **Data Encryption**: All sensitive data encrypted at rest
+- **Input Validation**: Comprehensive server-side validation
+- **CSRF Protection**: Built-in Next.js CSRF protection
+- **Secure Headers**: Security headers and content policies
+- **Audit Logging**: Complete activity tracking and logging
+
+## 🚀 Production Deployment
+
+### Vercel Deployment (Recommended)
+
+1. **Connect your repository** to Vercel
+2. **Set environment variables** in Vercel dashboard
+3. **Deploy automatically** on push to main branch
+
+### Manual Deployment
+
+1. **Build the application**:
    ```bash
-   node scripts/apply-schema.js
+   npm run build:ci
    ```
 
-## Usage
+2. **Set up production database** with proper RLS policies
 
-### Creating a Contract
+3. **Configure Stripe webhooks** for your production domain
 
-1. Sign in to your account
-2. Navigate to Dashboard > Contracts
-3. Click "Create Contract"
-4. Choose a template or start from scratch
-5. Fill in the contract details
-6. Send to your client for signing
+4. **Deploy to your hosting provider** of choice
 
-### Managing Templates
+## 📊 Project Status
 
-1. Go to Dashboard > Templates
-2. Create or browse existing templates
-3. Use templates to quickly generate contracts
+- **Development Progress**: 100% Complete
+- **Testing Coverage**: 200+ tests covering all functionality
+- **Database Schema**: Fully implemented with RLS
+- **Payment Integration**: Complete Stripe integration with escrow
+- **User Management**: Full authentication and profile system
+- **Contract System**: AI-enhanced contract creation and management
+- **Mobile Support**: Fully responsive design
 
-### Subscription Management
+## 🔄 Development Roadmap
 
-1. Go to Dashboard > Subscription
-2. View your current plan details
-3. Upgrade or manage your subscription
+### ✅ Completed Features
+- [x] **Complete Authentication System** with Google OAuth
+- [x] **Contract Creation & Management** with AI enhancement
+- [x] **Digital Signature System** with HTML5 canvas
+- [x] **Stripe Payment Integration** with escrow functionality
+- [x] **Subscription Management** with multiple tiers
+- [x] **User Profile & KYC System** with document verification
+- [x] **Deliverable Management** with file uploads
+- [x] **Real-time Messaging** with notifications
+- [x] **Dispute Resolution System** with escalation
+- [x] **Comprehensive Testing Suite** with 200+ tests
+- [x] **Admin Dashboard** with user management
+- [x] **Mobile Responsive Design** optimized for all devices
+- [x] **API Documentation** and testing endpoints
 
-## Development Roadmap
+### 🎯 Future Enhancements
+- [ ] **Mobile App** (React Native) with push notifications
+- [ ] **Advanced Analytics** with custom dashboards
+- [ ] **Team Collaboration** features for business accounts
+- [ ] **Multi-language Support** for global users
+- [ ] **Advanced AI Features** for contract analysis
+- [ ] **Integration Marketplace** with third-party tools
+- [ ] **Blockchain Integration** for contract verification
 
-- [x] Authentication system
-- [x] Contract creation interface
-- [x] Template management
-- [x] Subscription management UI
-- [ ] Complete Stripe integration
-- [ ] Full escrow payment system
-- [ ] Mobile responsive design optimization
-- [ ] Email notification system
-- [ ] API access for Business tier
-- [ ] Mobile app with push notifications
+## 🤝 Contributing
 
-## Contributing
+We welcome contributions to Pactify! Please follow these steps:
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and add tests
+4. **Run the test suite**: `npm run test:comprehensive`
+5. **Commit your changes**: `git commit -m 'Add amazing feature'`
+6. **Push to the branch**: `git push origin feature/amazing-feature`
+7. **Open a Pull Request**
 
-## License
+### Development Guidelines
+
+- **Follow TypeScript best practices**
+- **Add tests for new features**
+- **Update documentation as needed**
+- **Use conventional commit messages**
+- **Ensure all tests pass before submitting**
+
+## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Documentation**: Check the `docs/` folder for detailed guides
+- **Issues**: Report bugs via GitHub Issues
+- **Email**: Contact support for urgent matters
+- **Community**: Join our Discord for discussions
+
+---
+
+**Pactify** - Streamlining freelance contracts and payments with security, transparency, and ease of use.
+
+Built with ❤️ using Next.js, Supabase, and Stripe.
