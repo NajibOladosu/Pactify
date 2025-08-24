@@ -27,6 +27,7 @@ export default async function ProgressPage() {
 
   const userType = profile?.user_type || "both";
 
+
   return (
     <div className="space-y-8">
       <ProgressTrackingDashboard userId={user.id} userType={userType} />
