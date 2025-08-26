@@ -44,17 +44,26 @@ export function MobileNav({ open, onClose, userType, currentPlan = "free" }: Mob
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background md:hidden">
-      <div className="flex flex-col h-full overflow-y-auto">
+    <div className="fixed inset-0 z-50 md:hidden">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      
+      {/* Navigation Panel */}
+      <div className="relative z-50 flex flex-col h-full w-80 max-w-[80vw] bg-background border-r border-border overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2" onClick={onClose}>
             <span className="text-primary-500 font-bold text-2xl font-serif">Pactify</span>
           </Link>
           
           <button
             type="button"
-            className="text-muted-foreground p-2 rounded-md"
+            className="text-muted-foreground p-2 rounded-md hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
             onClick={onClose}
+            aria-label="Close navigation"
           >
             <XIcon className="h-6 w-6" />
           </button>
@@ -112,6 +121,20 @@ export function MobileNav({ open, onClose, userType, currentPlan = "free" }: Mob
               >
                 <UsersIcon className={`mr-3 h-5 w-5 ${isActiveLink('/dashboard/clients') ? 'text-primary-500' : 'text-muted-foreground'}`} />
                 {userType === 'client' ? 'Freelancers' : 'Clients'}
+              </Link>
+              
+              <Link 
+                href="/dashboard/progress" 
+                className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  isActiveLink('/dashboard/progress') 
+                    ? 'text-primary-500 bg-primary-500/10 hover:bg-primary-500/15' 
+                    : 'text-foreground hover:bg-accent/50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`mr-3 h-5 w-5 ${isActiveLink('/dashboard/progress') ? 'text-primary-500' : 'text-muted-foreground'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                Progress
               </Link>
             </div>
           </div>

@@ -85,14 +85,16 @@ const getStatusIcon = (status: string | null) => {
 export function RecentContracts({ contracts }: RecentContractsProps) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div>
           <CardTitle>Recent Contracts</CardTitle>
-          <CardDescription>Your 5 most recently created contracts.</CardDescription>
+          <CardDescription className="hidden sm:block">Your 5 most recently created contracts.</CardDescription>
         </div>
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="sm" className="sm:ml-4" asChild>
           <Link href="/dashboard/contracts">
-            View all<ArrowRightIcon className="ml-2 h-4 w-4" />
+            <span className="hidden sm:inline">View all</span>
+            <span className="sm:hidden">View all contracts</span>
+            <ArrowRightIcon className="ml-2 h-4 w-4" />
           </Link>
         </Button>
       </CardHeader>
@@ -100,22 +102,38 @@ export function RecentContracts({ contracts }: RecentContractsProps) {
         {contracts.length > 0 ? (
           <div className="space-y-4">
             {contracts.map((contract) => (
-              <div key={contract.id} className="flex items-start p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-                <div className="mr-4 mt-0.5">
-                  {getStatusIcon(contract.status)}
+              <div key={contract.id} className="flex flex-col space-y-2 p-3 rounded-lg border hover:bg-muted/20 transition-colors sm:flex-row sm:items-start sm:space-y-0">
+                <div className="flex items-start sm:mr-4">
+                  <div className="mr-3 mt-0.5 sm:mr-0 sm:mt-0.5">
+                    {getStatusIcon(contract.status)}
+                  </div>
+                  <div className="flex-1 min-w-0 sm:hidden">
+                    <Link href={`/dashboard/contracts/${contract.id}`} className="text-sm font-medium hover:underline block">
+                      {contract.title || "Untitled Contract"}
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 hidden sm:block">
                   <div className="flex items-center justify-between">
                     <Link href={`/dashboard/contracts/${contract.id}`} className="text-sm font-medium hover:underline truncate">
                       {contract.title || "Untitled Contract"}
                     </Link>
-                    <div className="ml-2 flex-shrink-0">
+                    <div className="ml-2 flex-shrink-0 hidden sm:block">
                       {getStatusBadge(contract.status)}
                     </div>
                   </div>
                   <div className="mt-1 flex items-center text-xs text-muted-foreground">
                     <ClockIcon className="mr-1 h-3 w-3" />
                     Created {contract.created_at ? new Date(contract.created_at).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between sm:hidden">
+                  <div className="flex items-center text-xs text-muted-foreground">
+                    <ClockIcon className="mr-1 h-3 w-3" />
+                    Created {contract.created_at ? new Date(contract.created_at).toLocaleDateString() : 'N/A'}
+                  </div>
+                  <div className="flex-shrink-0">
+                    {getStatusBadge(contract.status)}
                   </div>
                 </div>
               </div>

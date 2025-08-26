@@ -29,7 +29,7 @@ export function DashboardLayoutWrapper({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar - Desktop */}
-      <div className="hidden lg:block">
+      <div className="hidden md:block">
         <DashboardNav
           userType={userType}
           displayName={displayName}
@@ -39,20 +39,12 @@ export function DashboardLayoutWrapper({
       </div>
 
       {/* Mobile Navigation Overlay */}
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div 
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <MobileNav
-            open={mobileNavOpen}
-            onClose={() => setMobileNavOpen(false)}
-            userType={userType}
-            currentPlan={currentPlan} // Pass the prop down
-          />
-        </div>
-      )}
+      <MobileNav
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        userType={userType}
+        currentPlan={currentPlan} // Pass the prop down
+      />
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -66,7 +58,7 @@ export function DashboardLayoutWrapper({
         />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-background/95">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-background/95">
           <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>

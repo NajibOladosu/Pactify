@@ -43,8 +43,9 @@ export function DashboardHeader({
     <header className="flex items-center h-16 px-6 border-b border-border justify-between">
       {/* Mobile menu button */}
       <button 
-        className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground"
+        className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
         onClick={toggleMobileNav}
+        aria-label="Toggle mobile navigation"
       >
         <MenuIcon className="h-6 w-6" />
       </button>

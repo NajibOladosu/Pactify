@@ -68,6 +68,7 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
       
       allPayments = paymentsData;
       console.log(`[PAYMENTS API] Created ${paymentsData.length} payments based on contracts`);
+    console.log(`[PAYMENTS API] Sample payment data:`, JSON.stringify(paymentsData[0], null, 2));
     } else {
       console.log(`[PAYMENTS API] No contracts found, no payments to create`);
     }
