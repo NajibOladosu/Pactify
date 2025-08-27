@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
-  PlusIcon, 
   BellIcon, 
   ChevronDownIcon,
   MenuIcon,
@@ -42,35 +41,18 @@ export function DashboardHeader({
   };
 
   return (
-    <header className="flex items-center h-16 px-4 sm:px-6 border-b border-border justify-between">
+    <header className="flex items-center h-16 px-4 sm:px-6 border-b border-border">
       {/* Mobile menu button */}
       <button 
-        className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
+        className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500 mr-auto"
         onClick={toggleMobileNav}
         aria-label="Toggle mobile navigation"
       >
         <MenuIcon className="h-6 w-6" />
       </button>
       
-      {/* Mobile logo */}
-      <div className="md:hidden">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-primary-500 font-bold text-xl font-serif">Pactify</span>
-        </Link>
-      </div>
-      
-      {/* Quick actions */}
-      <div className="hidden md:flex items-center">
-        <Button variant="outline" size="sm" className="mr-4" asChild>
-          <Link href="/dashboard/contracts/new">
-            <PlusIcon className="mr-2 h-4 w-4" />
-            New Contract
-          </Link>
-        </Button>
-      </div>
-      
       {/* User menu & notification */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 ml-auto">
         <button className="p-1 rounded-full text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500">
           <BellIcon className="h-6 w-6" />
         </button>
