@@ -61,8 +61,75 @@ export default function DashboardWrapper({
   const [activeView, setActiveView] = useState<'overview' | 'analytics'>('overview');
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-start flex-col sm:flex-row gap-4">
+    <div className="space-y-6 sm:space-y-8">
+      {/* Mobile Header */}
+      <div className="flex flex-col gap-4 sm:hidden">
+        <div>
+          <h1 className="text-2xl font-serif font-bold">{greeting}, {displayName}!</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {activeView === 'overview' 
+              ? "Here's what's happening with your contracts today."
+              : "Detailed insights and analytics for your business."
+            }
+          </p>
+        </div>
+        
+        <div className="flex flex-col gap-3">
+          {/* View Toggle */}
+          <div className="flex border rounded-lg p-1">
+            <Button
+              variant={activeView === 'overview' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('overview')}
+              className="text-xs flex-1"
+            >
+              <LayoutDashboardIcon className="h-4 w-4 mr-1" />
+              Overview
+            </Button>
+            <Button
+              variant={activeView === 'analytics' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveView('analytics')}
+              className="text-xs flex-1"
+            >
+              <BarChart3Icon className="h-4 w-4 mr-1" />
+              Analytics
+            </Button>
+          </div>
+
+          {/* New Contract Button */}
+          <TooltipProvider>
+            <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <div className={isLimitReached ? 'cursor-not-allowed' : ''}>
+                  <Button size="sm" asChild={!isLimitReached} disabled={isLimitReached} className="w-full">
+                    {isLimitReached ? (
+                      <span className="inline-flex items-center justify-center px-3 py-1.5 w-full">
+                        <PlusIcon className="mr-2 h-4 w-4" />
+                        New Contract
+                      </span>
+                    ) : (
+                      <Link href="/dashboard/contracts/new" className="w-full inline-flex items-center justify-center">
+                        <PlusIcon className="mr-2 h-4 w-4" />
+                        New Contract
+                      </Link>
+                    )}
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              {isLimitReached && (
+                <TooltipContent>
+                  <p>Upgrade to create more contracts.</p>
+                  <p className="text-xs text-muted-foreground">Free plan limit ({maxContracts}) reached.</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden sm:flex justify-between items-start flex-col sm:flex-row gap-4">
         <div>
           <h1 className="text-3xl font-serif font-bold">{greeting}, {displayName}!</h1>
           <p className="text-muted-foreground mt-1">
@@ -147,34 +214,34 @@ export default function DashboardWrapper({
 
             {/* Get started cards */}
             <Card>
-              <CardHeader>
-                <CardTitle>Getting Started</CardTitle>
-                <CardDescription>Complete these steps to set up your account.</CardDescription>
+              <CardHeader className="pb-3 lg:pb-4">
+                <CardTitle className="text-base lg:text-lg">Getting Started</CardTitle>
+                <CardDescription className="text-sm">Complete these steps to set up your account.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="border rounded-lg p-4">
+              <CardContent className="space-y-3 lg:space-y-4">
+                <div className="border rounded-lg p-3 lg:p-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-success/20 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <div className="flex-shrink-0 h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-success/20 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 lg:h-4 lg:w-4 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium mb-1">Create your account</h4>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs lg:text-sm font-medium mb-1">Create your account</h4>
                       <p className="text-xs text-muted-foreground">You've successfully created your account.</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="border rounded-lg p-4">
+                <div className="border rounded-lg p-3 lg:p-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-background flex items-center justify-center border">
-                      <span className="text-sm font-medium">2</span>
+                    <div className="flex-shrink-0 h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-background flex items-center justify-center border">
+                      <span className="text-xs lg:text-sm font-medium">2</span>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium mb-1">Complete your profile</h4>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs lg:text-sm font-medium mb-1">Complete your profile</h4>
                       <p className="text-xs text-muted-foreground mb-2">Add your business details and contact information.</p>
-                      <Button size="sm" variant="outline" asChild>
+                      <Button size="sm" variant="outline" asChild className="text-xs">
                         <Link href="/dashboard/settings">
                           Complete profile
                         </Link>
@@ -183,15 +250,15 @@ export default function DashboardWrapper({
                   </div>
                 </div>
 
-                <div className="border rounded-lg p-4">
+                <div className="border rounded-lg p-3 lg:p-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-background flex items-center justify-center border">
-                      <span className="text-sm font-medium">3</span>
+                    <div className="flex-shrink-0 h-6 w-6 lg:h-8 lg:w-8 rounded-full bg-background flex items-center justify-center border">
+                      <span className="text-xs lg:text-sm font-medium">3</span>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium mb-1">Create your first contract</h4>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs lg:text-sm font-medium mb-1">Create your first contract</h4>
                       <p className="text-xs text-muted-foreground mb-2">Select a template or create a custom contract.</p>
-                      <Button size="sm" asChild>
+                      <Button size="sm" asChild className="text-xs">
                         <Link href="/dashboard/contracts/new">
                           Create contract
                         </Link>
@@ -224,24 +291,24 @@ export default function DashboardWrapper({
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">{dashboardStats.active_contracts}</p>
-                  <p className="text-sm text-muted-foreground">Active Contracts</p>
+                  <p className="text-xl sm:text-2xl font-bold">{dashboardStats.active_contracts}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Active Contracts</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">${dashboardStats.total_revenue.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">Total Revenue</p>
+                  <p className="text-xl sm:text-2xl font-bold">${dashboardStats.total_revenue.toLocaleString()}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Revenue</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">{dashboardStats.completed_contracts}</p>
-                  <p className="text-sm text-muted-foreground">Completed Projects</p>
+                  <p className="text-xl sm:text-2xl font-bold">{dashboardStats.completed_contracts}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Completed Projects</p>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-2xl font-bold">
+                  <p className="text-xl sm:text-2xl font-bold">
                     {dashboardStats.avg_contract_value > 0 ? `$${Math.round(dashboardStats.avg_contract_value).toLocaleString()}` : '-'}
                   </p>
-                  <p className="text-sm text-muted-foreground">Avg Contract Value</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Avg Contract Value</p>
                 </div>
               </div>
             </CardContent>

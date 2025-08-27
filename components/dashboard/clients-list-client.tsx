@@ -94,9 +94,12 @@ export function ClientsListClient({ initialClients }: ClientsListClientProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex justify-between items-center">
-          <CardTitle>Your Clients</CardTitle>
-          <div className="relative w-64">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <CardTitle>Your Clients</CardTitle>
+            <CardDescription>Clients you've worked with or sent contracts to.</CardDescription>
+          </div>
+          <div className="relative w-full sm:w-64">
             <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search clients..."
@@ -106,58 +109,219 @@ export function ClientsListClient({ initialClients }: ClientsListClientProps) {
             />
           </div>
         </div>
-        <CardDescription>Clients you've worked with or sent contracts to.</CardDescription>
       </CardHeader>
       <CardContent>
         {filteredClients.length > 0 ? (
           <div className="space-y-4">
             {filteredClients.map((client) => (
-              <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
-                    {(client.name || client.email)[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium">
-                        {client.name || client.email.split('@')[0]}
-                      </h3>
-                      <Badge variant="outline" className="text-xs">
-                        {client.contractCount} contract{client.contractCount !== 1 ? 's' : ''}
-                      </Badge>
+              <div key={client.id} className="border rounded-lg hover:bg-muted/50 transition-colors">
+                {/* Mobile Layout */}
+                <div className="flex flex-col gap-3 p-3 sm:hidden">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium shrink-0">
+                      {(client.name || client.email)[0].toUpperCase()}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <MailIcon className="h-3 w-3" />
-                        <span>{client.email}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col gap-1 mb-2">
+                        <h3 className="font-medium text-sm truncate">
+                          {client.name || client.email.split('@')[0]}
+                        </h3>
+                        <Badge variant="outline" className="text-xs self-start">
+                          {client.contractCount} contract{client.contractCount !== 1 ? 's' : ''}
+                        </Badge>
                       </div>
-                      {client.lastActivity && (
+                      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <CalendarIcon className="h-3 w-3" />
-                          <span>Last activity: {new Date(client.lastActivity).toLocaleDateString()}</span>
+                          <MailIcon className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{client.email}</span>
                         </div>
-                      )}
+                        {client.lastActivity && (
+                          <div className="flex items-center gap-1">
+                            <CalendarIcon className="h-3 w-3 shrink-0" />
+                            <span>Last activity: {new Date(client.lastActivity).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 pt-2 border-t">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-center text-xs">
+                          <FileTextIcon className="h-3 w-3 mr-1" />
+                          View Contracts ({client.contractCount})
+                          <ChevronDownIcon className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-80 max-w-[90vw]">
+                        <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                          Contracts with {client.name || client.email.split('@')[0]}
+                        </div>
+                        <DropdownMenuSeparator />
+                        {client.contracts.map((contract) => (
+                          <DropdownMenuItem key={contract.id} asChild>
+                            <Link 
+                              href={`/dashboard/contracts/${contract.id}`}
+                              className="flex items-start justify-between p-2 cursor-pointer"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium truncate text-xs">{contract.title}</span>
+                                  <span className={`px-1.5 py-0.5 text-xs rounded-full ${getStatusColor(contract.status)} shrink-0`}>
+                                    {contract.status}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatCurrency(contract.total_amount, contract.currency)} • 
+                                  {new Date(contract.created_at).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <ExternalLinkIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                        {client.contracts.length === 0 && (
+                          <DropdownMenuItem disabled>
+                            <span className="text-muted-foreground">No contracts found</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-center text-xs">
+                          <MessageSquareIcon className="h-3 w-3 mr-1" />
+                          Contact Client
+                          <ChevronDownIcon className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-64 max-w-[90vw]">
+                        <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                          Choose contract to discuss
+                        </div>
+                        <DropdownMenuSeparator />
+                        {client.contracts.map((contract) => (
+                          <DropdownMenuItem 
+                            key={contract.id}
+                            onClick={() => handleChatOpen(contract, client)}
+                            className="flex items-start justify-between p-2 cursor-pointer"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium truncate text-xs">{contract.title}</span>
+                                <span className={`px-1.5 py-0.5 text-xs rounded-full ${getStatusColor(contract.status)} shrink-0`}>
+                                  {contract.status}
+                                </span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Chat about this contract
+                              </div>
+                            </div>
+                            <MessageSquareIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
+                          </DropdownMenuItem>
+                        ))}
+                        {client.contracts.length === 0 && (
+                          <DropdownMenuItem disabled>
+                            <span className="text-muted-foreground">No contracts to discuss</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <FileTextIcon className="h-3 w-3 mr-1" />
-                        View Contracts
-                        <ChevronDownIcon className="h-3 w-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-80">
-                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                        Contracts with {client.name || client.email.split('@')[0]}
+
+                {/* Desktop Layout */}
+                <div className="hidden sm:flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium">
+                      {(client.name || client.email)[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium">
+                          {client.name || client.email.split('@')[0]}
+                        </h3>
+                        <Badge variant="outline" className="text-xs">
+                          {client.contractCount} contract{client.contractCount !== 1 ? 's' : ''}
+                        </Badge>
                       </div>
-                      <DropdownMenuSeparator />
-                      {client.contracts.map((contract) => (
-                        <DropdownMenuItem key={contract.id} asChild>
-                          <Link 
-                            href={`/dashboard/contracts/${contract.id}`}
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <MailIcon className="h-3 w-3" />
+                          <span>{client.email}</span>
+                        </div>
+                        {client.lastActivity && (
+                          <div className="flex items-center gap-1">
+                            <CalendarIcon className="h-3 w-3" />
+                            <span>Last activity: {new Date(client.lastActivity).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <FileTextIcon className="h-3 w-3 mr-1" />
+                          View Contracts
+                          <ChevronDownIcon className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-80">
+                        <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                          Contracts with {client.name || client.email.split('@')[0]}
+                        </div>
+                        <DropdownMenuSeparator />
+                        {client.contracts.map((contract) => (
+                          <DropdownMenuItem key={contract.id} asChild>
+                            <Link 
+                              href={`/dashboard/contracts/${contract.id}`}
+                              className="flex items-start justify-between p-2 cursor-pointer"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium truncate">{contract.title}</span>
+                                  <span className={`px-1.5 py-0.5 text-xs rounded-full ${getStatusColor(contract.status)}`}>
+                                    {contract.status}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatCurrency(contract.total_amount, contract.currency)} • 
+                                  {new Date(contract.created_at).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <ExternalLinkIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
+                            </Link>
+                          </DropdownMenuItem>
+                        ))}
+                        {client.contracts.length === 0 && (
+                          <DropdownMenuItem disabled>
+                            <span className="text-muted-foreground">No contracts found</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <MessageSquareIcon className="h-3 w-3 mr-1" />
+                          Contact
+                          <ChevronDownIcon className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                          Choose contract to discuss
+                        </div>
+                        <DropdownMenuSeparator />
+                        {client.contracts.map((contract) => (
+                          <DropdownMenuItem 
+                            key={contract.id}
+                            onClick={() => handleChatOpen(contract, client)}
                             className="flex items-start justify-between p-2 cursor-pointer"
                           >
                             <div className="flex-1 min-w-0">
@@ -168,62 +332,20 @@ export function ClientsListClient({ initialClients }: ClientsListClientProps) {
                                 </span>
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {formatCurrency(contract.total_amount, contract.currency)} • 
-                                {new Date(contract.created_at).toLocaleDateString()}
+                                Chat about this contract
                               </div>
                             </div>
-                            <ExternalLinkIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
-                          </Link>
-                        </DropdownMenuItem>
-                      ))}
-                      {client.contracts.length === 0 && (
-                        <DropdownMenuItem disabled>
-                          <span className="text-muted-foreground">No contracts found</span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <MessageSquareIcon className="h-3 w-3 mr-1" />
-                        Contact
-                        <ChevronDownIcon className="h-3 w-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
-                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                        Choose contract to discuss
-                      </div>
-                      <DropdownMenuSeparator />
-                      {client.contracts.map((contract) => (
-                        <DropdownMenuItem 
-                          key={contract.id}
-                          onClick={() => handleChatOpen(contract, client)}
-                          className="flex items-start justify-between p-2 cursor-pointer"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium truncate">{contract.title}</span>
-                              <span className={`px-1.5 py-0.5 text-xs rounded-full ${getStatusColor(contract.status)}`}>
-                                {contract.status}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Chat about this contract
-                            </div>
-                          </div>
-                          <MessageSquareIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
-                        </DropdownMenuItem>
-                      ))}
-                      {client.contracts.length === 0 && (
-                        <DropdownMenuItem disabled>
-                          <span className="text-muted-foreground">No contracts to discuss</span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                            <MessageSquareIcon className="h-3 w-3 text-muted-foreground ml-2 flex-shrink-0" />
+                          </DropdownMenuItem>
+                        ))}
+                        {client.contracts.length === 0 && (
+                          <DropdownMenuItem disabled>
+                            <span className="text-muted-foreground">No contracts to discuss</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </div>
             ))}

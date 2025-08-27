@@ -10,10 +10,12 @@ import {
   MenuIcon,
   UserIcon,
   SettingsIcon,
-  LogOutIcon
+  LogOutIcon,
+  PaletteIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 interface DashboardHeaderProps {
   userType: string;
@@ -40,7 +42,7 @@ export function DashboardHeader({
   };
 
   return (
-    <header className="flex items-center h-16 px-6 border-b border-border justify-between">
+    <header className="flex items-center h-16 px-4 sm:px-6 border-b border-border justify-between">
       {/* Mobile menu button */}
       <button 
         className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -113,6 +115,12 @@ export function DashboardHeader({
                 <UserIcon className="mr-3 h-4 w-4 text-muted-foreground" />
                 Subscription
               </Link>
+              
+              <div className="flex items-center px-4 py-2 text-sm text-foreground hover:bg-accent/40 transition-colors">
+                <PaletteIcon className="mr-3 h-4 w-4 text-muted-foreground" />
+                <span className="mr-auto">Theme</span>
+                <ThemeSwitcher />
+              </div>
               
               <div className="border-t border-border mt-2 pt-2">
                 <form action={signOutAction}>

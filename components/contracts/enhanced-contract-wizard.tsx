@@ -304,14 +304,14 @@ export default function EnhancedContractWizard() {
         return (
           <div className="space-y-8">
             <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-3xl font-serif font-bold mb-4">Choose Your Contract Template</h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Choose Your Contract Template</h2>
+              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
                 Select a pre-designed template that best matches your project type. Each template includes 
                 industry-optimized terms and suggested payment structures.
               </p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 max-w-6xl mx-auto">
               {TEMPLATES.map(template => (
                 <Card 
                   key={template.id}
@@ -323,22 +323,22 @@ export default function EnhancedContractWizard() {
                   )}
                   onClick={() => handleTemplateSelect(template)}
                 >
-                  <CardContent className="p-6 relative">
-                    <div className="flex items-start gap-4">
+                  <CardContent className="p-4 sm:p-6 relative">
+                    <div className="flex items-start gap-3 sm:gap-4">
                       <div className={cn(
-                        "text-4xl p-4 rounded-xl transition-all duration-300",
+                        "text-2xl sm:text-3xl lg:text-4xl p-2 sm:p-3 lg:p-4 rounded-xl transition-all duration-300 shrink-0",
                         selectedTemplate?.id === template.id 
                           ? "bg-primary/10 ring-2 ring-primary/20" 
                           : "bg-muted/30 group-hover:bg-muted/50"
                       )}>
                         {template.icon}
                       </div>
-                      <div className="flex-1 space-y-3">
+                      <div className="flex-1 space-y-2 sm:space-y-3 min-w-0">
                         <div>
-                          <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                          <h3 className="text-lg sm:text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                             {template.name}
                           </h3>
-                          <p className="text-muted-foreground mt-2 leading-relaxed text-sm">
+                          <p className="text-muted-foreground mt-1 sm:mt-2 leading-relaxed text-xs sm:text-sm">
                             {template.description}
                           </p>
                         </div>
@@ -355,11 +355,11 @@ export default function EnhancedContractWizard() {
                       </div>
                       <div className="flex-shrink-0">
                         {selectedTemplate?.id === template.id ? (
-                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
-                            <CheckCircleIcon className="h-5 w-5 text-primary-foreground" />
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                            <CheckCircleIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/30 group-hover:border-primary/40 transition-colors" />
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-muted-foreground/30 group-hover:border-primary/40 transition-colors" />
                         )}
                       </div>
                     </div>
@@ -411,20 +411,20 @@ export default function EnhancedContractWizard() {
         return (
           <div className="space-y-10">
             <div className="text-center max-w-4xl mx-auto">
-              <h2 className="text-3xl font-serif font-bold mb-4">Contract Information & Your Role</h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Contract Information & Your Role</h2>
+              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
                 Let's establish the basic details of your contract and clarify your role in this agreement.
               </p>
             </div>
 
-            <div className="max-w-5xl mx-auto space-y-10">
+            <div className="max-w-5xl mx-auto space-y-8 sm:space-y-10">
               {/* Role Selection */}
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="text-center">
-                  <h3 className="text-xl font-semibold mb-2">What's Your Role?</h3>
-                  <p className="text-muted-foreground">Are you the one providing services or hiring someone?</p>
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">What's Your Role?</h3>
+                  <p className="text-muted-foreground text-sm sm:text-base">Are you the one providing services or hiring someone?</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl mx-auto">
                   {[
                     { 
                       value: 'freelancer', 
@@ -452,23 +452,23 @@ export default function EnhancedContractWizard() {
                       )}
                       onClick={() => setFormData(prev => ({ ...prev, user_role: role.value as any }))}
                     >
-                      <CardContent className="p-8 text-center">
+                      <CardContent className="p-4 sm:p-6 lg:p-8 text-center">
                         <div className={cn(
-                          "text-4xl mb-4 p-4 rounded-xl inline-block transition-all duration-300",
+                          "text-2xl sm:text-3xl lg:text-4xl mb-3 sm:mb-4 p-2 sm:p-3 lg:p-4 rounded-xl inline-block transition-all duration-300",
                           formData.user_role === role.value 
                             ? "bg-primary/10 ring-2 ring-primary/20" 
                             : "bg-muted/30 group-hover:bg-muted/50"
                         )}>
                           {role.icon}
                         </div>
-                        <h4 className="text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
+                        <h4 className="text-base sm:text-lg font-semibold mb-2 group-hover:text-primary transition-colors">
                           {role.label}
                         </h4>
-                        <p className="text-muted-foreground text-sm mb-2">{role.desc}</p>
+                        <p className="text-muted-foreground text-xs sm:text-sm mb-2">{role.desc}</p>
                         <p className="text-xs text-muted-foreground/80">{role.details}</p>
                         {formData.user_role === role.value && (
-                          <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
-                            <CheckCircleIcon className="h-5 w-5 text-primary-foreground" />
+                          <div className="absolute top-3 sm:top-4 right-3 sm:right-4 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                            <CheckCircleIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary-foreground" />
                           </div>
                         )}
                       </CardContent>
@@ -484,23 +484,23 @@ export default function EnhancedContractWizard() {
               </div>
 
               {/* Contract Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10">
                 <Card className="border-2 border-border/50">
                   <CardHeader>
-                    <CardTitle className="text-xl font-semibold">Contract Details</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-lg sm:text-xl font-semibold">Contract Details</CardTitle>
+                    <CardDescription className="text-sm sm:text-base">
                       Provide the basic information about your contract and the parties involved.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
+                  <CardContent className="space-y-4 sm:space-y-6">
                     <div>
-                      <Label htmlFor="title" className="text-base font-medium">Contract Title *</Label>
+                      <Label htmlFor="title" className="text-sm sm:text-base font-medium">Contract Title *</Label>
                       <Input
                         id="title"
                         value={formData.title}
                         onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                         placeholder="e.g., Website Redesign for ABC Company"
-                        className={cn("mt-2 h-12 text-base", errors.title ? "border-destructive" : "")}
+                        className={cn("mt-2 h-10 sm:h-12 text-sm sm:text-base", errors.title ? "border-destructive" : "")}
                       />
                       {errors.title && (
                         <div className="flex items-center gap-2 text-destructive mt-2">
@@ -511,7 +511,7 @@ export default function EnhancedContractWizard() {
                     </div>
 
                     <div>
-                      <Label htmlFor="client_email" className="text-base font-medium">
+                      <Label htmlFor="client_email" className="text-sm sm:text-base font-medium">
                         {formData.user_role === 'freelancer' ? 'Client Email Address' : 'Freelancer Email Address'} *
                       </Label>
                       <Input
@@ -520,9 +520,9 @@ export default function EnhancedContractWizard() {
                         value={formData.client_email}
                         onChange={(e) => setFormData(prev => ({ ...prev, client_email: e.target.value }))}
                         placeholder={formData.user_role === 'freelancer' ? 'client@company.com' : 'freelancer@email.com'}
-                        className={cn("mt-2 h-12 text-base", errors.client_email ? "border-destructive" : "")}
+                        className={cn("mt-2 h-10 sm:h-12 text-sm sm:text-base", errors.client_email ? "border-destructive" : "")}
                       />
-                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-2 leading-relaxed">
                         {formData.user_role === 'freelancer' 
                           ? 'The client will receive an invitation to review and sign the contract.'
                           : 'The freelancer will receive an invitation to review and sign the contract.'
@@ -577,19 +577,19 @@ export default function EnhancedContractWizard() {
         return (
           <div className="space-y-8">
             <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-3xl font-serif font-bold mb-4">Payment Structure</h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Payment Structure</h2>
+              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
                 Choose the payment model that works best for your project and define the compensation details.
               </p>
             </div>
 
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
               <div>
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-semibold mb-2">Contract Type</h3>
-                  <p className="text-muted-foreground">Select the payment structure that best fits your project</p>
+                <div className="text-center mb-4 sm:mb-6">
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">Contract Type</h3>
+                  <p className="text-muted-foreground text-sm sm:text-base">Select the payment structure that best fits your project</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                   {[
                     { 
                       value: 'fixed', 
@@ -623,19 +623,19 @@ export default function EnhancedContractWizard() {
                       )}
                       onClick={() => setFormData(prev => ({ ...prev, type: type.value as any }))}
                     >
-                      <CardContent className="p-6 text-center">
+                      <CardContent className="p-4 sm:p-6 text-center">
                         <div className={cn(
-                          "text-3xl mb-4 p-3 rounded-lg inline-block transition-all duration-300",
+                          "text-2xl sm:text-3xl mb-3 sm:mb-4 p-2 sm:p-3 rounded-lg inline-block transition-all duration-300",
                           formData.type === type.value 
                             ? "bg-primary/10 ring-2 ring-primary/20" 
                             : "bg-muted/30 group-hover:bg-muted/50"
                         )}>
                           {type.icon}
                         </div>
-                        <h4 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
+                        <h4 className="font-semibold text-base sm:text-lg mb-2 group-hover:text-primary transition-colors">
                           {type.label}
                         </h4>
-                        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 leading-relaxed">
                           {type.desc}
                         </p>
                         <div className="space-y-1">
@@ -647,9 +647,9 @@ export default function EnhancedContractWizard() {
                           ))}
                         </div>
                         {formData.type === type.value && (
-                          <div className="mt-4">
-                            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center mx-auto">
-                              <CheckCircleIcon className="h-4 w-4 text-primary-foreground" />
+                          <div className="mt-3 sm:mt-4">
+                            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-primary flex items-center justify-center mx-auto">
+                              <CheckCircleIcon className="h-3 w-3 sm:h-4 sm:w-4 text-primary-foreground" />
                             </div>
                           </div>
                         )}
@@ -661,19 +661,19 @@ export default function EnhancedContractWizard() {
 
               <Card className="border-2 border-border/50">
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold">Compensation Details</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg sm:text-xl font-semibold">Compensation Details</CardTitle>
+                  <CardDescription className="text-sm sm:text-base">
                     Set the {formData.type === 'hourly' ? 'hourly rate' : 'total amount'} and currency for this contract.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                     <div>
-                      <Label htmlFor="total_amount" className="text-base font-medium">
+                      <Label htmlFor="total_amount" className="text-sm sm:text-base font-medium">
                         {formData.type === 'hourly' ? 'Hourly Rate' : 'Total Amount'} *
                       </Label>
                       <div className="relative mt-2">
-                        <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                         <Input
                           id="total_amount"
                           type="number"
@@ -685,7 +685,7 @@ export default function EnhancedContractWizard() {
                             total_amount: parseFloat(e.target.value) || 0 
                           }))}
                           placeholder="0.00"
-                          className={cn("pl-12 h-12 text-lg font-medium", errors.total_amount ? "border-destructive" : "")}
+                          className={cn("pl-10 sm:pl-12 h-10 sm:h-12 text-base sm:text-lg font-medium", errors.total_amount ? "border-destructive" : "")}
                         />
                       </div>
                       {errors.total_amount && (
@@ -697,12 +697,12 @@ export default function EnhancedContractWizard() {
                     </div>
 
                     <div>
-                      <Label htmlFor="currency" className="text-base font-medium">Currency</Label>
+                      <Label htmlFor="currency" className="text-sm sm:text-base font-medium">Currency</Label>
                       <select
                         id="currency"
                         value={formData.currency}
                         onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
-                        className="w-full mt-2 h-12 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="w-full mt-2 h-10 sm:h-12 rounded-md border border-input bg-background px-3 py-2 text-sm sm:text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <option value="USD">USD - US Dollar</option>
                         <option value="EUR">EUR - Euro</option>
@@ -746,14 +746,15 @@ export default function EnhancedContractWizard() {
 
         return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold mb-2">Project Milestones</h3>
-                <p className="text-muted-foreground">Break down your project into manageable milestones.</p>
+                <p className="text-muted-foreground text-sm sm:text-base">Break down your project into manageable milestones.</p>
               </div>
-              <Button onClick={addMilestone} variant="outline" size="sm">
+              <Button onClick={addMilestone} variant="outline" size="sm" className="shrink-0">
                 <PlusIcon className="h-4 w-4 mr-2" />
-                Add Milestone
+                <span className="hidden sm:inline">Add Milestone</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
 
@@ -803,20 +804,21 @@ export default function EnhancedContractWizard() {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <CardContent className="space-y-3 sm:space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
-                          <Label htmlFor={`milestone-title-${milestone.id}`}>Milestone Title</Label>
+                          <Label htmlFor={`milestone-title-${milestone.id}`} className="text-sm font-medium">Milestone Title</Label>
                           <Input
                             id={`milestone-title-${milestone.id}`}
                             value={milestone.title}
                             onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
                             placeholder="e.g., Design Mockups"
+                            className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label htmlFor={`milestone-amount-${milestone.id}`}>Amount</Label>
-                          <div className="relative">
+                          <Label htmlFor={`milestone-amount-${milestone.id}`} className="text-sm font-medium">Amount</Label>
+                          <div className="relative mt-1">
                             <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                               id={`milestone-amount-${milestone.id}`}
@@ -835,23 +837,25 @@ export default function EnhancedContractWizard() {
                       </div>
                       
                       <div>
-                        <Label htmlFor={`milestone-description-${milestone.id}`}>Description</Label>
+                        <Label htmlFor={`milestone-description-${milestone.id}`} className="text-sm font-medium">Description</Label>
                         <Textarea
                           id={`milestone-description-${milestone.id}`}
                           value={milestone.description}
                           onChange={(e) => updateMilestone(milestone.id, { description: e.target.value })}
                           placeholder="Describe what will be delivered in this milestone..."
                           rows={2}
+                          className="mt-1 text-sm"
                         />
                       </div>
 
                       <div>
-                        <Label htmlFor={`milestone-due-${milestone.id}`}>Due Date (Optional)</Label>
+                        <Label htmlFor={`milestone-due-${milestone.id}`} className="text-sm font-medium">Due Date (Optional)</Label>
                         <Input
                           id={`milestone-due-${milestone.id}`}
                           type="date"
                           value={milestone.due_date}
                           onChange={(e) => updateMilestone(milestone.id, { due_date: e.target.value })}
+                          className="mt-1"
                         />
                       </div>
                     </CardContent>
@@ -871,42 +875,43 @@ export default function EnhancedContractWizard() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-2">Contract Terms & Timeline</h3>
-              <p className="text-muted-foreground">Define the terms and timeline for your project.</p>
+              <p className="text-muted-foreground text-sm sm:text-base">Define the terms and timeline for your project.</p>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="start_date">Project Start Date (Optional)</Label>
+                  <Label htmlFor="start_date" className="text-sm font-medium">Project Start Date (Optional)</Label>
                   <Input
                     id="start_date"
                     type="date"
                     value={formData.start_date}
                     onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                    className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="end_date">Expected Completion Date (Optional)</Label>
+                  <Label htmlFor="end_date" className="text-sm font-medium">Expected Completion Date (Optional)</Label>
                   <Input
                     id="end_date"
                     type="date"
                     value={formData.end_date}
                     onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                    className={errors.end_date ? "border-destructive" : ""}
+                    className={cn("mt-1", errors.end_date ? "border-destructive" : "")}
                   />
                   {errors.end_date && <p className="text-sm text-destructive mt-1">{errors.end_date}</p>}
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="terms_and_conditions">Terms and Conditions *</Label>
+                <Label htmlFor="terms_and_conditions" className="text-sm font-medium">Terms and Conditions *</Label>
                 <Textarea
                   id="terms_and_conditions"
                   value={formData.terms_and_conditions}
                   onChange={(e) => setFormData(prev => ({ ...prev, terms_and_conditions: e.target.value }))}
                   placeholder="Enter the terms and conditions for this contract..."
-                  rows={8}
-                  className={errors.terms_and_conditions ? "border-destructive" : ""}
+                  rows={6}
+                  className={cn("mt-1 text-sm", errors.terms_and_conditions ? "border-destructive" : "")}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   These terms have been pre-filled based on your selected template. You can modify them as needed.
@@ -922,16 +927,16 @@ export default function EnhancedContractWizard() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-2">Review Your Contract</h3>
-              <p className="text-muted-foreground">Please review all details before creating your contract.</p>
+              <p className="text-muted-foreground text-sm sm:text-base">Please review all details before creating your contract.</p>
             </div>
 
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Contract Overview</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">Contract Overview</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div>
                       <span className="font-medium">Template:</span>
                       <p className="text-muted-foreground">{selectedTemplate?.name}</p>
@@ -1044,17 +1049,17 @@ export default function EnhancedContractWizard() {
     <div className="min-h-screen bg-background">
       {/* Header Section */}
       <div className="border-b bg-card">
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-serif font-bold tracking-tight">Create New Contract</h1>
-              <p className="text-muted-foreground mt-2 text-lg">
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold tracking-tight">Create New Contract</h1>
+              <p className="text-muted-foreground mt-2 text-sm sm:text-base lg:text-lg leading-relaxed">
                 Follow our guided wizard to create a comprehensive, legally-binding contract.
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">Step</div>
-              <div className="text-2xl font-bold">{currentStep + 1} of {effectiveSteps.length}</div>
+            <div className="text-right shrink-0">
+              <div className="text-xs sm:text-sm text-muted-foreground">Step</div>
+              <div className="text-xl sm:text-2xl font-bold">{currentStep + 1} of {effectiveSteps.length}</div>
             </div>
           </div>
         </div>
@@ -1062,8 +1067,29 @@ export default function EnhancedContractWizard() {
 
       {/* Progress Steps */}
       <div className="border-b bg-muted/30">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center justify-center space-x-8">
+        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          {/* Mobile Progress: Simplified View */}
+          <div className="block sm:hidden">
+            <div className="flex items-center justify-center gap-2">
+              <div className="flex-1 bg-muted-foreground/20 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300 rounded-full"
+                  style={{ width: `${((currentStep + 1) / effectiveSteps.length) * 100}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                {currentStep + 1} of {effectiveSteps.length}
+              </span>
+            </div>
+            <div className="text-center mt-3">
+              <div className="text-sm font-medium text-foreground">
+                {effectiveSteps[currentStep]}
+              </div>
+            </div>
+          </div>
+          
+          {/* Desktop Progress: Full Step View */}
+          <div className="hidden sm:flex items-center justify-center space-x-4 lg:space-x-8">
             {effectiveSteps.map((stepName, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
@@ -1073,15 +1099,15 @@ export default function EnhancedContractWizard() {
                 <div key={stepName} className="flex items-center">
                   <div className="flex flex-col items-center">
                     <div className={cn(
-                      "flex items-center justify-center w-12 h-12 rounded-full text-sm font-medium transition-all",
+                      "flex items-center justify-center w-8 h-8 lg:w-12 lg:h-12 rounded-full text-xs lg:text-sm font-medium transition-all",
                       isCompleted ? "bg-primary text-primary-foreground shadow-lg" :
                       isActive ? "bg-primary text-primary-foreground shadow-lg scale-110" :
                       "bg-muted text-muted-foreground border-2 border-muted-foreground/20"
                     )}>
-                      {isCompleted ? <CheckCircleIcon className="w-6 h-6" /> : stepNumber + 1}
+                      {isCompleted ? <CheckCircleIcon className="w-4 h-4 lg:w-6 lg:h-6" /> : stepNumber + 1}
                     </div>
                     <div className={cn(
-                      "mt-2 text-sm font-medium text-center min-w-[100px]",
+                      "mt-2 text-xs lg:text-sm font-medium text-center min-w-[60px] lg:min-w-[100px]",
                       isActive ? "text-foreground" : "text-muted-foreground"
                     )}>
                       {stepName}
@@ -1089,7 +1115,7 @@ export default function EnhancedContractWizard() {
                   </div>
                   {index < effectiveSteps.length - 1 && (
                     <div className={cn(
-                      "mx-6 h-0.5 w-16 transition-colors",
+                      "mx-3 lg:mx-6 h-0.5 w-8 lg:w-16 transition-colors",
                       isCompleted ? "bg-primary" : "bg-muted-foreground/20"
                     )} />
                   )}
@@ -1101,59 +1127,61 @@ export default function EnhancedContractWizard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="max-w-6xl mx-auto">
           <Card className="shadow-lg border-0 bg-card">
-            <CardContent className="p-8 md:p-12">
-              <div className="min-h-[600px]">
+            <CardContent className="p-4 sm:p-6 lg:p-8 xl:p-12">
+              <div className="min-h-[400px] sm:min-h-[600px]">
                 {renderStepContent()}
               </div>
               
               {/* Navigation */}
-              <div className="flex justify-between items-center mt-12 pt-8 border-t border-border">
+              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-border">
                 <Button 
                   onClick={prevStep} 
                   variant="outline"
-                  size="lg"
+                  size="default"
                   disabled={currentStep === 0 || isPending}
-                  className="px-8"
+                  className="px-4 sm:px-8 order-2 sm:order-1"
                 >
-                  <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                  <ChevronLeftIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   Back
                 </Button>
                 
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <div className="hidden sm:flex items-center space-x-2 text-sm text-muted-foreground order-2">
                   <span>Step {currentStep + 1} of {effectiveSteps.length}</span>
                 </div>
                 
                 {currentStep === effectiveSteps.length - 1 ? (
                   <Button 
                     onClick={handleSubmit} 
-                    size="lg"
+                    size="default"
                     disabled={isPending}
-                    className="px-8 bg-primary hover:bg-primary/90"
+                    className="px-4 sm:px-8 bg-primary hover:bg-primary/90 order-1 sm:order-3"
                   >
                     {isPending ? (
                       <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Creating Contract...
+                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-spin" />
+                        <span className="hidden sm:inline">Creating Contract...</span>
+                        <span className="sm:hidden">Creating...</span>
                       </>
                     ) : (
                       <>
-                        <FileTextIcon className="w-5 h-5 mr-2" />
-                        Create Contract
+                        <FileTextIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                        <span className="hidden sm:inline">Create Contract</span>
+                        <span className="sm:hidden">Create</span>
                       </>
                     )}
                   </Button>
                 ) : (
                   <Button 
                     onClick={nextStep}
-                    size="lg"
+                    size="default"
                     disabled={isPending}
-                    className="px-8"
+                    className="px-4 sm:px-8 order-1 sm:order-3"
                   >
                     Continue
-                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                    <ChevronRightIcon className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
                   </Button>
                 )}
               </div>

@@ -201,8 +201,39 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
       )}
 
       {/* Search and Filters */}
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <Card className="p-3 sm:p-4">
+        {/* Mobile Layout - Stack vertically */}
+        <div className="flex flex-col gap-4 sm:hidden">
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search contracts..."
+              className="w-full pl-9 pr-4 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <span className="text-sm text-muted-foreground font-medium">Filter by status:</span>
+            <div className="flex flex-wrap gap-2">
+              {(['All', 'draft', 'pending', 'signed', 'completed', 'cancelled', 'disputed'] as const).map((status) => (
+                <Badge
+                  key={status}
+                  variant={statusFilter === (status === 'All' ? null : status) ? "default" : "outline"}
+                  className="rounded-full px-2 py-1 text-xs cursor-pointer"
+                  onClick={() => setStatusFilter(status === 'All' ? null : status)}
+                >
+                  {status === 'All' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Layout - Horizontal */}
+        <div className="hidden sm:flex flex-row gap-4">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -217,7 +248,6 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Filter:</span>
             <div className="flex flex-wrap gap-2">
-              {/* Add all possible statuses from schema */}
               {(['All', 'draft', 'pending', 'signed', 'completed', 'cancelled', 'disputed'] as const).map((status) => (
                 <Badge
                   key={status}
@@ -238,8 +268,79 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
         <div className="space-y-4">
           {filteredContracts.map((contract) => (
             <Card key={contract.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row md:items-center gap-4">
+              <CardContent className="p-4 sm:p-6">
+                {/* Mobile Layout - Hidden on desktop */}
+                <div className="flex flex-col gap-4 md:hidden">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium text-sm truncate">{contract.title}</h3>
+                        <div className="shrink-0">
+                          {getStatusBadge(contract.status)}
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{contract.description}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap gap-3">
+                      <div>
+                        <span className="opacity-70">Created:</span> {contract.created_at ? new Date(contract.created_at).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div>
+                        <span className="opacity-70">Template:</span> {contract.contract_templates?.name ?? 'Custom'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2 border-t">
+                    <div className="flex gap-2">
+                      {contract.status === "draft" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-blue-500 border-blue-200 hover:border-blue-300 text-xs flex-1"
+                          onClick={() => handleSendContract(contract.id)}
+                          disabled={isPending && sendingId === contract.id}
+                        >
+                          {isPending && sendingId === contract.id ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <ClockIcon className="mr-1 h-3 w-3" />
+                          )}
+                          {isPending && sendingId === contract.id ? 'Sending...' : 'Send'}
+                        </Button>
+                      )}
+
+                      <Link
+                        href={`/dashboard/contracts/${contract.id}`}
+                        className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 flex-1"
+                      >
+                        <EyeIcon className="mr-1 h-3 w-3" />
+                        View
+                      </Link>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-500 border-red-200 hover:border-red-300 hover:bg-red-50 disabled:opacity-50 text-xs flex-1"
+                        onClick={() => handleDeleteContract(contract.id)}
+                        disabled={isPending && deletingId === contract.id}
+                      >
+                        {isPending && deletingId === contract.id ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <TrashIcon className="mr-1 h-3 w-3" />
+                        )}
+                        {isPending && deletingId === contract.id ? 'Deleting...' : 'Delete'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop Layout - Hidden on mobile */}
+                <div className="hidden md:flex md:items-center gap-4">
                   <div className="flex-1">
                     <div className="flex items-start gap-2 mb-2">
                       <div>
@@ -250,18 +351,12 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      {/* Client Email might need fetching from contract_parties */}
-                      {/* <div>
-                        <span className="inline-block w-20 opacity-70">Client:</span>
-                        <span>{contract.clientEmail}</span>
-                      </div> */}
                       <div>
                         <span className="inline-block w-20 opacity-70">Created:</span>
                         <span>{contract.created_at ? new Date(contract.created_at).toLocaleDateString() : 'N/A'}</span>
                       </div>
                       <div>
                         <span className="inline-block w-20 opacity-70">Template:</span>
-                        {/* Display template name from joined data */}
                         <span>{contract.contract_templates?.name ?? 'Custom'}</span>
                       </div>
                     </div>
@@ -273,7 +368,6 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Placeholder buttons - need server actions */}
                       {contract.status === "draft" && (
                         <Button
                           variant="outline"
@@ -291,8 +385,6 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                         </Button>
                       )}
 
-                      {/* Add other status change buttons as needed, linking to server actions */}
-
                       <Link
                         href={`/dashboard/contracts/${contract.id}`}
                         className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
@@ -306,7 +398,7 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
                         size="sm"
                         className="text-red-500 border-red-200 hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
                         onClick={() => handleDeleteContract(contract.id)}
-                        disabled={isPending && deletingId === contract.id} // Disable button while deleting this specific contract
+                        disabled={isPending && deletingId === contract.id}
                       >
                         {isPending && deletingId === contract.id ? (
                           <Loader2 className="mr-1 h-4 w-4 animate-spin" />
