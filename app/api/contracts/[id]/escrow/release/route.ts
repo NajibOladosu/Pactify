@@ -15,6 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const supabase = await createClient();
     
     // Check authentication
@@ -40,7 +41,7 @@ export async function POST(
           status
         )
       `)
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (contractError || !contract) {
@@ -115,7 +116,7 @@ export async function POST(
     const { data: escrowPayments, error: escrowError } = await supabase
       .from('escrow_payments')
       .select('*')
-      .eq('contract_id', params.id)
+      .eq('contract_id', resolvedParams.id)
       .eq('status', 'funded')
       .order('created_at', { ascending: true });
 
@@ -156,7 +157,7 @@ export async function POST(
     // Create Stripe instance
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-07-30.basil',
     });
     
     try {
@@ -164,9 +165,9 @@ export async function POST(
         amount: Math.round(releaseAmount * 100), // Convert to cents
         currency: contract.currency.toLowerCase(),
         destination: freelancerProfile.stripe_connect_account_id,
-        transfer_group: `contract_${params.id}`,
+        transfer_group: `contract_${resolvedParams.id}`,
         metadata: {
-          contract_id: params.id,
+          contract_id: resolvedParams.id,
           escrow_payment_id: targetPayment.id,
           release_amount: releaseAmount.toString(),
           released_by: user.id,
@@ -194,7 +195,7 @@ export async function POST(
       const { error: paymentError } = await supabase
         .from('contract_payments')
         .insert({
-          contract_id: params.id,
+          contract_id: resolvedParams.id,
           user_id: user.id,
           amount: releaseAmount,
           status: 'completed',
@@ -218,7 +219,7 @@ export async function POST(
       const { data: remainingPayments } = await supabase
         .from('escrow_payments')
         .select('*')
-        .eq('contract_id', params.id)
+        .eq('contract_id', resolvedParams.id)
         .eq('status', 'funded');
 
       if (!remainingPayments || remainingPayments.length === 0) {
@@ -230,7 +231,7 @@ export async function POST(
             completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
-          .eq('id', params.id);
+          .eq('id', resolvedParams.id);
 
         if (contractUpdateError) {
           console.error('Error updating contract status:', contractUpdateError);
@@ -241,7 +242,7 @@ export async function POST(
       const { error: notificationError } = await supabase
         .from('contract_notifications')
         .insert({
-          contract_id: params.id,
+          contract_id: resolvedParams.id,
           user_id: freelancerParty.user_id,
           notification_type: 'payment_released',
           title: 'Payment Released',

@@ -14,6 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const supabase = await createClient();
     
     // Check authentication
@@ -39,7 +40,7 @@ export async function POST(
           status
         )
       `)
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (contractError || !contract) {
@@ -98,7 +99,7 @@ export async function POST(
     // Create Stripe instance
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-07-30.basil',
     });
     
     const baseUrl = new URL(request.url).origin;
@@ -141,11 +142,11 @@ export async function POST(
         },
       ],
       mode: 'payment',
-      success_url: validatedData.success_url || `${baseUrl}/dashboard/contracts/${params.id}/funded`,
-      cancel_url: validatedData.cancel_url || `${baseUrl}/dashboard/contracts/${params.id}`,
+      success_url: validatedData.success_url || `${baseUrl}/dashboard/contracts/${resolvedParams.id}/funded`,
+      cancel_url: validatedData.cancel_url || `${baseUrl}/dashboard/contracts/${resolvedParams.id}`,
       customer_email: user.email,
       metadata: {
-        contract_id: params.id,
+        contract_id: resolvedParams.id,
         user_id: user.id,
         contract_amount: contractAmount.toString(),
         platform_fee: platformFee.toString(),
@@ -159,7 +160,7 @@ export async function POST(
     const { data: escrowPayment, error: escrowError } = await supabase
       .from('escrow_payments')
       .insert({
-        contract_id: params.id,
+        contract_id: resolvedParams.id,
         amount: contractAmount,
         platform_fee: platformFee,
         stripe_fee: stripeFee,
@@ -181,7 +182,7 @@ export async function POST(
     const { error: paymentError } = await supabase
       .from('contract_payments')
       .insert({
-        contract_id: params.id,
+        contract_id: resolvedParams.id,
         user_id: user.id,
         amount: totalCharge,
         status: 'pending',

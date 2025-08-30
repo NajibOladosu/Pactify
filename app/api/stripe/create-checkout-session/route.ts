@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 
 // Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-06-30.basil', // Match the version used elsewhere
+  apiVersion: '2025-07-30.basil', // Match the version used elsewhere
   typescript: true,
 });
 

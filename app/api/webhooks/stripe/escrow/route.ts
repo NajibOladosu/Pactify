@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     // Create Stripe instance for webhook verification
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2025-06-30',
+      apiVersion: '2025-07-30.basil',
     });
 
     // Verify webhook signature

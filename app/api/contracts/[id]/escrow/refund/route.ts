@@ -15,6 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const supabase = await createClient();
     
     // Check authentication
@@ -40,7 +41,7 @@ export async function POST(
           status
         )
       `)
-      .eq('id', params.id)
+      .eq('id', resolvedParams.id)
       .single();
 
     if (contractError || !contract) {
@@ -81,7 +82,7 @@ export async function POST(
     const { data: escrowPayments, error: escrowError } = await supabase
       .from('escrow_payments')
       .select('*')
-      .eq('contract_id', params.id)
+      .eq('contract_id', resolvedParams.id)
       .in('status', ['funded', 'held'])
       .order('created_at', { ascending: true });
 
@@ -122,7 +123,7 @@ export async function POST(
     // Create Stripe instance
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2025-07-30.basil',
     });
     
     try {
@@ -139,7 +140,7 @@ export async function POST(
         amount: Math.round(refundAmount * 100), // Convert to cents
         reason: 'requested_by_customer',
         metadata: {
-          contract_id: params.id,
+          contract_id: resolvedParams.id,
           escrow_payment_id: targetPayment.id,
           refund_amount: refundAmount.toString(),
           refund_reason: validatedData.reason,
@@ -166,7 +167,7 @@ export async function POST(
       const { error: paymentError } = await supabase
         .from('contract_payments')
         .insert({
-          contract_id: params.id,
+          contract_id: resolvedParams.id,
           user_id: user.id,
           amount: refundAmount,
           status: 'completed',
@@ -189,7 +190,7 @@ export async function POST(
       const { data: remainingPayments } = await supabase
         .from('escrow_payments')
         .select('*')
-        .eq('contract_id', params.id)
+        .eq('contract_id', resolvedParams.id)
         .in('status', ['funded', 'held']);
 
       if (!remainingPayments || remainingPayments.length === 0) {
@@ -202,7 +203,7 @@ export async function POST(
             completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
-          .eq('id', params.id);
+          .eq('id', resolvedParams.id);
 
         if (contractUpdateError) {
           console.error('Error updating contract status:', contractUpdateError);
@@ -219,7 +220,7 @@ export async function POST(
         const { error: notificationError } = await supabase
           .from('contract_notifications')
           .insert({
-            contract_id: params.id,
+            contract_id: resolvedParams.id,
             user_id: freelancerParty.user_id,
             notification_type: 'payment_refunded',
             title: 'Payment Refunded',
