@@ -302,10 +302,10 @@ export default function EnhancedContractWizard() {
     switch (currentStep) {
       case 0: // Template Selection
         return (
-          <div className="space-y-8">
-            <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Choose Your Contract Template</h2>
-              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Choose Your Contract Template</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
                 Select a pre-designed template that best matches your project type. Each template includes 
                 industry-optimized terms and suggested payment structures.
               </p>
@@ -374,28 +374,26 @@ export default function EnhancedContractWizard() {
             </div>
             
             {selectedTemplate && (
-              <div className="mt-8 max-w-5xl mx-auto">
-                <Card className="border-l-4 border-l-primary">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <FileTextIcon className="h-5 w-5 text-primary" />
-                      Template Preview: {selectedTemplate.name}
-                    </CardTitle>
-                    <CardDescription>
-                      Here are the default terms for this template. You can customize these in the next steps.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-background p-6 rounded-lg border text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
-                      {selectedTemplate.default_terms}
-                    </div>
-                    <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
-                      <AlertCircleIcon className="h-4 w-4" />
-                      <span>These terms are fully customizable and will be refined in the following steps</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card className="border-l-4 border-l-primary">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileTextIcon className="h-5 w-5 text-primary" />
+                    Template Preview: {selectedTemplate.name}
+                  </CardTitle>
+                  <CardDescription>
+                    Here are the default terms for this template. You can customize these in the next steps.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted/30 p-4 rounded-lg text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+                    {selectedTemplate.default_terms}
+                  </div>
+                  <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+                    <AlertCircleIcon className="h-4 w-4" />
+                    <span>These terms are fully customizable and will be refined in the following steps</span>
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             {errors.template && (
@@ -409,10 +407,10 @@ export default function EnhancedContractWizard() {
 
       case 1: // Basic Info
         return (
-          <div className="space-y-10">
-            <div className="text-center max-w-4xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Contract Information & Your Role</h2>
-              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
+          <div className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Contract Information & Your Role</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
                 Let's establish the basic details of your contract and clarify your role in this agreement.
               </p>
             </div>
@@ -576,9 +574,9 @@ export default function EnhancedContractWizard() {
       case 2: // Payment & Type
         return (
           <div className="space-y-8">
-            <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-4">Payment Structure</h2>
-              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg leading-relaxed">
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Payment Structure</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
                 Choose the payment model that works best for your project and define the compensation details.
               </p>
             </div>
@@ -746,15 +744,12 @@ export default function EnhancedContractWizard() {
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Project Milestones</h3>
-                <p className="text-muted-foreground text-sm sm:text-base">Break down your project into manageable milestones.</p>
-              </div>
-              <Button onClick={addMilestone} variant="outline" size="sm" className="shrink-0">
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Project Milestones</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto mb-4">Break down your project into manageable milestones.</p>
+              <Button onClick={addMilestone} variant="outline" size="sm">
                 <PlusIcon className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Add Milestone</span>
-                <span className="sm:hidden">Add</span>
+                Add Milestone
               </Button>
             </div>
 
@@ -873,9 +868,9 @@ export default function EnhancedContractWizard() {
       case 4: // Terms & Timeline
         return (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Contract Terms & Timeline</h3>
-              <p className="text-muted-foreground text-sm sm:text-base">Define the terms and timeline for your project.</p>
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Contract Terms & Timeline</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">Define the terms and timeline for your project.</p>
             </div>
 
             <div className="space-y-4">
@@ -925,9 +920,9 @@ export default function EnhancedContractWizard() {
       case 5: // Review
         return (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Review Your Contract</h3>
-              <p className="text-muted-foreground text-sm sm:text-base">Please review all details before creating your contract.</p>
+            <div className="text-center">
+              <h2 className="text-2xl font-serif font-bold mb-3">Review Your Contract</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">Please review all details before creating your contract.</p>
             </div>
 
             <div className="space-y-4">
@@ -1046,39 +1041,35 @@ export default function EnhancedContractWizard() {
     : currentStep >= 3 ? currentStep + 1 : currentStep;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header Section */}
-      <div className="border-b bg-card">
-        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold tracking-tight">Create New Contract</h1>
-              <p className="text-muted-foreground mt-2 text-sm sm:text-base lg:text-lg leading-relaxed">
-                Follow our guided wizard to create a comprehensive, legally-binding contract.
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="text-xs sm:text-sm text-muted-foreground">Step</div>
-              <div className="text-xl sm:text-2xl font-bold">{currentStep + 1} of {effectiveSteps.length}</div>
-            </div>
+    <div className="space-y-8">
+      {/* Header Section - Matching other dashboard pages */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-serif font-bold">Create New Contract</h1>
+          <p className="text-muted-foreground mt-1">Follow our guided wizard to create a comprehensive, legally-binding contract.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-sm text-muted-foreground">Step {currentStep + 1} of {effectiveSteps.length}</div>
+            <div className="text-xs text-muted-foreground">{effectiveSteps[currentStep]}</div>
           </div>
         </div>
       </div>
 
       {/* Progress Steps */}
-      <div className="border-b bg-muted/30">
-        <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <Card>
+        <CardContent className="p-6">
           {/* Mobile Progress: Simplified View */}
           <div className="block sm:hidden">
-            <div className="flex items-center justify-center gap-2">
-              <div className="flex-1 bg-muted-foreground/20 h-2 rounded-full overflow-hidden">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-muted h-2 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary transition-all duration-300 rounded-full"
                   style={{ width: `${((currentStep + 1) / effectiveSteps.length) * 100}%` }}
                 />
               </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                {currentStep + 1} of {effectiveSteps.length}
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                {currentStep + 1}/{effectiveSteps.length}
               </span>
             </div>
             <div className="text-center mt-3">
@@ -1089,7 +1080,7 @@ export default function EnhancedContractWizard() {
           </div>
           
           {/* Desktop Progress: Full Step View */}
-          <div className="hidden sm:flex items-center justify-center space-x-4 lg:space-x-8">
+          <div className="hidden sm:flex items-center justify-center space-x-6">
             {effectiveSteps.map((stepName, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
@@ -1123,20 +1114,18 @@ export default function EnhancedContractWizard() {
               );
             })}
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Main Content Area */}
-      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <div className="max-w-6xl mx-auto">
-          <Card className="shadow-lg border-0 bg-card">
-            <CardContent className="p-4 sm:p-6 lg:p-8 xl:p-12">
-              <div className="min-h-[400px] sm:min-h-[600px]">
-                {renderStepContent()}
-              </div>
-              
-              {/* Navigation */}
-              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-border">
+      <Card>
+        <CardContent className="p-6">
+          <div className="min-h-[500px]">
+            {renderStepContent()}
+          </div>
+          
+          {/* Navigation */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8 pt-6 border-t border-border">
                 <Button 
                   onClick={prevStep} 
                   variant="outline"
@@ -1184,11 +1173,9 @@ export default function EnhancedContractWizard() {
                     <ChevronRightIcon className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
                   </Button>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
