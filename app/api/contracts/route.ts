@@ -37,27 +37,79 @@ const handleContractCreation = async (request: NextRequest, user: any) => {
     const validatedData = validateAndSanitize(ContractCreateSchema, processedBody);
 
     // Check user's contract limits based on subscription
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("subscription_tier, available_contracts")
-      .eq("id", user.id)
-      .single();
+    // Create service role client for bypassing RLS when needed
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
 
-      if (profile?.subscription_tier === "free" && profile?.available_contracts <= 0) {
-        await auditLogger.logSecurityEvent({
-          userId: user.id,
-          action: 'contract_creation_blocked',
-          resource: 'contract',
-          details: { reason: 'subscription_limit_reached' },
-          success: false,
-          severity: 'medium'
-        });
-        
-        return NextResponse.json(
-          { error: "SUBSCRIPTION_LIMIT", message: "Contract limit reached for free plan" },
-          { status: 403 }
-        );
-      }
+    // --- Fetch Subscription and Contract Limit Data ---
+    let planId = 'free';
+    let maxContracts: number | null = 3; // Default to free plan limit
+    let activeContractsCount = 0;
+
+    // 1. Get active subscription using service role client
+    const { data: subscription } = await serviceSupabase
+      .from('user_subscriptions')
+      .select('plan_id')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (subscription?.plan_id) {
+      planId = subscription.plan_id;
+      // 2. Get plan details using service role client
+      const { data: planDetails } = await serviceSupabase
+        .from('subscription_plans')
+        .select('max_contracts')
+        .eq('id', planId)
+        .single();
+      maxContracts = planDetails?.max_contracts ?? null; // Use null for unlimited
+    } else {
+       // Ensure we have the free plan limit if no active sub
+       const { data: freePlanDetails } = await serviceSupabase
+        .from('subscription_plans')
+        .select('max_contracts')
+        .eq('id', 'free')
+        .single();
+       maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
+    }
+
+    // 3. Get active contracts count for limit checking
+    const { data: dashboardStats } = await serviceSupabase.rpc('get_dashboard_stats', { p_user_id: user.id });
+    activeContractsCount = dashboardStats?.[0]?.active_contracts || 0;
+
+    // 4. Determine if limit is reached (only for plans with a limit)
+    const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
+
+    if (isLimitReached) {
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'contract_creation_blocked',
+        resource: 'contract',
+        details: { 
+          reason: 'subscription_limit_reached',
+          active_contracts: activeContractsCount,
+          max_contracts: maxContracts,
+          plan_id: planId
+        },
+        success: false,
+        severity: 'medium'
+      });
+      
+      return NextResponse.json(
+        { 
+          error: "SUBSCRIPTION_LIMIT", 
+          message: `Contract limit reached. You have ${activeContractsCount} active contracts and your ${planId} plan allows ${maxContracts}.`,
+          details: {
+            active_contracts: activeContractsCount,
+            max_contracts: maxContracts,
+            plan: planId
+          }
+        },
+        { status: 403 }
+      );
+    }
 
       // Determine user role and set appropriate fields
       const userRole = body.user_role;
@@ -94,11 +146,7 @@ const handleContractCreation = async (request: NextRequest, user: any) => {
         status: "draft"
       };
 
-      // Create service client for database operations to bypass RLS
-      const serviceSupabase = createServiceClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE!
-      );
+      // Using existing service client for database operations
 
       // Insert contract using service client
       const { data: contract, error: contractError } = await serviceSupabase

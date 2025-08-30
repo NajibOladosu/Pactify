@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { CheckIcon, XIcon, CreditCardIcon, ExternalLinkIcon, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Progress } from "@/components/ui/progress"; // Assuming you have a Progress component
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Assuming you have Table components
 
@@ -67,12 +67,36 @@ export default function SubscriptionPage() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Check if user returned from successful Stripe checkout
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    if (sessionId) {
+      toast({
+        title: "Payment Successful! 🎉",
+        description: "Your subscription has been activated. It may take a moment for all features to be available.",
+        duration: 5000,
+      });
+      
+      // Clean up the URL by removing the session_id parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams, toast]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (retryCount = 0) => {
       setDataLoading(true);
       setError(null);
       try {
+        // If returning from Stripe and first attempt, add small delay for webhook processing
+        const sessionId = searchParams.get('session_id');
+        if (sessionId && retryCount === 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
         // Fetch subscription details
         const subRes = await fetch('/api/subscriptions');
         if (!subRes.ok) {
@@ -83,6 +107,13 @@ export default function SubscriptionPage() {
         console.log('🔍 Subscription planId:', subData.subscription?.planId);
         console.log('🔍 Subscription planName:', subData.subscription?.planName);
         setSubscription(subData.subscription);
+
+        // If returning from Stripe and still on free plan, retry once after delay (webhook might be processing)
+        if (sessionId && subData.subscription?.planId === 'free' && retryCount === 0) {
+          console.log("Still on free plan after Stripe payment, retrying in 3 seconds...");
+          setTimeout(() => fetchData(1), 3000);
+          return;
+        }
 
         // Fetch available plans from database
         const plansRes = await fetch('/api/subscription-plans');
@@ -108,12 +139,22 @@ export default function SubscriptionPage() {
 
       } catch (err: any) {
         console.error("Error fetching subscription data:", err);
-        setError(err.message || "An unexpected error occurred.");
-        toast({
-          title: "Error Loading Data",
-          description: err.message || "Could not load subscription details.",
-          variant: "destructive",
-        });
+        
+        // If this is a retry from Stripe success and we got an error, show helpful message
+        const sessionId = searchParams.get('session_id');
+        if (sessionId && retryCount === 0) {
+          toast({
+            title: "Processing Payment...",
+            description: "Your payment is being processed. Please refresh in a moment if your subscription doesn't appear.",
+          });
+        } else {
+          setError(err.message || "An unexpected error occurred.");
+          toast({
+            title: "Error Loading Data",
+            description: err.message || "Could not load subscription details.",
+            variant: "destructive",
+          });
+        }
       } finally {
         setDataLoading(false);
       }

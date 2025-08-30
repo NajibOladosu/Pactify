@@ -36,6 +36,13 @@ export const updateSession = async (request: NextRequest) => {
 
     // protected routes
     if (request.nextUrl.pathname.startsWith("/dashboard") && user.error) {
+      // Special handling for subscription success page - allow retry
+      if (request.nextUrl.pathname === "/dashboard/subscription" && request.nextUrl.searchParams.has("session_id")) {
+        console.log("Stripe success redirect detected, allowing subscription page access for session refresh");
+        // Don't redirect immediately on subscription success page, allow the page to handle session refresh
+        return response;
+      }
+      
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
