@@ -7,11 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { PlusIcon, SearchIcon, FilterIcon, EyeIcon, TrashIcon, ClockIcon, Loader2, LockIcon } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ContractWithTemplate } from "@/app/(dashboard)/dashboard/contracts/page"; // Import the type from the server component
 import { deleteContractAction, sendContractAction } from "@/app/actions"; // Import the delete and send actions
 
 interface ContractsListClientProps {
   initialContracts: ContractWithTemplate[];
+  isLimitReached: boolean;
+  maxContracts: number | null;
 }
 
 // Define status type more broadly based on schema
@@ -25,7 +33,7 @@ interface ContractLimitInfo {
   contractLimit: number | null;
 }
 
-export function ContractsListClient({ initialContracts }: ContractsListClientProps) {
+export function ContractsListClient({ initialContracts, isLimitReached, maxContracts }: ContractsListClientProps) {
   const [contracts, setContracts] = useState<ContractWithTemplate[]>(initialContracts);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ContractStatus | null>(null);
@@ -426,12 +434,33 @@ export function ContractsListClient({ initialContracts }: ContractsListClientPro
               : "You haven't created any contracts yet, or none match the current filter."}
           </p>
           {!(searchQuery || statusFilter) && (
-             <Button asChild>
-                <Link href="/dashboard/contracts/new">
-                  <PlusIcon className="mr-2 h-4 w-4" />
-                  Create Your First Contract
-                </Link>
-              </Button>
+            <TooltipProvider>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <div className={isLimitReached ? 'cursor-not-allowed' : ''}>
+                    <Button asChild={!isLimitReached} disabled={isLimitReached}>
+                      {isLimitReached ? (
+                        <span className="inline-flex items-center">
+                          <PlusIcon className="mr-2 h-4 w-4" />
+                          Create Your First Contract
+                        </span>
+                      ) : (
+                        <Link href="/dashboard/contracts/new">
+                          <PlusIcon className="mr-2 h-4 w-4" />
+                          Create Your First Contract
+                        </Link>
+                      )}
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                {isLimitReached && (
+                  <TooltipContent>
+                    <p>Upgrade to create more contracts.</p>
+                    <p className="text-xs text-muted-foreground">Free plan limit ({maxContracts}) reached.</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       )}

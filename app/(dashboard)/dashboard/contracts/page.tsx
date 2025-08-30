@@ -4,9 +4,16 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
 import { createClient } from "@/utils/supabase/server"; // Use server client
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from "next/navigation";
 import { ContractsListClient } from "@/components/dashboard/contracts-list-client"; // Import the client component (to be created)
 import { Database } from "@/types/supabase"; // Assuming you have types generated
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Define the type for fetched contracts from get_user_contracts RPC function
 export type ContractWithTemplate = {
@@ -35,6 +42,12 @@ export type ContractWithTemplate = {
 
 export default async function ContractsPage() {
   const supabase = await createClient();
+  
+  // Create service role client for bypassing RLS when needed
+  const serviceSupabase = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE!
+  );
 
   const {
     data: { user },
@@ -45,6 +58,45 @@ export default async function ContractsPage() {
     console.error("Contracts Page Error: User not found.", getUserError);
     return redirect("/sign-in");
   }
+
+  // --- Fetch Subscription and Contract Limit Data ---
+  let planId = 'free';
+  let maxContracts: number | null = 3; // Default to free plan limit
+  let activeContractsCount = 0;
+
+  // 1. Get active subscription using service role client
+  const { data: subscription } = await serviceSupabase
+    .from('user_subscriptions')
+    .select('plan_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (subscription?.plan_id) {
+    planId = subscription.plan_id;
+    // 2. Get plan details using service role client
+    const { data: planDetails } = await serviceSupabase
+      .from('subscription_plans')
+      .select('max_contracts')
+      .eq('id', planId)
+      .single();
+    maxContracts = planDetails?.max_contracts ?? null; // Use null for unlimited
+  } else {
+     // Ensure we have the free plan limit if no active sub
+     const { data: freePlanDetails } = await serviceSupabase
+      .from('subscription_plans')
+      .select('max_contracts')
+      .eq('id', 'free')
+      .single();
+     maxContracts = freePlanDetails?.max_contracts ?? 3; // Fallback to 3 if DB fetch fails
+  }
+
+  // 3. Get active contracts count for limit checking
+  const { data: dashboardStats } = await serviceSupabase.rpc('get_dashboard_stats', { p_user_id: user.id });
+  activeContractsCount = dashboardStats?.[0]?.active_contracts || 0;
+
+  // 4. Determine if limit is reached (only for plans with a limit)
+  const isLimitReached = maxContracts !== null && activeContractsCount >= maxContracts;
 
   // Fetch contracts using security definer function with free tier filtering
   const { data: contracts, error: fetchError } = await supabase
@@ -98,17 +150,42 @@ export default async function ContractsPage() {
           <h1 className="text-3xl font-serif font-bold">Contracts</h1>
           <p className="text-muted-foreground mt-1">Manage your contracts and agreements.</p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/contracts/new">
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Create Contract
-          </Link>
-        </Button>
+        <TooltipProvider>
+          <Tooltip delayDuration={100}>
+            <TooltipTrigger asChild>
+              <div className={isLimitReached ? 'cursor-not-allowed' : ''}>
+                <Button asChild={!isLimitReached} disabled={isLimitReached}>
+                  {isLimitReached ? (
+                    <span className="inline-flex items-center">
+                      <PlusIcon className="mr-2 h-4 w-4" />
+                      Create Contract
+                    </span>
+                  ) : (
+                    <Link href="/dashboard/contracts/new">
+                      <PlusIcon className="mr-2 h-4 w-4" />
+                      Create Contract
+                    </Link>
+                  )}
+                </Button>
+              </div>
+            </TooltipTrigger>
+            {isLimitReached && (
+              <TooltipContent>
+                <p>Upgrade to create more contracts.</p>
+                <p className="text-xs text-muted-foreground">Free plan limit ({maxContracts}) reached.</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Pass fetched contracts to the Client Component */}
       {/* This component will handle filtering, searching, display, and actions */}
-      <ContractsListClient initialContracts={validContracts} />
+      <ContractsListClient 
+        initialContracts={validContracts} 
+        isLimitReached={isLimitReached}
+        maxContracts={maxContracts}
+      />
     </div>
   );
 }

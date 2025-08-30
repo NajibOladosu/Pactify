@@ -37,7 +37,7 @@ export function DashboardNav({ userType, displayName, userInitial, currentPlan =
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r border-border bg-background">
+    <aside className="hidden md:flex flex-col w-64 border-r border-border bg-background min-h-screen">
       <div className="p-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-primary-500 font-bold text-2xl font-serif">Pactify</span>
