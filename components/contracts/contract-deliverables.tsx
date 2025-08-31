@@ -468,10 +468,6 @@ export default function ContractDeliverables({
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-serif font-semibold flex items-center gap-2 mb-1">
-            <PackageIcon className="h-5 w-5 text-muted-foreground" />
-            Deliverables
-          </h3>
           <p className="text-sm text-muted-foreground">
             {contractStatus === 'pending_delivery' && userRole === 'freelancer' 
               ? "Submit all final deliverables to complete the project and enable payment release"
@@ -617,7 +613,6 @@ export default function ContractDeliverables({
           <CardContent className="space-y-4">
             {/* Deliverable Info */}
             <div>
-              <h4 className="font-medium mb-2">{selectedDeliverable.title}</h4>
               {selectedDeliverable.description && (
                 <p className="text-sm text-muted-foreground mb-3">
                   {selectedDeliverable.description}
