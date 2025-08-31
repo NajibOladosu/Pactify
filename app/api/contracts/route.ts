@@ -129,8 +129,8 @@ const handleContractCreation = async (request: NextRequest, user: any) => {
         // Set client/freelancer fields based on user role
         client_id: userRole === 'client' ? user.id : null,
         freelancer_id: userRole === 'freelancer' ? user.id : null,
-        client_email: userRole === 'freelancer' ? (validatedData.freelancer_email || body.freelancer_email) : null,
-        freelancer_email: userRole === 'client' ? (validatedData.freelancer_email || body.freelancer_email) : null,
+        client_email: userRole === 'freelancer' ? (validatedData.client_email || body.client_email) : null,
+        freelancer_email: userRole === 'client' ? (validatedData.client_email || body.client_email) : null,
         template_id: validatedData.template_id || null,
         content: validatedData.content || {
           template: "default",

@@ -91,7 +91,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://api.stripe.com" />
         <link rel="dns-prefetch" href="https://js.stripe.com" />
       </head>
-      <body className="bg-background text-foreground font-sans antialiased">
+      <body className="bg-background text-foreground font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

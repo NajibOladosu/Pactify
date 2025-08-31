@@ -119,7 +119,6 @@ const STEP_NAMES = [
   'Template',
   'Basic Info & Role',
   'Payment & Type',
-  'Milestones',
   'Terms & Timeline',
   'Review'
 ];
@@ -176,25 +175,31 @@ export default function EnhancedContractWizard() {
           newErrors.total_amount = 'Amount must be greater than 0';
         }
         break;
-      case 3: // Milestones (only for milestone contracts)
-        if (formData.type === 'milestone') {
-          if (formData.milestones.length === 0) {
-            newErrors.milestones = 'At least one milestone is required for milestone contracts';
-          } else {
-            const totalMilestoneAmount = formData.milestones.reduce((sum, m) => sum + m.amount, 0);
-            if (Math.abs(totalMilestoneAmount - formData.total_amount) > 0.01) {
-              newErrors.milestones = 'Total milestone amount must equal contract amount';
-            }
-          }
-        }
-        break;
-      case 4: // Terms & Timeline
+      case 3: // Terms & Timeline (includes milestones for milestone contracts)
         if (!formData.terms_and_conditions.trim()) {
           newErrors.terms_and_conditions = 'Terms and conditions are required';
         }
         if (formData.start_date && formData.end_date) {
           if (new Date(formData.end_date) <= new Date(formData.start_date)) {
             newErrors.end_date = 'End date must be after start date';
+          }
+        }
+        // Milestone validation for milestone contracts
+        if (formData.type === 'milestone') {
+          const validMilestones = formData.milestones.filter(m => m.title.trim() && m.amount > 0);
+          if (validMilestones.length === 0) {
+            newErrors.milestones = 'At least one valid milestone is required for milestone contracts';
+          } else {
+            const totalMilestoneAmount = validMilestones.reduce((sum, m) => sum + m.amount, 0);
+            if (Math.abs(totalMilestoneAmount - formData.total_amount) > 0.01) {
+              newErrors.milestones = 'Total milestone amount must equal contract amount';
+            }
+          }
+          
+          // Check for invalid milestones
+          const invalidMilestones = formData.milestones.filter(m => !m.title.trim() || m.amount <= 0);
+          if (invalidMilestones.length > 0) {
+            newErrors.milestones = 'All milestones must have a title and amount greater than 0';
           }
         }
         break;
@@ -222,7 +227,7 @@ export default function EnhancedContractWizard() {
     setSelectedTemplate(template);
     setFormData(prev => ({
       ...prev,
-      template_id: template.id,
+      template_id: null, // Template IDs are not UUIDs, so we'll pass the name in content
       type: template.suggested_type,
       terms_and_conditions: template.default_terms
     }));
@@ -263,24 +268,56 @@ export default function EnhancedContractWizard() {
     if (!validateStep(currentStep)) return;
 
     startTransition(async () => {
+      // Filter out invalid milestones (empty title or zero amount)
+      const validMilestones = formData.milestones.filter(m => 
+        m.title.trim() && m.amount > 0
+      );
+      
+      // Prepare request data, omitting null template_id
+      const requestData = {
+        ...formData,
+        milestones: validMilestones,
+        content: {
+          template: selectedTemplate?.name,
+          created_with_wizard: true
+        }
+      };
+      
+      // Remove template_id if it's null to avoid validation errors
+      if (requestData.template_id === null) {
+        delete requestData.template_id;
+      }
+      
       try {
+        
+        console.log('Making request to /api/contracts with data:', requestData);
+        
         const response = await fetch('/api/contracts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...formData,
-            content: {
-              template: selectedTemplate?.name,
-              created_with_wizard: true
-            }
-          })
+          body: JSON.stringify(requestData)
         });
-
-        const result = await response.json();
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
         if (!response.ok) {
-          throw new Error(result.error || 'Failed to create contract');
+          let errorMessage = 'Failed to create contract';
+          try {
+            const responseText = await response.text();
+            console.log('Error response text:', responseText.substring(0, 500)); // First 500 chars
+            
+            // Try to parse as JSON
+            const result = JSON.parse(responseText);
+            errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
+          } catch (parseError) {
+            console.log('Failed to parse error response as JSON:', parseError);
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          }
+          throw new Error(errorMessage);
         }
+        
+        const result = await response.json();
 
         toast({
           title: "Contract Created Successfully!",
@@ -289,9 +326,29 @@ export default function EnhancedContractWizard() {
 
         router.push(`/dashboard/contracts/${result.contract.id}`);
       } catch (error) {
+        console.error('Contract creation error:', error);
+        console.log('Form data being sent:', requestData);
+        
+        let errorMessage = "An unexpected error occurred";
+        
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        } else if (error && typeof error === 'object') {
+          // Try to extract meaningful error information from the object
+          if ('message' in error && typeof error.message === 'string') {
+            errorMessage = error.message;
+          } else if ('error' in error && typeof error.error === 'string') {
+            errorMessage = error.error;
+          } else {
+            errorMessage = JSON.stringify(error);
+          }
+        }
+        
         toast({
           title: "Error Creating Contract",
-          description: error instanceof Error ? error.message : "An unexpected error occurred",
+          description: errorMessage,
           variant: "destructive",
         });
       }
@@ -721,7 +778,7 @@ export default function EnhancedContractWizard() {
                       <div>
                         <h4 className="text-base font-semibold text-blue-900 mb-2">Milestone-based Contract</h4>
                         <p className="text-sm text-blue-700 leading-relaxed">
-                          In the next step, you'll define specific milestones with individual payment amounts. 
+                          In the next step, you'll define specific milestones with individual payment amounts and timelines. 
                           This approach helps ensure payment is tied to deliverables and provides better project management.
                         </p>
                       </div>
@@ -733,191 +790,215 @@ export default function EnhancedContractWizard() {
           </div>
         );
 
-      case 3: // Milestones (only shown for milestone contracts)
-        if (formData.type !== 'milestone') {
-          // Skip this step for non-milestone contracts
-          return null;
-        }
-
+      case 3: // Terms & Timeline (includes milestones for milestone contracts)
         const totalMilestoneAmount = formData.milestones.reduce((sum, m) => sum + m.amount, 0);
         const remaining = formData.total_amount - totalMilestoneAmount;
-
+        
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-serif font-bold mb-3">Project Milestones</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto mb-4">Break down your project into manageable milestones.</p>
-              <Button onClick={addMilestone} variant="outline" size="sm">
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Add Milestone
-              </Button>
+              <h2 className="text-2xl font-serif font-bold mb-3">Terms & Timeline</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                {formData.type === 'milestone' 
+                  ? 'Configure your project milestones and contract terms.' 
+                  : 'Define the terms and timeline for your project.'}
+              </p>
             </div>
 
-            <div className="bg-muted/30 rounded-lg p-4">
-              <div className="flex justify-between text-sm">
-                <span>Total Contract Amount:</span>
-                <span className="font-medium">${formData.total_amount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Milestones Total:</span>
-                <span className="font-medium">${totalMilestoneAmount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm border-t pt-2 mt-2">
-                <span>Remaining:</span>
-                <span className={cn(
-                  "font-medium",
-                  remaining === 0 ? "text-green-600" : remaining < 0 ? "text-red-600" : "text-orange-600"
-                )}>
-                  ${remaining.toFixed(2)}
-                </span>
-              </div>
-            </div>
+            {/* Milestone Configuration for milestone contracts */}
+            {formData.type === 'milestone' && (
+              <Card className="border-l-4 border-l-blue-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Project Milestones</span>
+                    <Button onClick={addMilestone} variant="outline" size="sm">
+                      <PlusIcon className="h-4 w-4 mr-2" />
+                      Add Milestone
+                    </Button>
+                  </CardTitle>
+                  <CardDescription>
+                    Break down your project into manageable milestones, each with its own timeline and payment.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <div className="flex justify-between text-sm">
+                      <span>Total Contract Amount:</span>
+                      <span className="font-medium">${formData.total_amount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Milestones Total:</span>
+                      <span className="font-medium">${totalMilestoneAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t pt-2 mt-2">
+                      <span>Remaining:</span>
+                      <span className={cn(
+                        "font-medium",
+                        remaining === 0 ? "text-green-600" : remaining < 0 ? "text-red-600" : "text-orange-600"
+                      )}>
+                        ${remaining.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
 
-            {formData.milestones.length === 0 ? (
-              <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                <h4 className="text-sm font-medium text-muted-foreground">No milestones added yet</h4>
-                <p className="text-xs text-muted-foreground mt-1">Add milestones to structure your project payments</p>
-                <Button onClick={addMilestone} variant="outline" size="sm" className="mt-3">
-                  <PlusIcon className="h-4 w-4 mr-2" />
-                  Add First Milestone
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {formData.milestones.map((milestone, index) => (
-                  <Card key={milestone.id}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base">Milestone {index + 1}</CardTitle>
-                        <Button
-                          onClick={() => removeMilestone(milestone.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <XCircleIcon className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3 sm:space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                        <div>
-                          <Label htmlFor={`milestone-title-${milestone.id}`} className="text-sm font-medium">Milestone Title</Label>
-                          <Input
-                            id={`milestone-title-${milestone.id}`}
-                            value={milestone.title}
-                            onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
-                            placeholder="e.g., Design Mockups"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor={`milestone-amount-${milestone.id}`} className="text-sm font-medium">Amount</Label>
-                          <div className="relative mt-1">
-                            <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              id={`milestone-amount-${milestone.id}`}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={milestone.amount || ''}
-                              onChange={(e) => updateMilestone(milestone.id, { 
-                                amount: parseFloat(e.target.value) || 0 
-                              })}
-                              placeholder="0.00"
-                              className="pl-10"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor={`milestone-description-${milestone.id}`} className="text-sm font-medium">Description</Label>
-                        <Textarea
-                          id={`milestone-description-${milestone.id}`}
-                          value={milestone.description}
-                          onChange={(e) => updateMilestone(milestone.id, { description: e.target.value })}
-                          placeholder="Describe what will be delivered in this milestone..."
-                          rows={2}
-                          className="mt-1 text-sm"
-                        />
-                      </div>
+                  {formData.milestones.length === 0 ? (
+                    <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                      <h4 className="text-sm font-medium text-muted-foreground">No milestones added yet</h4>
+                      <p className="text-xs text-muted-foreground mt-1">Add milestones to structure your project payments</p>
+                      <Button onClick={addMilestone} variant="outline" size="sm" className="mt-3">
+                        <PlusIcon className="h-4 w-4 mr-2" />
+                        Add First Milestone
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {formData.milestones.map((milestone, index) => (
+                        <Card key={milestone.id} className="border-l-4 border-l-blue-200">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base">Milestone {index + 1}</CardTitle>
+                              <Button
+                                onClick={() => removeMilestone(milestone.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <XCircleIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3 sm:space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                              <div>
+                                <Label htmlFor={`milestone-title-${milestone.id}`} className="text-sm font-medium">Milestone Title</Label>
+                                <Input
+                                  id={`milestone-title-${milestone.id}`}
+                                  value={milestone.title}
+                                  onChange={(e) => updateMilestone(milestone.id, { title: e.target.value })}
+                                  placeholder="e.g., Design Mockups"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`milestone-amount-${milestone.id}`} className="text-sm font-medium">Amount</Label>
+                                <div className="relative mt-1">
+                                  <DollarSignIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    id={`milestone-amount-${milestone.id}`}
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={milestone.amount || ''}
+                                    onChange={(e) => updateMilestone(milestone.id, { 
+                                      amount: parseFloat(e.target.value) || 0 
+                                    })}
+                                    placeholder="0.00"
+                                    className="pl-10"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`milestone-description-${milestone.id}`} className="text-sm font-medium">Description</Label>
+                              <Textarea
+                                id={`milestone-description-${milestone.id}`}
+                                value={milestone.description}
+                                onChange={(e) => updateMilestone(milestone.id, { description: e.target.value })}
+                                placeholder="Describe what will be delivered in this milestone..."
+                                rows={2}
+                                className="mt-1 text-sm"
+                              />
+                            </div>
 
-                      <div>
-                        <Label htmlFor={`milestone-due-${milestone.id}`} className="text-sm font-medium">Due Date (Optional)</Label>
-                        <Input
-                          id={`milestone-due-${milestone.id}`}
-                          type="date"
-                          value={milestone.due_date}
-                          onChange={(e) => updateMilestone(milestone.id, { due_date: e.target.value })}
-                          className="mt-1"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                            <div>
+                              <Label htmlFor={`milestone-due-${milestone.id}`} className="text-sm font-medium">Due Date (Optional)</Label>
+                              <Input
+                                id={`milestone-due-${milestone.id}`}
+                                type="date"
+                                value={milestone.due_date}
+                                onChange={(e) => updateMilestone(milestone.id, { due_date: e.target.value })}
+                                className="mt-1"
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+
+                  {errors.milestones && (
+                    <p className="text-sm text-destructive">{errors.milestones}</p>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
-            {errors.milestones && (
-              <p className="text-sm text-destructive">{errors.milestones}</p>
-            )}
+
+            {/* Timeline and Terms Section for all contracts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Timeline</CardTitle>
+                <CardDescription>
+                  Set the overall project start and completion dates.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="start_date" className="text-sm font-medium">Project Start Date (Optional)</Label>
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={formData.start_date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="end_date" className="text-sm font-medium">Expected Completion Date (Optional)</Label>
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={formData.end_date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                      className={cn("mt-1", errors.end_date ? "border-destructive" : "")}
+                    />
+                    {errors.end_date && <p className="text-sm text-destructive mt-1">{errors.end_date}</p>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Terms and Conditions</CardTitle>
+                <CardDescription>
+                  Define the legal terms and conditions for this contract.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div>
+                  <Label htmlFor="terms_and_conditions" className="text-sm font-medium">Terms and Conditions *</Label>
+                  <Textarea
+                    id="terms_and_conditions"
+                    value={formData.terms_and_conditions}
+                    onChange={(e) => setFormData(prev => ({ ...prev, terms_and_conditions: e.target.value }))}
+                    placeholder="Enter the terms and conditions for this contract..."
+                    rows={6}
+                    className={cn("mt-1 text-sm", errors.terms_and_conditions ? "border-destructive" : "")}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    These terms have been pre-filled based on your selected template. You can modify them as needed.
+                  </p>
+                  {errors.terms_and_conditions && <p className="text-sm text-destructive mt-1">{errors.terms_and_conditions}</p>}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         );
 
-      case 4: // Terms & Timeline
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-serif font-bold mb-3">Contract Terms & Timeline</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">Define the terms and timeline for your project.</p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="start_date" className="text-sm font-medium">Project Start Date (Optional)</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="end_date" className="text-sm font-medium">Expected Completion Date (Optional)</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                    className={cn("mt-1", errors.end_date ? "border-destructive" : "")}
-                  />
-                  {errors.end_date && <p className="text-sm text-destructive mt-1">{errors.end_date}</p>}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="terms_and_conditions" className="text-sm font-medium">Terms and Conditions *</Label>
-                <Textarea
-                  id="terms_and_conditions"
-                  value={formData.terms_and_conditions}
-                  onChange={(e) => setFormData(prev => ({ ...prev, terms_and_conditions: e.target.value }))}
-                  placeholder="Enter the terms and conditions for this contract..."
-                  rows={6}
-                  className={cn("mt-1 text-sm", errors.terms_and_conditions ? "border-destructive" : "")}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  These terms have been pre-filled based on your selected template. You can modify them as needed.
-                </p>
-                {errors.terms_and_conditions && <p className="text-sm text-destructive mt-1">{errors.terms_and_conditions}</p>}
-              </div>
-            </div>
-          </div>
-        );
-
-      case 5: // Review
+      case 4: // Review
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -1031,14 +1112,8 @@ export default function EnhancedContractWizard() {
     }
   };
 
-  // Skip milestone step for non-milestone contracts
-  const effectiveSteps = formData.type === 'milestone' 
-    ? STEP_NAMES 
-    : STEP_NAMES.filter((_, index) => index !== 3);
-
-  const currentStepIndex = formData.type === 'milestone' 
-    ? currentStep 
-    : currentStep >= 3 ? currentStep + 1 : currentStep;
+  // All steps are now shown for all contract types
+  const effectiveSteps = STEP_NAMES;
 
   return (
     <div className="space-y-8">
@@ -1084,7 +1159,7 @@ export default function EnhancedContractWizard() {
             {effectiveSteps.map((stepName, index) => {
               const isActive = index === currentStep;
               const isCompleted = index < currentStep;
-              const stepNumber = formData.type === 'milestone' ? index : (index >= 3 ? index + 1 : index);
+              const stepNumber = index;
               
               return (
                 <div key={stepName} className="flex items-center">

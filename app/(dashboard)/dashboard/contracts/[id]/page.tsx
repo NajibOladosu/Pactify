@@ -19,6 +19,7 @@ import ContractCollaboration from '@/components/contracts/contract-collaboration
 import DisputeResolution from '@/components/contracts/dispute-resolution';
 import RefundCancellationManager from '@/components/contracts/refund-cancellation-manager';
 import ContractDeliverables from '@/components/contracts/contract-deliverables';
+import { ContractTimeTracking } from '@/components/contracts/time-tracking/contract-time-tracking';
 
 // Define and EXPORT the type for the fetched contract
 export type ContractDetail = Database['public']['Tables']['contracts']['Row'] & {
@@ -345,6 +346,19 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
                 status: m.status as 'pending' | 'in_progress' | 'submitted' | 'approved' | 'revision_requested' | 'completed',
                 due_date: m.due_date
               })) || []}
+            />
+          )}
+
+          {/* Time Tracking Section - Only for hourly contracts */}
+          {contractDetail.type === 'hourly' && (['active', 'pending_delivery', 'in_review', 'pending_completion', 'completed'].includes(contractDetail.status || '')) && (
+            <ContractTimeTracking
+              contractId={contractDetail.id}
+              contractType={contractDetail.type as 'hourly'}
+              contractStatus={contractDetail.status || 'draft'}
+              hourlyRate={contractDetail.total_amount ? Number(contractDetail.total_amount) / 40 : undefined}
+              currency={contractDetail.currency || 'USD'}
+              userRole={userRole}
+              userId={user.id}
             />
           )}
 
