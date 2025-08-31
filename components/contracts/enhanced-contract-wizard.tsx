@@ -274,19 +274,16 @@ export default function EnhancedContractWizard() {
       );
       
       // Prepare request data, omitting null template_id
+      const { template_id, ...baseData } = formData;
       const requestData = {
-        ...formData,
+        ...baseData,
         milestones: validMilestones,
         content: {
           template: selectedTemplate?.name,
           created_with_wizard: true
-        }
+        },
+        ...(template_id !== null && { template_id })
       };
-      
-      // Remove template_id if it's null to avoid validation errors
-      if (requestData.template_id === null) {
-        delete requestData.template_id;
-      }
       
       try {
         

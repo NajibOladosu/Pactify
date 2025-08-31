@@ -50,18 +50,21 @@ export function ContractTimeTracking({
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Only show time tracking for hourly contracts
-  if (contractType !== 'hourly') {
-    return null;
-  }
-
   const isFreelancer = userRole === 'freelancer' || userRole === 'creator';
   const isClient = userRole === 'client';
   const canTrackTime = isFreelancer && ['active', 'in_progress', 'pending_delivery'].includes(contractStatus);
 
   useEffect(() => {
-    fetchSummary();
-  }, [contractId, refreshTrigger]);
+    // Only fetch if this is an hourly contract
+    if (contractType === 'hourly') {
+      fetchSummary();
+    }
+  }, [contractId, refreshTrigger, contractType]);
+
+  // Only show time tracking for hourly contracts
+  if (contractType !== 'hourly') {
+    return null;
+  }
 
   const fetchSummary = async () => {
     try {
