@@ -70,30 +70,69 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Get freelancer profile with Stripe Connect info
-    const { data: freelancerProfile, error: freelancerError } = await supabase
-      .from('profiles')
+    // Get freelancer's connected account from new KYC tables
+    const { data: connectedAccount, error: accountError } = await supabase
+      .from('connected_accounts')
       .select('*')
-      .eq('id', freelancerParty.user_id)
+      .eq('user_id', freelancerParty.user_id)
       .single();
 
-    if (freelancerError || !freelancerProfile) {
-      return NextResponse.json({ error: 'Freelancer profile not found' }, { status: 404 });
-    }
-
-    // Check if freelancer has Stripe Connect account
-    if (!freelancerProfile.stripe_connect_account_id) {
+    if (accountError || !connectedAccount) {
       return NextResponse.json({ 
         error: 'Freelancer has not set up payment account' 
       }, { status: 400 });
     }
 
-    // Check if freelancer's Stripe Connect account is ready
-    if (!freelancerProfile.stripe_connect_charges_enabled || !freelancerProfile.stripe_connect_payouts_enabled) {
-      return NextResponse.json({ 
-        error: 'Freelancer payment account is not fully verified' 
-      }, { status: 400 });
+    // Create Stripe instance for account verification
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: '2024-06-20',
+    });
+
+    // *** KYC HARD GATE - The core verification logic ***
+    // fetch escrow row -> get payee stripe_account_id & amount
+    const payeeStripeAccountId = connectedAccount.stripe_account_id;
+    
+    // Re-fetch the connected account and enforce the gate
+    const acct = await stripe.accounts.retrieve(payeeStripeAccountId);
+
+    const transfersActive = acct.capabilities?.transfers === "active";
+    const payoutsEnabled = Boolean((acct as any).payouts_enabled);
+    
+    if (!(transfersActive && payoutsEnabled)) {
+      // populate reasons from requirements to show in UI
+      const r = (acct as any).requirements;
+      return NextResponse.json({
+        ok: false,
+        error: "kyc_not_verified",
+        missing: r?.currently_due || [],
+        past_due: r?.past_due || [],
+        disabled_reason: r?.disabled_reason || null,
+        message: "Freelancer account is not fully verified for payouts",
+        verification_status: {
+          transfers_active: transfersActive,
+          payouts_enabled: payoutsEnabled,
+          requirements_currently_due: r?.currently_due || [],
+          requirements_past_due: r?.past_due || [],
+          requirements_disabled_reason: r?.disabled_reason,
+        }
+      }, { status: 403 });
     }
+
+    // Update our database with fresh account data
+    await supabase
+      .from('connected_accounts')
+      .update({
+        cap_transfers: acct.capabilities?.transfers || 'inactive',
+        payouts_enabled: acct.payouts_enabled,
+        charges_enabled: acct.charges_enabled,
+        requirements_currently_due: acct.requirements?.currently_due || [],
+        requirements_past_due: acct.requirements?.past_due || [],
+        requirements_eventually_due: acct.requirements?.eventually_due || [],
+        requirements_disabled_reason: acct.requirements?.disabled_reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connectedAccount.id);
 
     // Validate contract status
     if (!contract.is_funded) {
@@ -112,12 +151,12 @@ export async function POST(
     const body = await request.json();
     const validatedData = validateRequestBody(releasePaymentSchema, body);
 
-    // Get escrow payment records for this contract
+    // Get escrow ledger records for this contract
     const { data: escrowPayments, error: escrowError } = await supabase
-      .from('escrow_payments')
+      .from('escrow_ledger')
       .select('*')
       .eq('contract_id', resolvedParams.id)
-      .eq('status', 'funded')
+      .eq('status', 'held')
       .order('created_at', { ascending: true });
 
     if (escrowError) {
@@ -127,7 +166,7 @@ export async function POST(
 
     if (!escrowPayments || escrowPayments.length === 0) {
       return NextResponse.json({ 
-        error: 'No funded escrow payments found for this contract' 
+        error: 'No held escrow payments found for this contract' 
       }, { status: 400 });
     }
 
@@ -145,43 +184,39 @@ export async function POST(
       targetPayment = milestonePayment;
     }
 
-    // Calculate release amount
-    const releaseAmount = validatedData.amount || targetPayment.amount;
+    // Calculate release amount (escrow_ledger stores amounts in smallest currency unit)
+    const releaseAmount = validatedData.amount || (targetPayment.amount / 100); // Convert from cents to dollars
+    const releaseAmountCents = validatedData.amount ? Math.round(validatedData.amount * 100) : targetPayment.amount;
 
-    if (releaseAmount > targetPayment.amount) {
+    if (releaseAmountCents > targetPayment.amount) {
       return NextResponse.json({ 
         error: 'Release amount cannot exceed escrow amount' 
       }, { status: 400 });
     }
-
-    // Create Stripe instance
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: '2025-07-30.basil',
-    });
     
     try {
+      // Passed -> release funds from platform balance
       const transfer = await stripe.transfers.create({
-        amount: Math.round(releaseAmount * 100), // Convert to cents
-        currency: contract.currency.toLowerCase(),
-        destination: freelancerProfile.stripe_connect_account_id,
+        amount: releaseAmountCents, // already in smallest currency unit
+        currency: targetPayment.currency.toLowerCase(),
+        destination: payeeStripeAccountId,
         transfer_group: `contract_${resolvedParams.id}`,
         metadata: {
           contract_id: resolvedParams.id,
-          escrow_payment_id: targetPayment.id,
+          escrow_ledger_id: targetPayment.id,
           release_amount: releaseAmount.toString(),
           released_by: user.id,
           reason: validatedData.reason || 'Payment release',
         },
       });
 
-      // Update escrow payment status
+      // mark escrow row released; store transfer.id
       const { error: updateError } = await supabase
-        .from('escrow_payments')
+        .from('escrow_ledger')
         .update({
           status: 'released',
           released_at: new Date().toISOString(),
-          stripe_transfer_id: transfer.id,
+          transfer_id: transfer.id,
           updated_at: new Date().toISOString(),
         })
         .eq('id', targetPayment.id);
@@ -202,7 +237,7 @@ export async function POST(
           payment_type: 'release',
           stripe_payment_id: transfer.id,
           metadata: {
-            escrow_payment_id: targetPayment.id,
+            escrow_ledger_id: targetPayment.id,
             transfer_id: transfer.id,
             freelancer_id: freelancerParty.user_id,
             released_by: user.id,
@@ -217,10 +252,10 @@ export async function POST(
 
       // Update contract status if all payments are released
       const { data: remainingPayments } = await supabase
-        .from('escrow_payments')
+        .from('escrow_ledger')
         .select('*')
         .eq('contract_id', resolvedParams.id)
-        .eq('status', 'funded');
+        .eq('status', 'held');
 
       if (!remainingPayments || remainingPayments.length === 0) {
         // All payments released, mark contract as completed
@@ -259,15 +294,16 @@ export async function POST(
       }
 
       return NextResponse.json({
-        success: true,
+        ok: true,
+        transferId: transfer.id,
         transfer: {
           id: transfer.id,
           amount: releaseAmount,
-          currency: contract.currency,
-          destination: freelancerProfile.stripe_connect_account_id,
+          currency: targetPayment.currency,
+          destination: payeeStripeAccountId,
           status: 'released',
         },
-        escrow_payment: {
+        escrow_ledger: {
           id: targetPayment.id,
           status: 'released',
           released_at: new Date().toISOString(),

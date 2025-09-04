@@ -72,6 +72,31 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // Get freelancer party to check for connected account
+    const freelancerParty = contract.contract_parties.find(
+      (party: any) => party.role === 'freelancer'
+    );
+    
+    if (!freelancerParty) {
+      return NextResponse.json({ 
+        error: 'Freelancer not found for this contract' 
+      }, { status: 400 });
+    }
+
+    // Check if freelancer has a connected account (required for escrow)
+    const { data: connectedAccount, error: accountError } = await supabase
+      .from('connected_accounts')
+      .select('*')
+      .eq('user_id', freelancerParty.user_id)
+      .single();
+
+    if (accountError || !connectedAccount) {
+      return NextResponse.json({ 
+        error: 'Freelancer must set up payment account before contract can be funded',
+        action_required: 'freelancer_kyc_setup'
+      }, { status: 400 });
+    }
+
     // Validate contract amount
     if (!contract.total_amount || contract.total_amount <= 0) {
       return NextResponse.json({ 
@@ -156,7 +181,7 @@ export async function POST(
       },
     });
 
-    // Create escrow payment record
+    // Create escrow payment record (keep existing table for compatibility)
     const { data: escrowPayment, error: escrowError } = await supabase
       .from('escrow_payments')
       .insert({
@@ -178,6 +203,37 @@ export async function POST(
       }, { status: 500 });
     }
 
+    // Create escrow ledger entry (new KYC-compliant table)
+    // Record it in your escrow_ledger - this will be used for KYC-gated releases
+    const { data: escrowLedgerEntry, error: ledgerError } = await supabase
+      .from('escrow_ledger')
+      .insert({
+        payment_intent_id: session.payment_intent as string,
+        buyer_user_id: user.id,
+        payee_account_id: connectedAccount.id,
+        amount: Math.round(contractAmount * 100), // store in smallest currency unit (cents)
+        currency: contract.currency,
+        platform_fee: Math.round(platformFee * 100),
+        status: 'held', // held until KYC verification passes and work is complete
+        contract_id: resolvedParams.id,
+        description: `Escrow funding for contract ${contract.contract_number}`,
+        metadata: {
+          contract_number: contract.contract_number,
+          total_charged: totalCharge,
+          stripe_fee: stripeFee,
+          escrow_payment_id: escrowPayment.id,
+        },
+      })
+      .select()
+      .single();
+
+    if (ledgerError) {
+      console.error('Error creating escrow ledger entry:', ledgerError);
+      return NextResponse.json({ 
+        error: 'Failed to create escrow ledger entry' 
+      }, { status: 500 });
+    }
+
     // Create contract payment record for compatibility
     const { error: paymentError } = await supabase
       .from('contract_payments')
@@ -190,6 +246,7 @@ export async function POST(
         stripe_payment_id: session.id,
         metadata: {
           escrow_payment_id: escrowPayment.id,
+          escrow_ledger_id: escrowLedgerEntry.id,
           contract_amount: contractAmount,
           platform_fee: platformFee,
           stripe_fee: stripeFee,
@@ -206,11 +263,17 @@ export async function POST(
       sessionId: session.id,
       sessionUrl: session.url,
       paymentId: escrowPayment.id,
+      escrowLedgerId: escrowLedgerEntry.id,
       amounts: {
         contract: contractAmount,
         platform_fee: platformFee,
         stripe_fee: stripeFee,
         total: totalCharge,
+      },
+      escrow: {
+        id: escrowLedgerEntry.id,
+        status: 'held',
+        description: escrowLedgerEntry.description,
       },
     });
 

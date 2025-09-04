@@ -10,7 +10,7 @@ import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
 import { updateUserProfile } from "@/app/actions"; // Import the server action
-import KycStatusDashboard from "@/components/dashboard/kyc-status-dashboard";
+import { KYCDashboardSection } from "@/components/kyc/kyc-dashboard-section";
 import EmailNotificationSettings from "@/components/dashboard/email-notification-settings";
 
 export const metadata = {
@@ -406,13 +406,12 @@ export default async function SettingsPage() {
         {/* Verification Tab */}
         <TabsContent value="verification">
           <div>
-            <h2 className="text-2xl font-semibold mb-2">Identity Verification</h2>
+            <h2 className="text-2xl font-semibold mb-2">Payment Account Verification</h2>
             <p className="text-muted-foreground mb-6">
-              Complete your identity verification to unlock all platform features and enable secure payments.
+              Set up and verify your payment account to receive funds from completed contracts securely.
             </p>
-            <KycStatusDashboard 
-              kycVerification={kycVerification} 
-              profile={profile} 
+            <KYCDashboardSection 
+              userType={profile?.user_type || 'both'} 
             />
           </div>
         </TabsContent>
