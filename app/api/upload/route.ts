@@ -1,7 +1,11 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from "@/utils/security/csrf";
+import { validateFile, createSecureUploadPath, SAFE_FILE_TYPES } from "@/utils/security/file-validation";
+import { withRateLimit } from "@/utils/security/rate-limit";
+import { auditLogger } from "@/utils/security/audit-logger";
 
-export async function POST(request: NextRequest) {
+async function handleFileUpload(request: NextRequest) {
   try {
     const supabase = await createClient();
     
@@ -21,71 +25,126 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      return NextResponse.json({ error: "File size too large. Maximum 10MB allowed." }, { status: 400 });
-    }
+    // Comprehensive file validation
+    const validationResult = await validateFile(file, {
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedTypes: SAFE_FILE_TYPES // Only safe file types
+    });
 
-    // Validate file type
-    const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-      'application/pdf',
-      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'text/plain', 'text/csv',
-      'application/zip', 'application/x-zip-compressed',
-      'application/x-rar-compressed', 'application/x-7z-compressed'
-    ];
+    if (!validationResult.valid) {
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'file_upload_rejected',
+        resource: 'file',
+        details: { 
+          filename: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          error: validationResult.error
+        },
+        success: false,
+        severity: 'medium'
+      });
 
-    if (!allowedTypes.includes(file.type)) {
       return NextResponse.json({ 
-        error: "File type not allowed. Supported formats: images, PDF, Office documents, text files, and archives." 
+        error: validationResult.error 
       }, { status: 400 });
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const fileExtension = file.name.split('.').pop();
-    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = `${user.id}/${timestamp}_${sanitizedName}`;
+    // Log warnings if any
+    if (validationResult.warnings) {
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'file_upload_warning',
+        resource: 'file',
+        details: { 
+          filename: validationResult.fileInfo.name,
+          warnings: validationResult.warnings
+        },
+        success: true,
+        severity: 'low'
+      });
+    }
+
+    // Create secure upload path
+    const secureFileName = createSecureUploadPath(user.id, validationResult.fileInfo.name);
 
     // Convert File to ArrayBuffer then to Uint8Array
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with secure filename
     const { data, error } = await supabase.storage
       .from('deliverables')
-      .upload(fileName, uint8Array, {
+      .upload(secureFileName, uint8Array, {
         contentType: file.type,
         cacheControl: '3600'
       });
 
     if (error) {
       console.error('Error uploading file:', error);
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'file_upload_failed',
+        resource: 'file',
+        details: { 
+          filename: validationResult.fileInfo.name,
+          error: error.message
+        },
+        success: false,
+        severity: 'medium'
+      });
       return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
     }
 
     // Get public URL
     const { data: urlData } = supabase.storage
       .from('deliverables')
-      .getPublicUrl(fileName);
+      .getPublicUrl(secureFileName);
+
+    // Log successful upload
+    await auditLogger.logSecurityEvent({
+      userId: user.id,
+      action: 'file_upload_success',
+      resource: 'file',
+      details: { 
+        filename: validationResult.fileInfo.name,
+        fileSize: validationResult.fileInfo.size,
+        fileType: validationResult.fileInfo.type,
+        fileHash: validationResult.fileInfo.hash,
+        storagePath: secureFileName
+      },
+      success: true,
+      severity: 'low'
+    });
 
     return NextResponse.json({
       success: true,
       file: {
-        name: file.name,
-        size: file.size,
-        type: file.type,
+        name: validationResult.fileInfo.name,
+        size: validationResult.fileInfo.size,
+        type: validationResult.fileInfo.type,
+        hash: validationResult.fileInfo.hash,
         url: urlData.publicUrl,
-        path: fileName
+        path: secureFileName
       }
     });
 
   } catch (error) {
     console.error('File upload error:', error);
+    await auditLogger.logSecurityEvent({
+      userId: user.id,
+      action: 'file_upload_error',
+      resource: 'file',
+      details: { 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      success: false,
+      severity: 'high'
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+// Apply security middleware
+export const POST = withRateLimit(withCSRF(handleFileUpload));

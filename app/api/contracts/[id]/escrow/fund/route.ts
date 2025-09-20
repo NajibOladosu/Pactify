@@ -2,26 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { ensureUserProfile } from '@/utils/profile-helpers';
 import { validateRequestBody } from '@/utils/security/validation';
+import { withFullSecurity } from '@/utils/security/middleware';
 import { z } from 'zod';
+import type { User } from '@supabase/supabase-js';
 
 const fundEscrowSchema = z.object({
   success_url: z.string().url().optional(),
   cancel_url: z.string().url().optional(),
 });
 
-export async function POST(
+async function handleFundEscrow(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  user: User
 ) {
+  const resolvedParams = await request.nextUrl.pathname.split('/')[3]; // Extract contract ID
+  const contractId = resolvedParams;
+  
   try {
-    const resolvedParams = await params;
     const supabase = await createClient();
-    
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     // Ensure user profile exists
     const profile = await ensureUserProfile(user.id);
@@ -297,3 +295,6 @@ function getPlatformFeePercentage(subscriptionTier: string): number {
       return 10.0;
   }
 }
+
+// Apply comprehensive security to this critical payment endpoint
+export const POST = withFullSecurity(handleFundEscrow);

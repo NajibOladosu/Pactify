@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { balanceSyncManager } from '@/lib/payout/balance-sync';
 
 export async function POST(
   request: NextRequest,
@@ -291,6 +292,26 @@ export async function POST(
         contract_completed: shouldCompleteContract
       }
     });
+
+    // Credit freelancer's wallet balance for withdrawal
+    try {
+      await balanceSyncManager.creditFreelancerBalance(
+        contractId,
+        contract.freelancer_id,
+        amountToRelease,
+        fundedPayment.currency || 'USD',
+        releasePayment.id,
+        {
+          contract_title: contract.title,
+          milestone_id: milestone_id,
+          release_type: milestone_id ? 'milestone' : 'full_payment'
+        }
+      );
+    } catch (balanceError) {
+      console.error('Failed to credit freelancer balance:', balanceError);
+      // Don't fail the release if balance credit fails, but log it
+      // In production, you might want to queue this for retry
+    }
 
     // Create notification for freelancer
     await supabase.from("notifications").insert({

@@ -21,57 +21,164 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
       contractsError: contractsError?.message 
     });
 
-    // Create realistic payment data based on contracts from RPC
-    let allPayments: any[] = [];
+    // Get real payment data from database
+    const allPayments: any[] = [];
     
-    if (contractsFromRPC && contractsFromRPC.length > 0) {
-      console.log(`[PAYMENTS API] Creating payments from ${contractsFromRPC.length} contracts`);
-      
-      // Create realistic payment data based on actual contracts
-      const now = new Date();
-      const paymentsData = contractsFromRPC.map((contract: any, index: number) => {
-        const isClient = contract.client_id === user.id;
-        const amount = parseFloat(contract.total_amount) || (500 + Math.floor(Math.random() * 1500));
+    // Get escrow payments
+    const { data: escrowPayments, error: escrowError } = await supabase
+      .from("contract_escrows")
+      .select(`
+        *,
+        contracts!inner(
+          id,
+          title,
+          client_id,
+          freelancer_id,
+          profiles!client_id(display_name),
+          freelancer_profile:profiles!freelancer_id(display_name)
+        )
+      `)
+      .or(`contracts.client_id.eq.${user.id},contracts.freelancer_id.eq.${user.id}`)
+      .order("created_at", { ascending: false });
+
+    // Get milestone payments
+    const { data: milestonePayments, error: milestoneError } = await supabase
+      .from("payments")
+      .select(`
+        *,
+        contracts!contract_id(
+          id,
+          title,
+          client_id,
+          freelancer_id,
+          profiles!client_id(display_name),
+          freelancer_profile:profiles!freelancer_id(display_name)
+        )
+      `)
+      .or(`contracts.client_id.eq.${user.id},contracts.freelancer_id.eq.${user.id}`)
+      .order("created_at", { ascending: false });
+
+    // Get withdrawal payments
+    const { data: withdrawalPayments, error: withdrawalError } = await supabase
+      .from("withdrawals")
+      .select(`
+        *,
+        connected_accounts!connected_account_id(
+          profiles!user_id(display_name)
+        )
+      `)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    console.log(`[PAYMENTS API] Database query results:`, {
+      escrowPayments: escrowPayments?.length || 0,
+      milestonePayments: milestonePayments?.length || 0,
+      withdrawalPayments: withdrawalPayments?.length || 0,
+      errors: {
+        escrowError: escrowError?.message,
+        milestoneError: milestoneError?.message,
+        withdrawalError: withdrawalError?.message
+      }
+    });
+
+    // Process escrow payments
+    if (escrowPayments) {
+      const formattedEscrowPayments = escrowPayments.map(escrow => {
+        const isClient = escrow.contracts.client_id === user.id;
+        const amount = parseFloat(escrow.total_amount) || 0;
         const fee = Math.round(amount * 0.05 * 100) / 100;
         const netAmount = amount - fee;
-        
-        // Create payment status based on contract status
-        let status = "pending";
-        let completedAt = null;
-        
-        if (contract.status === "completed") {
-          status = "released";
-          completedAt = new Date(now.getTime() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString();
-        } else if (["active", "pending_delivery", "in_review"].includes(contract.status)) {
-          status = Math.random() > 0.5 ? "funded" : "pending";
-        }
-        
+
         return {
-          id: `payment-${contract.id}-${index}`,
+          id: `escrow-${escrow.id}`,
           amount: amount,
-          net_amount: netAmount,
-          fee: fee,
-          currency: contract.currency || "USD",
-          status: status,
-          payment_type: isClient ? "escrow_payment" : "contract_release",
-          created_at: contract.created_at,
-          completed_at: completedAt,
-          payer_id: isClient ? user.id : contract.client_id,
-          payee_id: isClient ? contract.freelancer_id : user.id,
+          net_amount: isClient ? amount : netAmount,
+          fee: isClient ? 0 : fee,
+          currency: escrow.currency || "USD",
+          status: escrow.status, // pending_funding, funded, released, refunded
+          payment_type: isClient ? "escrow_payment" : "escrow_release",
+          created_at: escrow.created_at,
+          completed_at: escrow.released_at || escrow.refunded_at,
+          payer_id: escrow.contracts.client_id,
+          payee_id: escrow.contracts.freelancer_id,
           contract: {
-            title: contract.title
+            id: escrow.contracts.id,
+            title: escrow.contracts.title
           },
-          payer: { display_name: isClient ? "You" : "Client" },
-          payee: { display_name: isClient ? "Freelancer" : "You" }
+          payer: { 
+            display_name: isClient ? "You" : escrow.contracts.profiles?.display_name || "Client"
+          },
+          payee: { 
+            display_name: isClient ? escrow.contracts.freelancer_profile?.display_name || "Freelancer" : "You"
+          },
+          stripe_payment_intent_id: escrow.stripe_payment_intent_id,
+          stripe_transfer_id: escrow.stripe_transfer_id
         };
       });
-      
-      allPayments = paymentsData;
-      console.log(`[PAYMENTS API] Created ${paymentsData.length} payments based on contracts`);
-    console.log(`[PAYMENTS API] Sample payment data:`, JSON.stringify(paymentsData[0], null, 2));
-    } else {
-      console.log(`[PAYMENTS API] No contracts found, no payments to create`);
+      allPayments.push(...formattedEscrowPayments);
     }
+
+    // Process milestone payments
+    if (milestonePayments) {
+      const formattedMilestonePayments = milestonePayments.map(payment => {
+        const isClient = payment.contracts.client_id === user.id;
+        const amount = parseFloat(payment.amount) || 0;
+        const fee = parseFloat(payment.platform_fee) || Math.round(amount * 0.05 * 100) / 100;
+        const netAmount = amount - fee;
+
+        return {
+          id: `payment-${payment.id}`,
+          amount: amount,
+          net_amount: isClient ? amount : netAmount,
+          fee: isClient ? 0 : fee,
+          currency: payment.currency || "USD",
+          status: payment.status, // pending, paid, failed, refunded
+          payment_type: isClient ? "milestone_payment" : "milestone_release",
+          created_at: payment.created_at,
+          completed_at: payment.paid_at,
+          payer_id: payment.contracts.client_id,
+          payee_id: payment.contracts.freelancer_id,
+          contract: {
+            id: payment.contracts.id,
+            title: payment.contracts.title
+          },
+          payer: { 
+            display_name: isClient ? "You" : payment.contracts.profiles?.display_name || "Client"
+          },
+          payee: { 
+            display_name: isClient ? payment.contracts.freelancer_profile?.display_name || "Freelancer" : "You"
+          },
+          stripe_payment_intent_id: payment.stripe_payment_intent_id,
+          milestone_id: payment.milestone_id
+        };
+      });
+      allPayments.push(...formattedMilestonePayments);
+    }
+
+    // Process withdrawal payments
+    if (withdrawalPayments) {
+      const formattedWithdrawalPayments = withdrawalPayments.map(withdrawal => ({
+        id: `withdrawal-${withdrawal.id}`,
+        amount: parseFloat(withdrawal.amount) || 0,
+        net_amount: parseFloat(withdrawal.amount) || 0,
+        fee: 0, // Withdrawal fees are handled separately
+        currency: withdrawal.currency || "USD",
+        status: withdrawal.status, // processing, paid, failed, canceled
+        payment_type: "withdrawal",
+        created_at: withdrawal.created_at,
+        completed_at: withdrawal.arrived_at,
+        payer_id: "platform", // Platform pays out
+        payee_id: user.id,
+        contract: null,
+        payer: { display_name: "Pactify" },
+        payee: { display_name: "You" },
+        stripe_payout_id: withdrawal.stripe_payout_id,
+        expected_arrival_date: withdrawal.expected_arrival_date
+      }));
+      allPayments.push(...formattedWithdrawalPayments);
+    }
+
+    console.log(`[PAYMENTS API] Processed ${allPayments.length} real payments for user ${user.id}`);
 
     // Sort all payments by creation date
     allPayments.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -84,10 +191,16 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
       user_id: user.id,
       total: allPayments.length,
       debug: {
-        rpc_contracts: contractsFromRPC?.length || 0,
-        created_payments: allPayments.length,
-        contracts_error: contractsError?.message || null,
-        is_generated_data: true
+        escrow_payments: escrowPayments?.length || 0,
+        milestone_payments: milestonePayments?.length || 0,
+        withdrawal_payments: withdrawalPayments?.length || 0,
+        total_payments: allPayments.length,
+        errors: {
+          escrow: escrowError?.message,
+          milestone: milestoneError?.message,
+          withdrawal: withdrawalError?.message
+        },
+        is_real_data: true
       }
     });
 

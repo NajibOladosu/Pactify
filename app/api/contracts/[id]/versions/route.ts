@@ -31,15 +31,19 @@ export async function GET(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    // Note: contract_versions table doesn't exist in current schema
-    // Return empty versions array for now
-    const versions: any[] = [];
-    const error = null;
+    // Get contract versions using the new function
+    const { data: versions, error } = await supabase
+      .rpc('get_contract_versions', { contract_uuid: contractId });
 
-    // Format versions with proposer email
+    if (error) {
+      console.error("Error fetching contract versions:", error);
+      return NextResponse.json({ error: "Failed to fetch versions" }, { status: 500 });
+    }
+
+    // Format versions with proposer name
     const formattedVersions = versions?.map(version => ({
       ...version,
-      proposed_by_email: version.profiles?.email || 'Unknown',
+      proposed_by_name: version.proposer_name || 'Unknown',
     })) || [];
 
     return NextResponse.json({ versions: formattedVersions });
@@ -124,7 +128,24 @@ export async function POST(
       }
     });
 
-    // TODO: Send notification to other party
+    // Send notification to other party
+    const otherPartyId = contract.client_id === user.id ? contract.freelancer_id : contract.client_id;
+    const { data: currentUserProfile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: otherPartyId,
+        type: "in_app",
+        title: "Contract Version Proposed",
+        message: `${currentUserProfile?.display_name || 'The other party'} has proposed a new version of the contract "${contract.title}"`,
+        related_entity_type: "contract",
+        related_entity_id: contractId
+      });
     
     revalidatePath(`/dashboard/contracts/${contractId}`);
     

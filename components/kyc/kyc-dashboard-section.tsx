@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, CreditCard, Shield, ExternalLink } from 'lucide-react';
 import { KYCStatusPill } from './kyc-status-pill';
 import { KYCVerificationBanner } from './kyc-verification-banner';
+import { IdentityVerificationFlow } from './identity-verification-flow';
 import { useToast } from '@/components/ui/use-toast';
 
 interface KYCStatus {
@@ -43,6 +44,15 @@ interface KYCDashboardSectionProps {
 
 export function KYCDashboardSection({ userType, className }: KYCDashboardSectionProps) {
   const [kycStatus, setKycStatus] = useState<KYCStatus | null>(null);
+  const [enhancedKYCStatus, setEnhancedKYCStatus] = useState<{
+    hasEnhancedKYC: boolean;
+    status: string;
+    message: string;
+    documentsVerified: boolean;
+    completedAt?: string;
+    lastAttempt?: string;
+    canStartEnhancedKYC: boolean;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -54,13 +64,32 @@ export function KYCDashboardSection({ userType, className }: KYCDashboardSection
   const fetchKYCStatus = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/connect/account-status');
-      const data = await response.json();
+      // Fetch basic KYC status
+      const basicResponse = await fetch('/api/connect/account-status');
+      const basicData = await basicResponse.json();
       
-      if (response.ok) {
-        setKycStatus(data);
+      if (basicResponse.ok) {
+        setKycStatus(basicData);
       } else {
-        throw new Error(data.error || 'Failed to fetch KYC status');
+        throw new Error(basicData.error || 'Failed to fetch basic KYC status');
+      }
+
+      // Fetch enhanced KYC status
+      const enhancedResponse = await fetch('/api/connect/enhanced-kyc/status');
+      const enhancedData = await enhancedResponse.json();
+      
+      if (enhancedResponse.ok) {
+        setEnhancedKYCStatus(enhancedData);
+      } else {
+        console.error('Failed to fetch enhanced KYC status:', enhancedData.error);
+        // Set default enhanced KYC status
+        setEnhancedKYCStatus({
+          hasEnhancedKYC: false,
+          status: 'not_started',
+          message: 'Enhanced verification not started',
+          documentsVerified: false,
+          canStartEnhancedKYC: false
+        });
       }
     } catch (error) {
       console.error('Error fetching KYC status:', error);
@@ -300,6 +329,14 @@ export function KYCDashboardSection({ userType, className }: KYCDashboardSection
           )}
         </CardContent>
       </Card>
+
+      {/* Enhanced KYC Section - Only show if basic KYC is complete */}
+      {kycStatus?.hasAccount && kycStatus.account && enhancedKYCStatus && (
+        <IdentityVerificationFlow
+          enhancedKYCStatus={enhancedKYCStatus}
+          onRefresh={fetchKYCStatus}
+        />
+      )}
     </div>
   );
 }

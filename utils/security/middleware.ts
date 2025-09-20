@@ -1,416 +1,285 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createSecurityValidator, SecurityValidationError } from "./validations";
-import { InputSanitizer, sanitizeRequestBody } from "./sanitization";
-import { ErrorHandler, withErrorHandling } from "./error-handling";
+import { NextRequest, NextResponse } from 'next/server';
+import { withRateLimit } from './rate-limit';
+import { withCSRF } from './csrf';
+import { withAuth } from '@/utils/api/with-auth';
+import { auditLogger } from './audit-logger';
+import type { User } from '@supabase/supabase-js';
 
 export interface SecurityConfig {
-  rateLimit?: {
-    requests: number;
-    windowMs: number;
-  };
-  validateInput?: boolean;
   requireAuth?: boolean;
-  allowedMethods?: string[];
-  maxBodySize?: number;
-  requireKyc?: boolean;
-  contractAmountCheck?: boolean;
+  requireCSRF?: boolean;
+  rateLimit?: boolean;
+  auditLog?: boolean;
+  roles?: string[];
 }
 
-export class SecurityMiddleware {
-  private static rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+/**
+ * Comprehensive security middleware for API routes
+ */
+export function withSecurity(
+  handler: (request: NextRequest, user?: User) => Promise<NextResponse>,
+  config: SecurityConfig = {}
+) {
+  const {
+    requireAuth = true,
+    requireCSRF = true,
+    rateLimit = true,
+    auditLog = true,
+    roles = []
+  } = config;
 
-  /**
-   * Apply comprehensive security middleware
-   */
-  static withSecurity(
-    handler: (request: NextRequest, context?: any) => Promise<NextResponse>,
-    config: SecurityConfig = {}
-  ) {
-    return withErrorHandling(async (request: NextRequest, context?: any) => {
-      // Default security config
-      const securityConfig: Required<SecurityConfig> = {
-        rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 }, // 100 requests per 15 minutes
-        validateInput: true,
-        requireAuth: true,
-        allowedMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-        maxBodySize: 10 * 1024 * 1024, // 10MB
-        requireKyc: false,
-        contractAmountCheck: false,
-        ...config
-      };
+  let securedHandler = handler;
 
-      // 1. Validate HTTP method
-      if (!securityConfig.allowedMethods.includes(request.method)) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "METHOD_NOT_ALLOWED",
-              message: `Method ${request.method} not allowed`,
-              timestamp: new Date().toISOString()
-            }
+  // Apply audit logging
+  if (auditLog) {
+    securedHandler = withAuditLogging(securedHandler);
+  }
+
+  // Apply authentication
+  if (requireAuth) {
+    securedHandler = withAuth(securedHandler as any) as any;
+  }
+
+  // Apply role-based access control
+  if (roles.length > 0) {
+    securedHandler = withRoleCheck(securedHandler, roles);
+  }
+
+  // Apply CSRF protection
+  if (requireCSRF) {
+    securedHandler = withCSRF(securedHandler as any) as any;
+  }
+
+  // Apply rate limiting
+  if (rateLimit) {
+    securedHandler = withRateLimit(securedHandler as any) as any;
+  }
+
+  return securedHandler;
+}
+
+/**
+ * Audit logging middleware
+ */
+function withAuditLogging(
+  handler: (request: NextRequest, user?: User) => Promise<NextResponse>
+) {
+  return async (request: NextRequest, user?: User): Promise<NextResponse> => {
+    const startTime = Date.now();
+    const pathname = request.nextUrl.pathname;
+    const method = request.method;
+
+    try {
+      // Log request start
+      if (user) {
+        await auditLogger.logSecurityEvent({
+          userId: user.id,
+          action: `api_${method.toLowerCase()}_start`,
+          resource: pathname,
+          details: {
+            method,
+            pathname,
+            userAgent: request.headers.get('user-agent'),
+            ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
           },
-          { status: 405 }
-        );
+          success: true,
+          severity: 'low'
+        });
       }
 
-      // 2. Apply rate limiting
-      const rateLimitResponse = await this.applyRateLimit(request, securityConfig.rateLimit);
-      if (rateLimitResponse) {
-        return rateLimitResponse;
-      }
+      const response = await handler(request, user);
 
-      // 3. Validate content length
-      const contentLength = request.headers.get('content-length');
-      if (contentLength && parseInt(contentLength) > securityConfig.maxBodySize) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "PAYLOAD_TOO_LARGE",
-              message: "Request body too large",
-              timestamp: new Date().toISOString()
-            }
+      // Log successful request
+      const duration = Date.now() - startTime;
+      if (user) {
+        await auditLogger.logSecurityEvent({
+          userId: user.id,
+          action: `api_${method.toLowerCase()}_success`,
+          resource: pathname,
+          details: {
+            method,
+            pathname,
+            statusCode: response.status,
+            duration
           },
-          { status: 413 }
-        );
+          success: true,
+          severity: 'low'
+        });
       }
-
-      // 4. Check authentication if required
-      if (securityConfig.requireAuth) {
-        try {
-          await createSecurityValidator();
-        } catch (error) {
-          if (error instanceof SecurityValidationError) {
-            return NextResponse.json(
-              {
-                error: {
-                  code: error.code,
-                  message: error.message,
-                  timestamp: new Date().toISOString()
-                }
-              },
-              { status: error.statusCode }
-            );
-          }
-          throw error;
-        }
-      }
-
-      // 5. Validate and sanitize input
-      if (securityConfig.validateInput && ['POST', 'PATCH', 'PUT'].includes(request.method)) {
-        try {
-          const originalBody = await request.json().catch(() => ({}));
-          const sanitizedBody = this.sanitizeInput(originalBody, request.url);
-          
-          // Create a new request with sanitized body
-          const sanitizedRequest = new NextRequest(request.url, {
-            method: request.method,
-            headers: request.headers,
-            body: JSON.stringify(sanitizedBody)
-          });
-
-          // Add sanitized body to the request for the handler
-          (sanitizedRequest as any).sanitizedBody = sanitizedBody;
-          
-          request = sanitizedRequest;
-        } catch (error) {
-          return NextResponse.json(
-            {
-              error: {
-                code: "INVALID_JSON",
-                message: "Invalid JSON in request body",
-                timestamp: new Date().toISOString()
-              }
-            },
-            { status: 400 }
-          );
-        }
-      }
-
-      // 6. Security headers
-      const response = await handler(request, context);
-      this.addSecurityHeaders(response);
-
-      // 7. Log security events
-      this.logSecurityEvent(request, response);
 
       return response;
-    });
-  }
 
-  /**
-   * Apply rate limiting
-   */
-  private static async applyRateLimit(
-    request: NextRequest,
-    config: { requests: number; windowMs: number }
-  ): Promise<NextResponse | null> {
-    const identifier = this.getClientIdentifier(request);
-    const now = Date.now();
-    const windowStart = now - config.windowMs;
-
-    // Clean up expired entries
-    const entries = Array.from(this.rateLimitStore.entries());
-    for (const [key, value] of entries) {
-      if (value.resetTime < now) {
-        this.rateLimitStore.delete(key);
+    } catch (error) {
+      // Log failed request
+      const duration = Date.now() - startTime;
+      if (user) {
+        await auditLogger.logSecurityEvent({
+          userId: user.id,
+          action: `api_${method.toLowerCase()}_error`,
+          resource: pathname,
+          details: {
+            method,
+            pathname,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            duration
+          },
+          success: false,
+          severity: 'medium'
+        });
       }
-    }
 
-    // Get or create rate limit entry
-    let rateLimitEntry = this.rateLimitStore.get(identifier);
-    if (!rateLimitEntry || rateLimitEntry.resetTime < now) {
-      rateLimitEntry = {
-        count: 0,
-        resetTime: now + config.windowMs
-      };
-      this.rateLimitStore.set(identifier, rateLimitEntry);
+      throw error;
     }
+  };
+}
 
-    // Check if limit exceeded
-    if (rateLimitEntry.count >= config.requests) {
-      const retryAfter = Math.ceil((rateLimitEntry.resetTime - now) / 1000);
-      
-      ErrorHandler.logSecurityEvent(
-        'RATE_LIMIT_EXCEEDED',
-        undefined,
-        { identifier, ip: this.getClientIP(request) },
-        'medium'
+/**
+ * Role-based access control middleware
+ */
+function withRoleCheck(
+  handler: (request: NextRequest, user?: User) => Promise<NextResponse>,
+  allowedRoles: string[]
+) {
+  return async (request: NextRequest, user?: User): Promise<NextResponse> => {
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
       );
+    }
+
+    // Get user role (this would need to be implemented based on your user role system)
+    const userRole = user.user_metadata?.role || 'user';
+
+    if (!allowedRoles.includes(userRole)) {
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'unauthorized_access_attempt',
+        resource: request.nextUrl.pathname,
+        details: {
+          userRole,
+          requiredRoles: allowedRoles,
+          method: request.method
+        },
+        success: false,
+        severity: 'high'
+      });
 
       return NextResponse.json(
-        {
-          error: {
-            code: "RATE_LIMIT_EXCEEDED",
-            message: "Too many requests. Please try again later.",
-            timestamp: new Date().toISOString(),
-            retryAfter
-          }
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': retryAfter.toString(),
-            'X-RateLimit-Limit': config.requests.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': Math.ceil(rateLimitEntry.resetTime / 1000).toString()
-          }
-        }
+        { error: 'Insufficient permissions' },
+        { status: 403 }
       );
     }
 
-    // Increment counter
-    rateLimitEntry.count++;
-    this.rateLimitStore.set(identifier, rateLimitEntry);
-
-    return null;
-  }
-
-  /**
-   * Get client IP address
-   */
-  private static getClientIP(request: NextRequest): string {
-    return request.headers.get('x-forwarded-for') || 
-           request.headers.get('x-real-ip') || 
-           'unknown';
-  }
-
-  /**
-   * Get client identifier for rate limiting
-   */
-  private static getClientIdentifier(request: NextRequest): string {
-    // Use IP address and User-Agent for identification
-    const ip = this.getClientIP(request);
-    const userAgent = request.headers.get('user-agent') || 'unknown';
-    
-    // Create a hash of IP + User-Agent for privacy
-    return `${ip}-${userAgent.slice(0, 50)}`;
-  }
-
-  /**
-   * Sanitize input based on endpoint
-   */
-  private static sanitizeInput(body: any, url: string): any {
-    if (!body || typeof body !== 'object') {
-      return {};
-    }
-
-    // Determine sanitization type based on URL
-    if (url.includes('/contracts') && url.includes('/milestones')) {
-      return sanitizeRequestBody(body, 'milestone');
-    } else if (url.includes('/contracts')) {
-      return sanitizeRequestBody(body, 'contract');
-    } else if (url.includes('/deliver') || url.includes('/submit')) {
-      return sanitizeRequestBody(body, 'submission');
-    } else if (url.includes('/review') || url.includes('/feedback')) {
-      return sanitizeRequestBody(body, 'feedback');
-    }
-
-    return sanitizeRequestBody(body, 'general');
-  }
-
-  /**
-   * Add security headers to response
-   */
-  private static addSecurityHeaders(response: NextResponse): void {
-    // Prevent XSS attacks
-    response.headers.set('X-Content-Type-Options', 'nosniff');
-    response.headers.set('X-Frame-Options', 'DENY');
-    response.headers.set('X-XSS-Protection', '1; mode=block');
-    
-    // HSTS for HTTPS
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
-
-    // Content Security Policy
-    response.headers.set(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:"
-    );
-
-    // Referrer Policy
-    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-    // Remove server information
-    response.headers.delete('Server');
-    response.headers.delete('X-Powered-By');
-  }
-
-  /**
-   * Log security events
-   */
-  private static logSecurityEvent(request: NextRequest, response: NextResponse): void {
-    const statusCode = response.status;
-    const method = request.method;
-    const url = request.url;
-    const ip = this.getClientIP(request);
-    const userAgent = request.headers.get('user-agent');
-
-    // Log suspicious activity
-    if (statusCode === 401 || statusCode === 403) {
-      ErrorHandler.logSecurityEvent(
-        'UNAUTHORIZED_ACCESS_ATTEMPT',
-        undefined,
-        {
-          method,
-          url,
-          ip,
-          userAgent,
-          statusCode
-        },
-        'medium'
-      );
-    }
-
-    // Log server errors
-    if (statusCode >= 500) {
-      ErrorHandler.logSecurityEvent(
-        'SERVER_ERROR',
-        undefined,
-        {
-          method,
-          url,
-          ip,
-          userAgent,
-          statusCode
-        },
-        'high'
-      );
-    }
-
-    // Log in development/debug mode
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[API] ${method} ${url} - ${statusCode} - ${ip}`);
-    }
-  }
-
-  /**
-   * Validate API key if provided
-   */
-  static validateApiKey(request: NextRequest): boolean {
-    const apiKey = request.headers.get('x-api-key');
-    if (!apiKey) return false;
-
-    // In production, validate against stored API keys
-    const validApiKeys = process.env.VALID_API_KEYS?.split(',') || [];
-    return validApiKeys.includes(apiKey);
-  }
-
-  /**
-   * Check for suspicious patterns
-   */
-  static detectSuspiciousActivity(request: NextRequest): boolean {
-    const url = request.url.toLowerCase();
-    const userAgent = request.headers.get('user-agent')?.toLowerCase() || '';
-
-    // Common attack patterns
-    const suspiciousPatterns = [
-      /\.\./,  // Path traversal
-      /<script/i,  // XSS attempts
-      /union.*select/i,  // SQL injection
-      /exec\s*\(/i,  // Code injection
-      /javascript:/i,  // JavaScript injection
-      /data:text\/html/i  // Data URI XSS
-    ];
-
-    return suspiciousPatterns.some(pattern => 
-      pattern.test(url) || pattern.test(userAgent)
-    );
-  }
-
-  /**
-   * Create middleware for contract-specific operations
-   */
-  static forContract(config: Partial<SecurityConfig> = {}) {
-    return this.withSecurity(async (request, context) => {
-      // This will be implemented by the actual route handler
-      throw new Error("Handler not implemented");
-    }, {
-      ...config,
-      contractAmountCheck: true
-    });
-  }
-
-  /**
-   * Create middleware for payment operations
-   */
-  static forPayment(config: Partial<SecurityConfig> = {}) {
-    return this.withSecurity(async (request, context) => {
-      throw new Error("Handler not implemented");
-    }, {
-      ...config,
-      requireKyc: true,
-      rateLimit: { requests: 10, windowMs: 60 * 1000 } // More restrictive for payments
-    });
-  }
-
-  /**
-   * Create middleware for KYC operations
-   */
-  static forKyc(config: Partial<SecurityConfig> = {}) {
-    return this.withSecurity(async (request, context) => {
-      throw new Error("Handler not implemented");
-    }, {
-      ...config,
-      rateLimit: { requests: 5, windowMs: 60 * 1000 }, // Very restrictive for KYC
-      maxBodySize: 50 * 1024 * 1024 // 50MB for document uploads
-    });
-  }
+    return handler(request, user);
+  };
 }
 
 /**
- * Helper function to apply security to any handler
+ * Input validation middleware
  */
-export function withSecureHandler(
-  handler: (request: NextRequest, context?: any) => Promise<NextResponse>,
-  config?: SecurityConfig
+export function withValidation<T>(
+  handler: (request: NextRequest, validatedData: T, user?: User) => Promise<NextResponse>,
+  schema: any // Zod schema
 ) {
-  return SecurityMiddleware.withSecurity(handler, config);
+  return async (request: NextRequest, user?: User): Promise<NextResponse> => {
+    try {
+      const body = await request.json();
+      const validatedData = schema.parse(body);
+      return handler(request, validatedData, user);
+    } catch (error: any) {
+      if (user) {
+        await auditLogger.logSecurityEvent({
+          userId: user.id,
+          action: 'input_validation_failed',
+          resource: request.nextUrl.pathname,
+          details: {
+            error: error.message,
+            method: request.method
+          },
+          success: false,
+          severity: 'medium'
+        });
+      }
+
+      return NextResponse.json(
+        { error: 'Invalid input data', details: error.message },
+        { status: 400 }
+      );
+    }
+  };
 }
 
 /**
- * Extract sanitized body from request (added by middleware)
+ * Error handling middleware
  */
-export function getSanitizedBody(request: NextRequest): any {
-  return (request as any).sanitizedBody || {};
+export function withErrorHandling(
+  handler: (request: NextRequest, user?: User) => Promise<NextResponse>
+) {
+  return async (request: NextRequest, user?: User): Promise<NextResponse> => {
+    try {
+      return await handler(request, user);
+    } catch (error) {
+      console.error('API Error:', error);
+
+      if (user) {
+        await auditLogger.logSecurityEvent({
+          userId: user.id,
+          action: 'api_error',
+          resource: request.nextUrl.pathname,
+          details: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+          },
+          success: false,
+          severity: 'high'
+        });
+      }
+
+      // Don't expose internal errors in production
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      
+      return NextResponse.json(
+        {
+          error: 'Internal server error',
+          ...(isDevelopment && { details: error instanceof Error ? error.message : 'Unknown error' })
+        },
+        { status: 500 }
+      );
+    }
+  };
+}
+
+/**
+ * Complete security stack for high-security endpoints
+ */
+export function withFullSecurity(
+  handler: (request: NextRequest, user: User) => Promise<NextResponse>,
+  config: SecurityConfig = {}
+) {
+  return withErrorHandling(
+    withSecurity(handler, {
+      requireAuth: true,
+      requireCSRF: true,
+      rateLimit: true,
+      auditLog: true,
+      ...config
+    })
+  );
+}
+
+/**
+ * Public endpoint security (no auth required)
+ */
+export function withPublicSecurity(
+  handler: (request: NextRequest) => Promise<NextResponse>
+) {
+  return withErrorHandling(
+    withSecurity(handler, {
+      requireAuth: false,
+      requireCSRF: false,
+      rateLimit: true,
+      auditLog: false
+    })
+  );
 }

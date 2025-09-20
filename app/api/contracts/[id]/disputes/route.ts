@@ -168,7 +168,46 @@ export async function POST(
       }
     );
 
-    // TODO: Send notification to other party
+    // Send notification to other party
+    const otherPartyId = contract.client_id === user.id ? contract.freelancer_id : contract.client_id;
+    const { data: currentUserProfile } = await serviceSupabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+
+    // Create notification for other party
+    await serviceSupabase
+      .from("notifications")
+      .insert({
+        user_id: otherPartyId,
+        type: "in_app",
+        title: "Dispute Created",
+        message: `${currentUserProfile?.display_name || 'The other party'} has created a dispute for contract "${contract.title}"`,
+        related_entity_type: "contract",
+        related_entity_id: contractId
+      });
+
+    // Send email notification using notification service
+    const { notificationService } = await import('@/lib/services/notification-service');
+    
+    try {
+      await notificationService.sendNotification(
+        'dispute_created',
+        otherPartyId,
+        {
+          contract_title: contract.title,
+          dispute_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/contracts/${contractId}`
+        },
+        {
+          types: ['email', 'in_app'],
+          related_resource_type: 'contract',
+          related_resource_id: contractId
+        }
+      );
+    } catch (emailError) {
+      console.warn('Failed to send email notification:', emailError);
+    }
     
     revalidatePath(`/dashboard/contracts/${contractId}`);
     

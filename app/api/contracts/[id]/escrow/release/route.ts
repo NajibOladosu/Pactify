@@ -89,6 +89,54 @@ export async function POST(
       apiVersion: '2024-06-20',
     });
 
+    // *** ENHANCED KYC HARD GATE - The core verification logic ***
+    // Validate request body to get the release amount for enhanced KYC check
+    const body = await request.json();
+    const validatedData = validateRequestBody(releasePaymentSchema, body);
+    
+    // Get escrow ledger records to determine release amount
+    const { data: escrowPayments, error: escrowError } = await supabase
+      .from('escrow_ledger')
+      .select('*')
+      .eq('contract_id', resolvedParams.id)
+      .eq('status', 'held')
+      .order('created_at', { ascending: true });
+
+    if (escrowError) {
+      console.error('Error fetching escrow payments:', escrowError);
+      return NextResponse.json({ error: 'Failed to fetch escrow payments' }, { status: 500 });
+    }
+
+    if (!escrowPayments || escrowPayments.length === 0) {
+      return NextResponse.json({ 
+        error: 'No held escrow payments found for this contract' 
+      }, { status: 400 });
+    }
+
+    // Determine target payment and release amount
+    let targetPayment = escrowPayments[0];
+    if (validatedData.milestone_id) {
+      const milestonePayment = escrowPayments.find(
+        payment => payment.milestone_id === validatedData.milestone_id
+      );
+      if (!milestonePayment) {
+        return NextResponse.json({ 
+          error: 'Escrow payment not found for specified milestone' 
+        }, { status: 404 });
+      }
+      targetPayment = milestonePayment;
+    }
+
+    // Calculate release amount (escrow_ledger stores amounts in smallest currency unit)
+    const releaseAmount = validatedData.amount || (targetPayment.amount / 100); // Convert from cents to dollars
+    const releaseAmountCents = validatedData.amount ? Math.round(validatedData.amount * 100) : targetPayment.amount;
+
+    if (releaseAmountCents > targetPayment.amount) {
+      return NextResponse.json({ 
+        error: 'Release amount cannot exceed escrow amount' 
+      }, { status: 400 });
+    }
+
     // *** KYC HARD GATE - The core verification logic ***
     // fetch escrow row -> get payee stripe_account_id & amount
     const payeeStripeAccountId = connectedAccount.stripe_account_id;
@@ -119,6 +167,32 @@ export async function POST(
       }, { status: 403 });
     }
 
+    // Enhanced KYC verification for amounts > $100
+    const requiresEnhancedKYC = releaseAmount > 100;
+    if (requiresEnhancedKYC) {
+      const hasEnhancedKYC = connectedAccount.enhanced_kyc_status === 'verified' &&
+                            connectedAccount.documents_verified;
+
+      if (!hasEnhancedKYC) {
+        return NextResponse.json({
+          ok: false,
+          error: "enhanced_kyc_required",
+          amount: releaseAmount,
+          amount_threshold: 100,
+          enhanced_kyc_status: connectedAccount.enhanced_kyc_status,
+          documents_verified: connectedAccount.documents_verified,
+          message: `Enhanced identity verification is required for payments over $100. Current amount: $${releaseAmount.toFixed(2)}`,
+          verification_status: {
+            basic_kyc_complete: true,
+            enhanced_kyc_complete: hasEnhancedKYC,
+            enhanced_kyc_status: connectedAccount.enhanced_kyc_status,
+            documents_verified: connectedAccount.documents_verified,
+            last_verification_attempt: connectedAccount.last_verification_attempt
+          }
+        }, { status: 403 });
+      }
+    }
+
     // Update our database with fresh account data
     await supabase
       .from('connected_accounts')
@@ -147,52 +221,6 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Validate request body
-    const body = await request.json();
-    const validatedData = validateRequestBody(releasePaymentSchema, body);
-
-    // Get escrow ledger records for this contract
-    const { data: escrowPayments, error: escrowError } = await supabase
-      .from('escrow_ledger')
-      .select('*')
-      .eq('contract_id', resolvedParams.id)
-      .eq('status', 'held')
-      .order('created_at', { ascending: true });
-
-    if (escrowError) {
-      console.error('Error fetching escrow payments:', escrowError);
-      return NextResponse.json({ error: 'Failed to fetch escrow payments' }, { status: 500 });
-    }
-
-    if (!escrowPayments || escrowPayments.length === 0) {
-      return NextResponse.json({ 
-        error: 'No held escrow payments found for this contract' 
-      }, { status: 400 });
-    }
-
-    // If milestone_id is provided, find specific milestone payment
-    let targetPayment = escrowPayments[0];
-    if (validatedData.milestone_id) {
-      const milestonePayment = escrowPayments.find(
-        payment => payment.milestone_id === validatedData.milestone_id
-      );
-      if (!milestonePayment) {
-        return NextResponse.json({ 
-          error: 'Escrow payment not found for specified milestone' 
-        }, { status: 404 });
-      }
-      targetPayment = milestonePayment;
-    }
-
-    // Calculate release amount (escrow_ledger stores amounts in smallest currency unit)
-    const releaseAmount = validatedData.amount || (targetPayment.amount / 100); // Convert from cents to dollars
-    const releaseAmountCents = validatedData.amount ? Math.round(validatedData.amount * 100) : targetPayment.amount;
-
-    if (releaseAmountCents > targetPayment.amount) {
-      return NextResponse.json({ 
-        error: 'Release amount cannot exceed escrow amount' 
-      }, { status: 400 });
-    }
     
     try {
       // Passed -> release funds from platform balance

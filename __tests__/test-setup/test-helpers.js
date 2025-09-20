@@ -8,10 +8,18 @@ import Stripe from 'stripe';
 import TEST_CONFIG from './test-config.js';
 
 // Initialize test clients with fallback values for testing
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://test-project.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE || 'test-service-role-key'
-);
+// Ensure environment is loaded before creating client
+let _supabaseAdmin;
+
+function getSupabaseAdmin() {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://test-project.supabase.co',
+      process.env.SUPABASE_SERVICE_ROLE || 'test-service-role-key'
+    );
+  }
+  return _supabaseAdmin;
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_stripe_key', {
   apiVersion: '2024-06-20',
@@ -24,7 +32,7 @@ export class TestUserManager {
   static async createTestUser(userData) {
     try {
       // Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
         email: userData.email,
         password: userData.password,
         email_confirm: true,
@@ -41,7 +49,7 @@ export class TestUserManager {
       const userId = authData.user.id;
 
       // Create profile
-      const { data: profile, error: profileError } = await supabaseAdmin
+      const { data: profile, error: profileError } = await getSupabaseAdmin()
         .from('profiles')
         .insert({
           id: userId,
@@ -77,13 +85,13 @@ export class TestUserManager {
   static async deleteTestUser(userId) {
     try {
       // Delete from profiles first (due to foreign key constraints)
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('profiles')
         .delete()
         .eq('id', userId);
 
       // Delete from auth
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      await getSupabaseAdmin().auth.admin.deleteUser(userId);
 
       return true;
     } catch (error) {
@@ -95,7 +103,7 @@ export class TestUserManager {
   static async cleanupTestUsers() {
     try {
       // Find all test users (by email pattern)
-      const { data: profiles } = await supabaseAdmin
+      const { data: profiles } = await getSupabaseAdmin()
         .from('profiles')
         .select('id')
         .or('id.like.%test%,display_name.ilike.%test%');
@@ -115,7 +123,7 @@ export class TestUserManager {
 
   static async authenticateUser(email, password) {
     try {
-      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+      const { data, error } = await getSupabaseAdmin().auth.signInWithPassword({
         email,
         password
       });
@@ -138,7 +146,7 @@ export class TestUserManager {
 export class TestContractManager {
   static async createContract(creatorId, contractData, userRole = 'freelancer') {
     try {
-      const { data: contract, error } = await supabaseAdmin
+      const { data: contract, error } = await getSupabaseAdmin()
         .from('contracts')
         .insert({
           title: contractData.title,
@@ -248,11 +256,11 @@ export class TestContractManager {
   static async deleteContract(contractId) {
     try {
       // Delete related records first
-      await supabaseAdmin.from('contract_parties').delete().eq('contract_id', contractId);
-      await supabaseAdmin.from('milestones').delete().eq('contract_id', contractId);
+      await getSupabaseAdmin().from('contract_parties').delete().eq('contract_id', contractId);
+      await getSupabaseAdmin().from('milestones').delete().eq('contract_id', contractId);
       
       // Delete contract
-      await supabaseAdmin.from('contracts').delete().eq('id', contractId);
+      await getSupabaseAdmin().from('contracts').delete().eq('id', contractId);
       
       return true;
     } catch (error) {
@@ -335,11 +343,11 @@ export class TestDatabaseManager {
       }
 
       // Clean up in correct order due to foreign key constraints
-      await supabaseAdmin.from('contract_parties').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabaseAdmin.from('milestones').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabaseAdmin.from('contracts').delete().like('title', '%Test%');
-      await supabaseAdmin.from('user_subscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabaseAdmin.from('profiles').delete().like('display_name', '%Test%');
+      await getSupabaseAdmin().from('contract_parties').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await getSupabaseAdmin().from('milestones').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await getSupabaseAdmin().from('contracts').delete().like('title', '%Test%');
+      await getSupabaseAdmin().from('user_subscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await getSupabaseAdmin().from('profiles').delete().like('display_name', '%Test%');
 
       // Clean up Stripe test data
       await TestPaymentManager.cleanupStripeTestData();
@@ -390,7 +398,7 @@ export class TestDatabaseManager {
           }
         ];
 
-        await supabaseAdmin.from('subscription_plans').insert(plans);
+        await getSupabaseAdmin().from('subscription_plans').insert(plans);
       }
 
       return true;
@@ -504,9 +512,10 @@ export class TestEnvironment {
   }
 }
 
-// Export all helpers
+// Export all helpers  
 export {
   TEST_CONFIG,
-  supabaseAdmin,
   stripe
 };
+
+export const supabaseAdmin = getSupabaseAdmin();

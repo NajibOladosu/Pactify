@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { DashboardLayoutWrapper } from "@/components/dashboard/layout-wrapper";
 import { ensureUserProfile, linkUserContracts } from "@/utils/profile-helpers";
 
@@ -53,6 +54,14 @@ export default async function DashboardLayout({
   if (!profile) {
     console.warn(`Profile still not found for user ${user.id} after error handling.`);
     return redirect("/sign-in?error=profile_missing");
+  }
+
+  // Check if user needs to complete onboarding
+  const headersList = await headers();
+  const pathname = headersList.get('x-pathname') || '';
+  
+  if (!profile.onboarding_completed && !pathname.includes('/onboarding')) {
+    return redirect("/dashboard/onboarding");
   }
 
   const userType = profile.user_type || "both";
