@@ -114,8 +114,6 @@ export async function createOptimizedResponse<T>(
   cacheTtl: number = 300
 ) {
   try {
-    let data: T;
-
     if (cacheKey) {
       // Try cache first
       const cached = await cache.get<T>(cacheKey);
@@ -135,7 +133,7 @@ export async function createOptimizedResponse<T>(
     }
 
     // Fetch data
-    data = await dataFetcher();
+    const data = await dataFetcher();
 
     // Cache result
     if (cacheKey) {

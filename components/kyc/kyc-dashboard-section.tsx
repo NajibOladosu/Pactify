@@ -56,11 +56,6 @@ export function KYCDashboardSection({ userType, className }: KYCDashboardSection
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Only show for freelancers or users with 'both' type
-  if (userType !== 'freelancer' && userType !== 'both') {
-    return null;
-  }
-
   const fetchKYCStatus = async () => {
     setIsLoading(true);
     try {
@@ -188,6 +183,11 @@ export function KYCDashboardSection({ userType, className }: KYCDashboardSection
   React.useEffect(() => {
     fetchKYCStatus();
   }, []);
+
+  // Only show for freelancers or users with 'both' type
+  if (userType !== 'freelancer' && userType !== 'both') {
+    return null;
+  }
 
   if (isLoading && !kycStatus) {
     return (

@@ -4,6 +4,7 @@
 // Conditional Redis import - only load if available
 let createRedisClient: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const redis = require('redis');
   createRedisClient = redis.createClient;
 } catch {

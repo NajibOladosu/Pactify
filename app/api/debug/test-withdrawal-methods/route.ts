@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Use an existing user for testing
-    let testUserId = 'd148c0fd-fb68-4cdb-ad96-c50b482e1c73'; // Oladosu Najib
+    const testUserId = 'd148c0fd-fb68-4cdb-ad96-c50b482e1c73'; // Oladosu Najib
     
     // Check if test user exists, create if not
     const { data: existingProfile } = await supabase
