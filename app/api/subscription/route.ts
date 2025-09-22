@@ -62,10 +62,10 @@ async function handleSubscriptionRequest(request: NextRequest, user: User) {
         is_active: subscription?.is_active || false,
         stripe_details: stripeSubscription ? {
           status: stripeSubscription.status,
-          current_period_start: new Date(stripeSubscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
-          cancel_at_period_end: stripeSubscription.cancel_at_period_end,
-          canceled_at: stripeSubscription.canceled_at ? new Date(stripeSubscription.canceled_at * 1000).toISOString() : null
+          current_period_start: new Date((stripeSubscription as any).current_period_start * 1000).toISOString(),
+          current_period_end: new Date((stripeSubscription as any).current_period_end * 1000).toISOString(),
+          cancel_at_period_end: (stripeSubscription as any).cancel_at_period_end,
+          canceled_at: (stripeSubscription as any).canceled_at ? new Date((stripeSubscription as any).canceled_at * 1000).toISOString() : null
         } : null
       }
     });

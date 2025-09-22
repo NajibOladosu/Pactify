@@ -244,14 +244,12 @@ async function getApiResponseTimes() {
         });
         
         return {
-          endpoint,
           status_code: response.status,
           response_time_ms: Date.now() - start,
           healthy: response.status < 500
         };
       } catch (error) {
         return {
-          endpoint,
           status_code: 0,
           response_time_ms: Date.now() - start,
           healthy: false,

@@ -13,6 +13,9 @@ interface DashboardLayoutWrapperProps {
   userInitial: string;
   userId: string;
   currentPlan: string; // Add currentPlan prop
+  hasEnhancedKyc?: boolean;
+  contractCount?: number;
+  availableBalance?: number;
 }
 
 export function DashboardLayoutWrapper({
@@ -21,7 +24,10 @@ export function DashboardLayoutWrapper({
   displayName,
   userInitial,
   userId,
-  currentPlan // Accept currentPlan as a prop
+  currentPlan, // Accept currentPlan as a prop
+  hasEnhancedKyc,
+  contractCount,
+  availableBalance
 }: DashboardLayoutWrapperProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Removed local state and useEffect for currentPlan

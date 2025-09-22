@@ -16,7 +16,7 @@ async function handleAdminRequest(request: NextRequest, user: User) {
       .eq('user_id', user.id)
       .eq('is_active', true);
 
-    const isAdmin = userRoles?.some(ur => ur.roles.name === 'admin') || 
+    const isAdmin = userRoles?.some(ur => (ur.roles as any).name === 'admin') || 
                    user.email?.endsWith('@pactify.com');
 
     if (!isAdmin) {

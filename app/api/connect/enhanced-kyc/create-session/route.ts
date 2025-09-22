@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         stripe_session_id: verificationSession.id,
         status: verificationSession.status,
         redirect_url: return_url,
-        expires_at: verificationSession.expires_at ? new Date(verificationSession.expires_at * 1000).toISOString() : null
+        expires_at: (verificationSession as any).expires_at ? new Date((verificationSession as any).expires_at * 1000).toISOString() : null
       })
       .select()
       .single();
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       success: true,
       verification_url: verificationSession.url,
       session_id: verificationSession.id,
-      expires_at: verificationSession.expires_at
+      expires_at: (verificationSession as any).expires_at
     });
 
   } catch (error) {
