@@ -6,13 +6,16 @@ import { withRateLimit } from "@/utils/security/rate-limit";
 import { auditLogger } from "@/utils/security/audit-logger";
 
 async function handleFileUpload(request: NextRequest) {
+  let user: any = null;
   try {
     const supabase = await createClient();
     
     // Get current user
     const {
-      data: { user },
+      data: { user: currentUser },
     } = await supabase.auth.getUser();
+    
+    user = currentUser;
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -132,16 +135,18 @@ async function handleFileUpload(request: NextRequest) {
 
   } catch (error) {
     console.error('File upload error:', error);
-    await auditLogger.logSecurityEvent({
-      userId: user.id,
-      action: 'file_upload_error',
-      resource: 'file',
-      details: { 
-        error: error instanceof Error ? error.message : 'Unknown error'
-      },
-      success: false,
-      severity: 'high'
-    });
+    if (user) {
+      await auditLogger.logSecurityEvent({
+        userId: user.id,
+        action: 'file_upload_error',
+        resource: 'file',
+        details: { 
+          error: error instanceof Error ? error.message : 'Unknown error'
+        },
+        success: false,
+        severity: 'high'
+      });
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

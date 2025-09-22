@@ -34,7 +34,6 @@ interface PayPalWebhookEvent {
       currency: string;
       value: string;
     };
-    payout_batch_id?: string;
     activity_id?: string;
     transaction_status: string;
     errors?: Array<{
@@ -57,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text();
-    const headersList = headers();
+    const headersList = await headers();
 
     // Get PayPal headers for verification
     const authAlgo = headersList.get('paypal-auth-algo');
@@ -200,6 +199,7 @@ async function handlePayoutBatchSuccess(event: PayPalWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: '', // This is batch level, not specific payout
     rail: 'paypal',
+    event_time: new Date().toISOString(),
     action: 'batch_success',
     provider_reference: event.resource.payout_batch_id,
     provider_status: 'success',
@@ -221,6 +221,7 @@ async function handlePayoutBatchDenied(event: PayPalWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: '', // This is batch level
     rail: 'paypal',
+    event_time: new Date().toISOString(),
     action: 'batch_denied',
     provider_reference: event.resource.payout_batch_id,
     provider_status: 'denied',

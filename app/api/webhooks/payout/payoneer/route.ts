@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text();
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('x-payoneer-signature');
     const timestamp = headersList.get('x-payoneer-timestamp');
 
@@ -207,6 +207,7 @@ async function handlePayoutProcessing(event: PayoneerWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: internalPayoutId,
     rail: 'payoneer',
+    event_time: new Date().toISOString(),
     action: 'status_update',
     provider_reference: payoutId,
     provider_status: event.resource.status,
@@ -227,6 +228,7 @@ async function handlePayeeVerified(event: PayoneerWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: '', // This is payee level, not specific payout
     rail: 'payoneer',
+    event_time: new Date().toISOString(),
     action: 'payee_verified',
     provider_reference: payeeId,
     provider_status: 'verified',
@@ -254,6 +256,7 @@ async function handlePayeeVerificationFailed(event: PayoneerWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: '', // This is payee level, not specific payout
     rail: 'payoneer',
+    event_time: new Date().toISOString(),
     action: 'payee_verification_failed',
     provider_reference: payeeId,
     provider_status: 'verification_failed',
