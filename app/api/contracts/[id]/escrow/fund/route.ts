@@ -15,8 +15,7 @@ async function handleFundEscrow(
   request: NextRequest,
   user: User
 ) {
-  const resolvedParams = await request.nextUrl.pathname.split('/')[3]; // Extract contract ID
-  const contractId = resolvedParams;
+  const contractId = request.nextUrl.pathname.split('/')[3]; // Extract contract ID
   
   try {
     const supabase = await createClient();
@@ -38,7 +37,7 @@ async function handleFundEscrow(
           status
         )
       `)
-      .eq('id', resolvedParams.id)
+      .eq('id', contractId)
       .single();
 
     if (contractError || !contract) {
@@ -165,11 +164,11 @@ async function handleFundEscrow(
         },
       ],
       mode: 'payment',
-      success_url: validatedData.success_url || `${baseUrl}/dashboard/contracts/${resolvedParams.id}/funded`,
-      cancel_url: validatedData.cancel_url || `${baseUrl}/dashboard/contracts/${resolvedParams.id}`,
+      success_url: validatedData.success_url || `${baseUrl}/dashboard/contracts/${contractId}/funded`,
+      cancel_url: validatedData.cancel_url || `${baseUrl}/dashboard/contracts/${contractId}`,
       customer_email: user.email,
       metadata: {
-        contract_id: resolvedParams.id,
+        contract_id: contractId,
         user_id: user.id,
         contract_amount: contractAmount.toString(),
         platform_fee: platformFee.toString(),
@@ -183,7 +182,7 @@ async function handleFundEscrow(
     const { data: escrowPayment, error: escrowError } = await supabase
       .from('escrow_payments')
       .insert({
-        contract_id: resolvedParams.id,
+        contract_id: contractId,
         amount: contractAmount,
         platform_fee: platformFee,
         stripe_fee: stripeFee,
@@ -213,7 +212,7 @@ async function handleFundEscrow(
         currency: contract.currency,
         platform_fee: Math.round(platformFee * 100),
         status: 'held', // held until KYC verification passes and work is complete
-        contract_id: resolvedParams.id,
+        contract_id: contractId,
         description: `Escrow funding for contract ${contract.contract_number}`,
         metadata: {
           contract_number: contract.contract_number,
@@ -236,7 +235,7 @@ async function handleFundEscrow(
     const { error: paymentError } = await supabase
       .from('contract_payments')
       .insert({
-        contract_id: resolvedParams.id,
+        contract_id: contractId,
         user_id: user.id,
         amount: totalCharge,
         status: 'pending',

@@ -94,7 +94,7 @@ export async function GET(
     }
 
     // Get unique sender IDs to fetch profile information
-    const senderIds = [...new Set(messages?.map(m => m.sender_id) || [])];
+    const senderIds = Array.from(new Set(messages?.map(m => m.sender_id) || []));
     
     // Fetch profile information for all senders
     const profilesMap = new Map();

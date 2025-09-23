@@ -359,7 +359,7 @@ export async function GET(
       success: true,
       pending_submissions: pendingSubmissions || [],
       feedback_history: feedbackHistory || [],
-      review_capabilities,
+      reviewCapabilities,
       contract_type: contract.type
     });
 

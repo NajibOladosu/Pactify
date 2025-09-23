@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text();
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('stripe-signature');
 
     if (!signature) {
@@ -230,6 +230,7 @@ async function handleTransferCreated(transfer: Stripe.Transfer) {
     await reconciliationManager.logEntry({
       payout_id: transfer.metadata.payout_id,
       rail: 'stripe',
+      event_time: new Date().toISOString(),
       action: 'transfer_created',
       amount: transfer.amount,
       currency: transfer.currency,
@@ -258,6 +259,7 @@ async function handleTransferUpdated(transfer: Stripe.Transfer) {
     await reconciliationManager.logEntry({
       payout_id: transfer.metadata.payout_id,
       rail: 'stripe',
+      event_time: new Date().toISOString(),
       action: 'transfer_updated',
       amount: transfer.amount,
       currency: transfer.currency,

@@ -21,9 +21,11 @@ export {
 
 // Security middleware
 export {
-  SecurityMiddleware,
-  withSecureHandler,
-  getSanitizedBody
+  withSecurity,
+  withValidation,
+  withErrorHandling,
+  withFullSecurity,
+  withPublicSecurity
 } from './middleware';
 
 // Audit logging

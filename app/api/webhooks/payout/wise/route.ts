@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text();
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('x-signature-sha256');
     const timestamp = headersList.get('x-delivery-timestamp');
 
@@ -136,6 +136,7 @@ async function handleTransferStateChange(event: WiseWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: payoutId,
     rail: 'wise',
+    event_time: new Date().toISOString(),
     action: 'state_change',
     provider_reference: resource.id.toString(),
     provider_status: current_state,
@@ -166,6 +167,7 @@ async function handleTransferActiveCases(event: WiseWebhookEvent) {
   await reconciliationManager.logEntry({
     payout_id: payoutId,
     rail: 'wise',
+    event_time: new Date().toISOString(),
     action: 'active_cases',
     provider_reference: resource.id.toString(),
     notes: `Transfer has active cases - may require attention`,

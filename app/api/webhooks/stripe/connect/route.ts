@@ -69,19 +69,19 @@ export async function POST(request: Request) {
           await handleCapabilityUpdated(capability);
           break;
         }
-        case 'persons.updated': {
+        case 'person.updated': {
           const person = event.data.object as Stripe.Person;
           await handlePersonUpdated(person);
           break;
         }
         case 'account.application.authorized': {
-          const account = event.data.object as Stripe.Account;
-          await handleAccountAuthorized(account);
+          const application = event.data.object as any;
+          await handleAccountAuthorized(application);
           break;
         }
         case 'account.application.deauthorized': {
-          const account = event.data.object as Stripe.Account;
-          await handleAccountDeauthorized(account);
+          const application = event.data.object as any;
+          await handleAccountDeauthorized(application);
           break;
         }
         default:
@@ -181,10 +181,10 @@ async function handlePersonUpdated(person: Stripe.Person) {
   console.log(`Person update processed for account ${person.account}`);
 }
 
-async function handleAccountAuthorized(account: Stripe.Account) {
+async function handleAccountAuthorized(application: any) {
   if (!supabaseAdmin) return;
   
-  console.log(`Handling account.application.authorized for account: ${account.id}`);
+  console.log(`Handling account.application.authorized for account: ${application.id}`);
   
   // This fires when a user completes onboarding successfully
   const { error } = await supabaseAdmin
@@ -194,10 +194,10 @@ async function handleAccountAuthorized(account: Stripe.Account) {
       details_submitted: true,
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_account_id', account.id);
+    .eq('stripe_account_id', application.id);
 
   if (error) {
-    console.error(`Failed to mark account ${account.id} as authorized:`, error);
+    console.error(`Failed to mark account ${application.id} as authorized:`, error);
   }
 
   // Update onboarding session status
@@ -208,15 +208,15 @@ async function handleAccountAuthorized(account: Stripe.Account) {
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('connected_account_id', account.id);
+    .eq('connected_account_id', application.id);
 
-  console.log(`Account ${account.id} marked as authorized and onboarding completed`);
+  console.log(`Account ${application.id} marked as authorized and onboarding completed`);
 }
 
-async function handleAccountDeauthorized(account: Stripe.Account) {
+async function handleAccountDeauthorized(application: any) {
   if (!supabaseAdmin) return;
   
-  console.log(`Handling account.application.deauthorized for account: ${account.id}`);
+  console.log(`Handling account.application.deauthorized for account: ${application.id}`);
   
   // This might happen if a user revokes access or there are compliance issues
   const { error } = await supabaseAdmin
@@ -229,11 +229,11 @@ async function handleAccountDeauthorized(account: Stripe.Account) {
       requirements_disabled_reason: 'Account deauthorized',
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_account_id', account.id);
+    .eq('stripe_account_id', application.id);
 
   if (error) {
-    console.error(`Failed to mark account ${account.id} as deauthorized:`, error);
+    console.error(`Failed to mark account ${application.id} as deauthorized:`, error);
   }
 
-  console.log(`Account ${account.id} marked as deauthorized`);
+  console.log(`Account ${application.id} marked as deauthorized`);
 }

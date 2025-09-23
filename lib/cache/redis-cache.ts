@@ -30,7 +30,7 @@ class CacheManager {
           url: process.env.REDIS_URL
         });
 
-        this.redis.on('error', (err) => {
+        this.redis.on('error', (err: any) => {
           console.error('Redis error:', err);
           this.useRedis = false;
         });
@@ -106,7 +106,7 @@ class CacheManager {
         }
       } else {
         // Memory cache pattern invalidation
-        for (const key of memoryCache.keys()) {
+        for (const key of Array.from(memoryCache.keys())) {
           if (key.includes(pattern.replace('*', ''))) {
             memoryCache.delete(key);
           }
@@ -120,7 +120,7 @@ class CacheManager {
   // Cleanup expired memory cache entries
   private cleanupMemoryCache() {
     const now = Date.now();
-    for (const [key, item] of memoryCache.entries()) {
+    for (const [key, item] of Array.from(memoryCache.entries())) {
       if (item.expiry <= now) {
         memoryCache.delete(key);
       }

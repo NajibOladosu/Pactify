@@ -16,7 +16,9 @@ import {
 } from './types';
 
 export class PayoutDecisionEngine {
-  private supabase = createClient();
+  private async getClient() {
+    return await createClient();
+  }
 
   /**
    * Main entry point - selects the best rail for a payout request
@@ -102,13 +104,14 @@ export class PayoutDecisionEngine {
    * Get rail capabilities for this specific request
    */
   private async getRailCapabilities(input: RailSelectionInput): Promise<RailCapability[]> {
-    const { data: countrySupport } = await this.supabase
+    const supabase = await this.getClient();
+    const { data: countrySupport } = await supabase
       .from('rail_country_support')
       .select('*')
       .eq('country_code', input.targetCountry)
       .eq('currency', input.currency);
 
-    const { data: feeConfigs } = await this.supabase
+    const { data: feeConfigs } = await supabase
       .from('payout_fees')
       .select('*')
       .eq('currency', input.currency)
@@ -122,10 +125,10 @@ export class PayoutDecisionEngine {
     const capabilities: RailCapability[] = [];
 
     for (const rail of input.railsEnabled) {
-      const support = countrySupport.find(s => s.rail === rail);
+      const support = countrySupport.find((s: any) => s.rail === rail);
       const feeConfig = feeConfigs
-        .filter(f => f.rail === rail)
-        .sort((a, b) => a.country ? 1 : -1)[0]; // prefer country-specific
+        .filter((f: any) => f.rail === rail)
+        .sort((a: any, b: any) => a.country ? 1 : -1)[0]; // prefer country-specific
 
       if (!support?.is_supported || !feeConfig) {
         continue;
@@ -141,7 +144,7 @@ export class PayoutDecisionEngine {
         max_amount: feeConfig.max_amount,
         daily_limit: support.max_daily_limit || Infinity,
         monthly_limit: support.max_monthly_limit || Infinity,
-        estimated_fee,
+        estimated_fee: estimatedFee,
         processing_time_min: feeConfig.processing_time_min,
         processing_time_max: feeConfig.processing_time_max,
         supports_instant: feeConfig.supports_instant && input.urgency === 'instant'

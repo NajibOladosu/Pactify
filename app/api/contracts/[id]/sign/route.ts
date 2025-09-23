@@ -170,7 +170,7 @@ export async function POST(
     const bothSigned = 
       (signatureField === "client_signed_at" && contract.freelancer_signed_at) ||
       (signatureField === "freelancer_signed_at" && contract.client_signed_at) ||
-      (signatureField === "client_signed_at" && signatureField === "freelancer_signed_at"); // Same person is both
+      false; // Remove the impossible condition
 
     if (bothSigned) {
       updateData.status = "pending_funding";

@@ -17,7 +17,7 @@ export async function GET(
       );
     }
 
-    const { id: contractId, milestoneId } = params;
+    const { id: contractId, milestoneId } = await params;
 
     // Verify access to contract
     const { data: contract, error: contractError } = await supabase
@@ -90,7 +90,7 @@ export async function PATCH(
       );
     }
 
-    const { id: contractId, milestoneId } = params;
+    const { id: contractId, milestoneId } = await params;
     const body = await request.json();
     const { status, title, description, amount, due_date, deliverables } = body;
 
@@ -295,7 +295,7 @@ export async function DELETE(
       );
     }
 
-    const { id: contractId, milestoneId } = params;
+    const { id: contractId, milestoneId } = await params;
 
     // Verify access to contract
     const { data: contract, error: contractError } = await supabase

@@ -254,7 +254,7 @@ export function withErrorHandling(
  * Complete security stack for high-security endpoints
  */
 export function withFullSecurity(
-  handler: (request: NextRequest, user: User) => Promise<NextResponse>,
+  handler: (request: NextRequest, user?: User) => Promise<NextResponse>,
   config: SecurityConfig = {}
 ) {
   return withErrorHandling(

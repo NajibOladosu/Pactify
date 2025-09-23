@@ -277,7 +277,7 @@ export async function POST(
           currency: contract.currency,
           destination: freelancerProfile.stripe_connect_account_id,
           status: 'pending', // Stripe transfers are typically pending then paid
-          arrival_date: transfer.arrival_date,
+          arrival_date: (transfer as any).arrival_date,
         },
         escrow_payment: {
           id: targetPayment.id,

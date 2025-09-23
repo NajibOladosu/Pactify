@@ -288,7 +288,7 @@ export async function POST(
         transfer_reversal: transferReversal ? {
           id: transferReversal.id,
           amount: transferReversal.amount / 100, // Convert back from cents
-          status: transferReversal.status,
+          status: (transferReversal as any).status,
         } : null,
         escrow_payment: {
           id: targetPayment.id,

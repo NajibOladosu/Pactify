@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
   CheckCircle, 
-  User, 
+  User as UserIcon, 
   Briefcase, 
   CreditCard, 
   Shield,
@@ -37,7 +37,7 @@ interface OnboardingData {
 }
 
 const STEPS = [
-  { id: 1, title: "Personal Info", icon: User, description: "Tell us about yourself" },
+  { id: 1, title: "Personal Info", icon: UserIcon, description: "Tell us about yourself" },
   { id: 2, title: "Account Type", icon: Briefcase, description: "How will you use Pactify?" },
   { id: 3, title: "Profile Details", icon: Shield, description: "Complete your profile" },
   { id: 4, title: "Payment Setup", icon: CreditCard, description: "Set up your payments" },

@@ -156,15 +156,16 @@ export class NotificationService {
           deliveryResult = { success: false, error: 'Unsupported notification type' };
       }
 
-      // Update notification status
-      const deliveryStatus = deliveryResult.success ? 'sent' : 'failed';
-      const errorMessage = deliveryResult.success ? null : (typeof deliveryResult === 'object' ? deliveryResult.error : 'Unknown error');
+      // Update notification status - normalize the result format
+      const normalizedResult = typeof deliveryResult === 'object' ? deliveryResult : { success: deliveryResult };
+      const deliveryStatus = normalizedResult.success ? 'sent' : 'failed';
+      const errorMessage = normalizedResult.success ? null : (normalizedResult as any).error || 'Unknown error';
 
       await this.serviceSupabase
         .from('notifications')
         .update({
           delivery_status: deliveryStatus,
-          sent_at: deliveryResult.success ? new Date().toISOString() : null,
+          sent_at: normalizedResult.success ? new Date().toISOString() : null,
           error_message: errorMessage
         })
         .eq('id', notification.id);
@@ -211,7 +212,7 @@ export class NotificationService {
         text: notificationData.message
       });
 
-      return emailResult;
+      return { success: emailResult };
     } catch (error) {
       console.error('Error sending email notification:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

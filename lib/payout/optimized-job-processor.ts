@@ -97,7 +97,7 @@ export class OptimizedPayoutJobProcessor {
       console.log(`Worker ${workerId}: Processing ${jobs.length} jobs`);
 
       // Process jobs in parallel with controlled concurrency
-      const jobPromises = jobs.map(job => this.processJobOptimized(job, workerId));
+      const jobPromises = jobs.map((job: any) => this.processJobOptimized(job, workerId));
       await Promise.allSettled(jobPromises);
 
     } finally {
@@ -127,7 +127,7 @@ export class OptimizedPayoutJobProcessor {
         const { error: updateError } = await client
           .from('payout_jobs')
           .update({
-            status: 'processing',
+            status: 'processing' as any,
             attempts: job.attempts + 1,
             updated_at: new Date().toISOString()
           })
@@ -140,25 +140,23 @@ export class OptimizedPayoutJobProcessor {
         }
 
         // Get payout and method data in parallel
-        const [payoutResult, methodResult] = await Promise.all([
-          client
-            .from('payouts')
-            .select('*')
-            .eq('id', job.payout_id)
-            .single(),
-          client
-            .from('withdrawal_methods')
-            .select('*')
-            .eq('user_id', job.payout_id) // This needs to be corrected to get method by payout
-            .single()
-        ]);
+        // Get payout data first
+        const { data: payout, error: payoutError } = await (client as any)
+          .from('payouts')
+          .select('*')
+          .eq('id', job.payout_id)
+          .single();
 
-        if (payoutResult.error || !payoutResult.data) {
+        if (payoutError || !payout) {
           throw new PayoutError('Payout not found', 'PAYOUT_NOT_FOUND', false);
         }
 
-        const payout = payoutResult.data as Payout;
-        const method = methodResult.data as WithdrawalMethod;
+        // Get withdrawal method data
+        const { data: method } = await (client as any)
+          .from('withdrawal_methods')
+          .select('*')
+          .eq('id', payout.withdrawal_method_id)
+          .single();
 
         // Get rail handler
         const railHandler = getRailHandler(job.rail as any);
@@ -166,7 +164,8 @@ export class OptimizedPayoutJobProcessor {
         // Log job start
         await reconciliationManager.logEntry({
           payout_id: job.payout_id,
-          rail: job.rail,
+          rail: job.rail as any,
+          event_time: new Date().toISOString(),
           action: 'job_started',
           notes: `Optimized job started (worker: ${workerId}, attempt: ${job.attempts + 1})`,
           created_by: workerId,
@@ -185,7 +184,7 @@ export class OptimizedPayoutJobProcessor {
 
           // Batch update payout and job status
           await Promise.all([
-            client
+            (client as any)
               .from('payouts')
               .update({
                 provider_reference: result.provider_reference,
@@ -195,7 +194,7 @@ export class OptimizedPayoutJobProcessor {
               })
               .eq('id', job.payout_id),
             
-            client
+            (client as any)
               .from('payout_jobs')
               .update({
                 status: 'completed',
@@ -207,7 +206,8 @@ export class OptimizedPayoutJobProcessor {
           // Log success
           await reconciliationManager.logEntry({
             payout_id: job.payout_id,
-            rail: job.rail,
+            rail: job.rail as any,
+            event_time: new Date().toISOString(),
             action: 'job_completed',
             provider_reference: result.provider_reference,
             notes: `Payout processed successfully (worker: ${workerId})`,
@@ -253,7 +253,8 @@ export class OptimizedPayoutJobProcessor {
       // Log the failure
       await reconciliationManager.logEntry({
         payout_id: job.payout_id,
-        rail: job.rail,
+        rail: job.rail as any,
+        event_time: new Date().toISOString(),
         action: 'job_failed',
         notes: `Job attempt ${attempts} failed (worker: ${workerId}): ${error.message}`,
         created_by: workerId,

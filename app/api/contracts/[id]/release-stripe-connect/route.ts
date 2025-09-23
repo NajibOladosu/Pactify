@@ -155,7 +155,7 @@ export async function POST(
       amount_released: releaseAmount,
       freelancer_account: freelancerProfile.stripe_connect_account_id,
       freelancer_name: freelancerProfile.display_name,
-      transfer_status: transfer.status || 'pending',
+      transfer_status: (transfer as any).status || 'pending',
       message: `Successfully released $${releaseAmount.toFixed(2)} to ${freelancerProfile.display_name}`,
     });
 

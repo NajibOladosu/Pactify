@@ -63,8 +63,8 @@ class SupabaseClientPool {
           lastUsed: now,
           inUse: true
         };
-        this.clients.push(newClient);
-        return { client: newClient.client, release: () => this.releaseClient(newClient) };
+        this.clients.push(newClient as any);
+        return { client: newClient.client, release: () => this.releaseClient(newClient as any) };
       } else {
         // Remove oldest client and create new one
         const oldestIndex = this.clients.reduce((oldest, client, index) => 
@@ -76,9 +76,9 @@ class SupabaseClientPool {
           created: now,
           lastUsed: now,
           inUse: true
-        };
+        } as any;
         
-        pooledClient = this.clients[oldestIndex];
+        pooledClient = this.clients[oldestIndex] as any;
       }
     } else {
       pooledClient.inUse = true;
@@ -86,12 +86,12 @@ class SupabaseClientPool {
     }
 
     return { 
-      client: pooledClient.client, 
-      release: () => this.releaseClient(pooledClient!) 
+      client: pooledClient.client as any, 
+      release: () => this.releaseClient(pooledClient! as any) 
     };
   }
 
-  private releaseClient(pooledClient: typeof this.clients[0]) {
+  private releaseClient(pooledClient: any) {
     pooledClient.inUse = false;
     pooledClient.lastUsed = Date.now();
   }
@@ -217,7 +217,7 @@ export const getOptimizedUserProfile = async (userId: string) => {
   return cachedQuery(
     `profile:${userId}`,
     async (client) => {
-      const { data, error } = await client
+      const { data, error } = await (client as any)
         .rpc('get_user_profile_fast', { _user_id: userId })
         .single();
       
@@ -233,7 +233,7 @@ export const getOptimizedDashboardData = async (userId: string) => {
   return cachedQuery(
     `dashboard:${userId}`,
     async (client) => {
-      const { data, error } = await client
+      const { data, error } = await (client as any)
         .rpc('get_user_dashboard_data', { _user_id: userId })
         .single();
       

@@ -58,6 +58,31 @@ export class AuditLogger {
   }
 
   /**
+   * Generic log method for backward compatibility
+   */
+  async log(entry: {
+    user_id: string;
+    action: string;
+    resource_id?: string;
+    resource_type?: string;
+    metadata?: any;
+    ip?: string;
+    user_agent?: string;
+  }): Promise<void> {
+    await this.logSecurityEvent({
+      userId: entry.user_id,
+      action: entry.action,
+      resource: entry.resource_type || 'unknown',
+      resourceId: entry.resource_id,
+      details: entry.metadata,
+      ip: entry.ip,
+      userAgent: entry.user_agent,
+      success: true,
+      severity: 'medium'
+    });
+  }
+
+  /**
    * Log authentication events
    */
   async logAuthEvent(

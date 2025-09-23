@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { withAuth } from '@/utils/api/with-auth';
 import {
-  SecurityMiddleware,
+  withSecurity,
   validateAndSanitize,
   auditLogger,
   ErrorHandler

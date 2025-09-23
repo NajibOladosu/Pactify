@@ -50,13 +50,13 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      case 'transfer.paid': {
+      case 'transfer.paid' as any: {
         const transfer = event.data.object as Stripe.Transfer;
         await handleTransferPaid(transfer, supabase);
         break;
       }
 
-      case 'transfer.failed': {
+      case 'transfer.failed' as any: {
         const transfer = event.data.object as Stripe.Transfer;
         await handleTransferFailed(transfer, supabase);
         break;

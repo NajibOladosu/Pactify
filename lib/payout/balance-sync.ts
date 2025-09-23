@@ -61,6 +61,7 @@ export class BalanceSyncManager {
       await reconciliationManager.logEntry({
         payout_id: '', // This isn't a payout yet, it's a balance credit
         rail: 'stripe', // Source is Stripe contract payment
+        event_time: new Date().toISOString(),
         action: 'balance_credited',
         provider_reference: paymentId,
         notes: `Balance credited from contract payment release`,

@@ -24,7 +24,9 @@ interface PayoutJob {
 }
 
 export class PayoutJobProcessor {
-  private supabase = createClient();
+  private async getClient() {
+    return await createClient();
+  }
   private isProcessing = false;
   private maxConcurrentJobs = 5;
   private retryDelayMs = [1000, 5000, 30000, 300000]; // 1s, 5s, 30s, 5min
@@ -69,7 +71,8 @@ export class PayoutJobProcessor {
   async queuePayout(payoutId: string): Promise<void> {
     try {
       // Get payout details
-      const { data: payout, error: payoutError } = await this.supabase
+      const supabase = await this.getClient();
+      const { data: payout, error: payoutError } = await (supabase as any)
         .from('payouts')
         .select('*')
         .eq('id', payoutId)
@@ -85,7 +88,7 @@ export class PayoutJobProcessor {
 
       // Create job record (we'll use a simple table for now)
       // In production, you might want to use a proper job queue like BullMQ
-      const { error: jobError } = await this.supabase
+      const { error: jobError } = await (supabase as any)
         .from('payout_jobs')
         .insert({
           payout_id: payoutId,
@@ -117,7 +120,8 @@ export class PayoutJobProcessor {
    */
   private async processJobs(): Promise<void> {
     // Get queued or retryable jobs
-    const { data: jobs, error } = await this.supabase
+    const supabase = await this.getClient();
+    const { data: jobs, error } = await (supabase as any)
       .from('payout_jobs')
       .select('*')
       .in('status', ['queued', 'retrying'])
@@ -137,7 +141,7 @@ export class PayoutJobProcessor {
     console.log(`Processing ${jobs.length} payout jobs...`);
 
     // Process jobs concurrently
-    const promises = jobs.map(job => this.processJob(job));
+    const promises = jobs.map((job: any) => this.processJob(job));
     await Promise.allSettled(promises);
   }
 
@@ -152,7 +156,8 @@ export class PayoutJobProcessor {
       await this.updateJobStatus(job.id, 'processing');
 
       // Get payout and method details
-      const { data: payout } = await this.supabase
+      const supabase = await this.getClient();
+      const { data: payout } = await (supabase as any)
         .from('payouts')
         .select(`
           *,
@@ -188,7 +193,7 @@ export class PayoutJobProcessor {
 
         // Update payout with provider reference
         if (result.provider_reference) {
-          await this.supabase
+          await (supabase as any)
             .from('payouts')
             .update({
               provider_reference: result.provider_reference,
@@ -256,7 +261,8 @@ export class PayoutJobProcessor {
       const retryDelay = this.retryDelayMs[retryDelayIndex];
       const nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
 
-      await this.supabase
+      const supabase2 = await this.getClient();
+      await (supabase2 as any)
         .from('payout_jobs')
         .update({
           status: 'retrying',
@@ -294,20 +300,21 @@ export class PayoutJobProcessor {
     status: PayoutJob['status'], 
     errorMessage?: string
   ): Promise<void> {
+    const supabase = await this.getClient();
     const updateData: any = {
       status,
       updated_at: new Date().toISOString()
     };
 
     if (status === 'processing') {
-      updateData.attempts = this.supabase.sql`attempts + 1`;
+      updateData.attempts = (supabase as any).sql`attempts + 1`;
     }
 
     if (errorMessage) {
       updateData.error_message = errorMessage;
     }
 
-    await this.supabase
+    await (supabase as any)
       .from('payout_jobs')
       .update(updateData)
       .eq('id', jobId);
@@ -323,7 +330,8 @@ export class PayoutJobProcessor {
     failed: number;
     retrying: number;
   }> {
-    const { data, error } = await this.supabase
+    const supabase = await this.getClient();
+    const { data, error } = await (supabase as any)
       .from('payout_jobs')
       .select('status')
       .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
@@ -332,7 +340,7 @@ export class PayoutJobProcessor {
       return { queued: 0, processing: 0, completed: 0, failed: 0, retrying: 0 };
     }
 
-    const stats = data.reduce((acc, job) => {
+    const stats = data.reduce((acc: any, job: any) => {
       acc[job.status as keyof typeof acc] = (acc[job.status as keyof typeof acc] || 0) + 1;
       return acc;
     }, { queued: 0, processing: 0, completed: 0, failed: 0, retrying: 0 });
@@ -346,7 +354,8 @@ export class PayoutJobProcessor {
   async cleanupOldJobs(daysOld: number = 30): Promise<void> {
     const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
     
-    const { error } = await this.supabase
+    const supabase = await this.getClient();
+    const { error } = await (supabase as any)
       .from('payout_jobs')
       .delete()
       .in('status', ['completed', 'failed'])

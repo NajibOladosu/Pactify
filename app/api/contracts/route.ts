@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { Database } from "@/types/supabase";
 import { 
-  SecurityMiddleware,
+  withSecurity,
   ContractCreateSchema,
   ContractQuerySchema,
   validateAndSanitize,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { sendEmail, getContractInvitationEmail } from '@/lib/utils/send-email';
 import { 
-  SecurityMiddleware,
+  withSecurity,
   validateAndSanitize,
   auditLogger,
   ErrorHandler
@@ -15,7 +15,7 @@ const ContractSendSchema = z.object({
   recipientEmail: z.string().email().toLowerCase().optional()
 });
 
-const secureHandler = SecurityMiddleware.withSecurity(
+const secureHandler = withSecurity.withSecurity(
   async (request: NextRequest) => {
     try {
       const supabase = await createClient();

@@ -10,6 +10,7 @@ interface EnhancedKYCBannerProps {
   amount?: number;
   amountThreshold?: number;
   lastAttempt?: string;
+  message?: string;
   onStartVerification?: () => void;
   onRefreshStatus?: () => void;
   isLoading?: boolean;
@@ -21,13 +22,14 @@ export function EnhancedKYCBanner({
   amount,
   amountThreshold = 100,
   lastAttempt,
+  message,
   onStartVerification,
   onRefreshStatus,
   isLoading = false,
   className = ''
 }: EnhancedKYCBannerProps) {
   // Don't show banner if already verified
-  if (status === 'verified' as const) {
+  if (status === 'verified') {
     return null;
   }
 

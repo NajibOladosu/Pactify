@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
           rail: payout.rail,
           rail_name: getRailDisplayName(payout.rail),
           method: {
-            label: payout.withdrawal_method.label,
-            provider_name: payout.withdrawal_method.provider_name,
-            icon: payout.withdrawal_method.icon,
-            last_four: payout.withdrawal_method.last_four
+            label: (payout.withdrawal_method as any)?.[0]?.label || '',
+            provider_name: (payout.withdrawal_method as any)?.[0]?.provider_name || '',
+            icon: (payout.withdrawal_method as any)?.[0]?.icon || '',
+            last_four: (payout.withdrawal_method as any)?.[0]?.last_four || ''
           },
           fees: {
             platform_fee: payout.platform_fee || 0,
@@ -71,13 +71,13 @@ export async function GET(request: NextRequest) {
             has_more: filteredPayouts.length === limit
           },
           stats: stats ? {
-            available_balance: stats.available_balance || 0,
-            pending_balance: stats.pending_balance || 0,
-            total_earned: stats.total_earned || 0,
-            total_withdrawn: stats.total_withdrawn || 0,
-            pending_payouts: stats.pending_payouts || 0,
-            successful_payouts: stats.successful_payouts || 0,
-            failed_payouts: stats.failed_payouts || 0
+            available_balance: (stats as any).available_balance || 0,
+            pending_balance: (stats as any).pending_balance || 0,
+            total_earned: (stats as any).total_earned || 0,
+            total_withdrawn: (stats as any).total_withdrawn || 0,
+            pending_payouts: (stats as any).pending_payouts || 0,
+            successful_payouts: (stats as any).successful_payouts || 0,
+            failed_payouts: (stats as any).failed_payouts || 0
           } : null,
           currency
         };
