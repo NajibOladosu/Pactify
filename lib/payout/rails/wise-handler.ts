@@ -50,14 +50,23 @@ export class WiseRailHandler extends BaseRailHandler {
   constructor() {
     super();
     this.baseUrl = process.env.WISE_API_URL || 'https://api.transferwise.com';
-    this.apiKey = process.env.WISE_API_KEY!;
+    this.apiKey = process.env.WISE_API_KEY || '';
     
-    if (!this.apiKey) {
-      throw new Error('WISE_API_KEY is not set');
+    // Only check for API key at runtime, not during build
+    if (!this.apiKey && process.env.NODE_ENV !== 'production' && typeof window === 'undefined') {
+      console.warn('WISE_API_KEY is not set - Wise payments will not function');
     }
   }
 
   async createPayout(payout: Payout, method: WithdrawalMethod): Promise<PayoutResult> {
+    if (!this.apiKey) {
+      throw new PayoutError(
+        'WISE_API_KEY is not configured',
+        'WISE_NOT_CONFIGURED',
+        false
+      );
+    }
+    
     try {
       this.validateMethod(method);
 
@@ -92,6 +101,10 @@ export class WiseRailHandler extends BaseRailHandler {
   }
 
   async getPayoutStatus(providerReference: string): Promise<PayoutStatus> {
+    if (!this.apiKey) {
+      throw new PayoutError('WISE_API_KEY is not configured', 'WISE_NOT_CONFIGURED', false);
+    }
+    
     try {
       const response = await this.makeWiseRequest(
         'GET',
@@ -106,6 +119,10 @@ export class WiseRailHandler extends BaseRailHandler {
   }
 
   async cancelPayout(providerReference: string): Promise<boolean> {
+    if (!this.apiKey) {
+      throw new PayoutError('WISE_API_KEY is not configured', 'WISE_NOT_CONFIGURED', false);
+    }
+    
     try {
       await this.makeWiseRequest(
         'PUT',
@@ -122,6 +139,10 @@ export class WiseRailHandler extends BaseRailHandler {
   }
 
   async getQuote(amount: number, currency: Currency, method: WithdrawalMethod): Promise<PayoutQuote> {
+    if (!this.apiKey) {
+      throw new PayoutError('WISE_API_KEY is not configured', 'WISE_NOT_CONFIGURED', false);
+    }
+    
     try {
       this.validateMethod(method);
 

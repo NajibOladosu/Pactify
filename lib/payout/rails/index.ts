@@ -10,20 +10,32 @@ import { LocalRailHandler } from './local-handler';
 // Registry of all available rail handlers
 const railHandlers = new Map<Rail, RailHandler>();
 
-// Initialize handlers
-railHandlers.set('stripe', new StripeRailHandler());
-railHandlers.set('wise', new WiseRailHandler());
-railHandlers.set('paypal', new PayPalRailHandler());
-railHandlers.set('payoneer', new PayoneerRailHandler());
-railHandlers.set('local', new LocalRailHandler());
+// Lazy initialization function
+function initializeHandler(rail: Rail): RailHandler {
+  switch (rail) {
+    case 'stripe':
+      return new StripeRailHandler();
+    case 'wise':
+      return new WiseRailHandler();
+    case 'paypal':
+      return new PayPalRailHandler();
+    case 'payoneer':
+      return new PayoneerRailHandler();
+    case 'local':
+      return new LocalRailHandler();
+    default:
+      throw new Error(`Unknown rail type: ${rail}`);
+  }
+}
 
 /**
  * Get a rail handler by rail type
  */
 export function getRailHandler(rail: Rail): RailHandler {
-  const handler = railHandlers.get(rail);
+  let handler = railHandlers.get(rail);
   if (!handler) {
-    throw new Error(`No handler found for rail: ${rail}`);
+    handler = initializeHandler(rail);
+    railHandlers.set(rail, handler);
   }
   return handler;
 }
@@ -32,14 +44,14 @@ export function getRailHandler(rail: Rail): RailHandler {
  * Get all available rail types
  */
 export function getAvailableRails(): Rail[] {
-  return Array.from(railHandlers.keys());
+  return ['stripe', 'wise', 'paypal', 'payoneer', 'local'];
 }
 
 /**
  * Check if a rail is supported
  */
 export function isRailSupported(rail: Rail): boolean {
-  return railHandlers.has(rail);
+  return getAvailableRails().includes(rail);
 }
 
 // Export individual handlers for direct use if needed
