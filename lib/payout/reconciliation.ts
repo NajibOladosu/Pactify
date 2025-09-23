@@ -5,18 +5,18 @@ import {
   ReconciliationEntry, 
   Payout,
   PayoutStatus,
-  PayoutError 
+  PayoutError,
+  Rail
 } from './types';
 
 export class ReconciliationManager {
-  private supabase = createClient();
-
   /**
    * Log a reconciliation entry for audit trail
    */
   async logEntry(entry: Omit<ReconciliationEntry, 'id'>): Promise<void> {
     try {
-      const { error } = await this.supabase
+      const supabase = await createClient();
+      const { error } = await supabase
         .from('reconciliation_ledger')
         .insert({
           payout_id: entry.payout_id,
@@ -48,7 +48,8 @@ export class ReconciliationManager {
    */
   async getPayoutReconciliation(payoutId: string): Promise<ReconciliationEntry[]> {
     try {
-      const { data, error } = await this.supabase
+      const supabase = await createClient();
+      const { data, error } = await supabase
         .from('reconciliation_ledger')
         .select('*')
         .eq('payout_id', payoutId)
@@ -82,7 +83,8 @@ export class ReconciliationManager {
   ): Promise<void> {
     try {
       // Get current payout data
-      const { data: payout, error: fetchError } = await this.supabase
+      const supabase = await createClient();
+      const { data: payout, error: fetchError } = await supabase
         .from('payouts')
         .select('*')
         .eq('id', payoutId)
@@ -120,7 +122,8 @@ export class ReconciliationManager {
       }
 
       // Update payout record
-      const { error: updateError } = await this.supabase
+      const supabase2 = await createClient();
+      const { error: updateError } = await supabase2
         .from('payouts')
         .update(updateFields)
         .eq('id', payoutId);
@@ -143,6 +146,7 @@ export class ReconciliationManager {
       await this.logEntry({
         payout_id: payoutId,
         rail: payout.rail,
+        event_time: new Date().toISOString(),
         action: 'webhook_update',
         provider_reference: providerReference,
         provider_status: providerStatus,
@@ -162,7 +166,8 @@ export class ReconciliationManager {
    */
   async completePayout(payoutId: string, success: boolean): Promise<void> {
     try {
-      const { data: result, error } = await this.supabase
+      const supabase3 = await createClient();
+      const { data: result, error } = await supabase3
         .rpc('complete_payout', {
           _payout_id: payoutId,
           _success: success
@@ -181,6 +186,7 @@ export class ReconciliationManager {
       await this.logEntry({
         payout_id: payoutId,
         rail: 'system',
+        event_time: new Date().toISOString(),
         action: success ? 'complete_payout_success' : 'complete_payout_failure',
         notes: success 
           ? 'Payout completed successfully - moved from pending to withdrawn'
@@ -197,7 +203,7 @@ export class ReconciliationManager {
   /**
    * Reconcile discrepancies between our records and provider records
    */
-  async reconcileDiscrepancies(rail: string, date: string): Promise<{
+  async reconcileDiscrepancies(rail: Rail, date: string): Promise<{
     matches: number;
     discrepancies: Array<{
       payout_id: string;
@@ -216,7 +222,8 @@ export class ReconciliationManager {
 
     try {
       // Get our records for the date
-      const { data: ourPayouts, error } = await this.supabase
+      const supabase4 = await createClient();
+      const { data: ourPayouts, error } = await supabase4
         .from('payouts')
         .select('*')
         .eq('rail', rail)
@@ -243,6 +250,7 @@ export class ReconciliationManager {
       await this.logEntry({
         payout_id: '', // No specific payout
         rail,
+        event_time: new Date().toISOString(),
         action: 'daily_reconciliation',
         notes: `Reconciled ${result.matches} payouts, found ${result.discrepancies.length} discrepancies`,
         created_by: 'reconciliation_job'
@@ -261,7 +269,8 @@ export class ReconciliationManager {
    */
   async getUserBalanceSummary(userId: string, currency: string = 'USD') {
     try {
-      const { data: stats, error } = await this.supabase
+      const supabase5 = await createClient();
+      const { data: stats, error } = await supabase5
         .rpc('get_user_payout_stats', {
           _user_id: userId,
           _currency: currency
@@ -289,7 +298,8 @@ export class ReconciliationManager {
     currency: string = 'USD'
   ): Promise<{ valid: boolean; available: number; error?: string }> {
     try {
-      const { data: balance, error } = await this.supabase
+      const supabase6 = await createClient();
+      const { data: balance, error } = await supabase6
         .from('wallet_balances')
         .select('available')
         .eq('user_id', userId)
@@ -334,7 +344,8 @@ export class ReconciliationManager {
   ): Promise<void> {
     try {
       // Credit the balance
-      const { data: result, error } = await this.supabase
+      const supabase7 = await createClient();
+      const { data: result, error } = await supabase7
         .rpc('credit_balance', {
           _user_id: userId,
           _amount: amount,
@@ -353,6 +364,7 @@ export class ReconciliationManager {
       await this.logEntry({
         payout_id: '', // No specific payout
         rail: 'contract_system',
+        event_time: new Date().toISOString(),
         action: 'credit_balance',
         amount,
         currency,
@@ -391,7 +403,8 @@ export class ReconciliationManager {
     discrepancies: any[];
   }> {
     try {
-      let query = this.supabase
+      const supabase8 = await createClient();
+      let query = supabase8
         .from('payouts')
         .select('*')
         .gte('created_at', startDate)

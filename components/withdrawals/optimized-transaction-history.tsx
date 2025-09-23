@@ -4,13 +4,18 @@
 
 import React, { memo, useMemo, useCallback, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { FixedSizeList as List } from 'react-window';
-import InfiniteLoader from 'react-window-infinite-loader';
+import { List } from 'react-window';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 import { 
   ArrowUpRight, 
   Clock, 
@@ -198,11 +203,12 @@ const OptimizedTransactionHistory = memo(({
 
       const response = await fetch(`/api/withdrawals/history?${params}`);
       const result = await response.json();
-      return result.data;
+      return result.data || { payouts: [], pagination: { has_more: false } };
     },
-    getNextPageParam: (lastPage, pages) => {
-      const totalLoaded = pages.reduce((sum, page) => sum + page.payouts.length, 0);
-      return lastPage.pagination.has_more ? totalLoaded : undefined;
+    initialPageParam: 0,
+    getNextPageParam: (lastPage: any, pages: any[]) => {
+      const totalLoaded = pages.reduce((sum: number, page: any) => sum + (page?.payouts?.length || 0), 0);
+      return lastPage?.pagination?.has_more ? totalLoaded : undefined;
     },
     staleTime: 30000, // 30 seconds
     refetchOnWindowFocus: false
@@ -211,7 +217,7 @@ const OptimizedTransactionHistory = memo(({
   // Flatten all transactions
   const transactions = useMemo(() => {
     if (!data?.pages) return [];
-    return data.pages.flatMap(page => page.payouts);
+    return data.pages.flatMap((page: any) => page?.payouts || []);
   }, [data]);
 
   // Filter transactions by search term
@@ -227,27 +233,12 @@ const OptimizedTransactionHistory = memo(({
     );
   }, [transactions, searchTerm]);
 
-  // Check if item is loaded
-  const isItemLoaded = useCallback((index: number) => {
-    return index < filteredTransactions.length;
-  }, [filteredTransactions]);
-
   // Load more items
   const loadMoreItems = useCallback(async () => {
     if (hasNextPage && !isFetchingNextPage) {
       await fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Render item function for virtual list
-  const renderItem = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
-    if (index >= filteredTransactions.length) {
-      return <LoadingRow style={style} />;
-    }
-
-    const transaction = filteredTransactions[index];
-    return <TransactionRow key={transaction.id} transaction={transaction} style={style} />;
-  }, [filteredTransactions]);
 
   const itemCount = hasNextPage 
     ? filteredTransactions.length + 1 
@@ -322,24 +313,28 @@ const OptimizedTransactionHistory = memo(({
             </div>
           ) : (
             <div className="h-96"> {/* Fixed height for virtual scrolling */}
-              <InfiniteLoader
-                isItemLoaded={isItemLoaded}
-                itemCount={itemCount}
-                loadMoreItems={loadMoreItems}
-              >
-                {({ onItemsRendered, ref }) => (
-                  <List
-                    ref={ref}
-                    height={384} // 96 * 4 (h-96)
-                    itemCount={itemCount}
-                    itemSize={80}
-                    onItemsRendered={onItemsRendered}
-                    width="100%"
-                  >
-                    {renderItem}
-                  </List>
-                )}
-              </InfiniteLoader>
+              <List
+                defaultHeight={384} // 96 * 4 (h-96)
+                rowCount={itemCount}
+                rowHeight={80}
+                rowProps={{}}
+                style={{ width: '100%', height: '384px' }}
+                onRowsRendered={({ startIndex, stopIndex }) => {
+                  if (!hasNextPage || isFetchingNextPage) return;
+                  
+                  const itemsNeededToStart = Math.max(0, filteredTransactions.length - 10);
+                  if (stopIndex >= itemsNeededToStart) {
+                    loadMoreItems();
+                  }
+                }}
+                rowComponent={({ index, style }) => {
+                  if (index >= filteredTransactions.length) {
+                    return <LoadingRow style={style} />;
+                  }
+                  const transaction = filteredTransactions[index];
+                  return <TransactionRow transaction={transaction} style={style} />;
+                }}
+              />
             </div>
           )}
         </CardContent>

@@ -17,7 +17,13 @@ const onboardingSchema = z.object({
   onboarding_completed_at: z.string()
 });
 
-async function handleOnboardingComplete(request: NextRequest, user: User) {
+async function handleOnboardingComplete(request: NextRequest, user?: User) {
+  if (!user) {
+    return NextResponse.json(
+      { error: "Unauthorized", message: "Authentication required" },
+      { status: 401 }
+    );
+  }
   try {
     const supabase = await createClient();
     const body = await request.json();

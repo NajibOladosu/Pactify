@@ -138,7 +138,6 @@ export function EnhancedKYCBanner({
                   {status === 'verification_session_created' && 'Session Created'}
                   {status === 'documents_submitted' && 'Documents Submitted'}
                   {status === 'under_review' && 'Under Review'}
-                  {status === 'verified' && 'Verified'}
                   {status === 'failed' && 'Failed'}
                 </Badge>
                 

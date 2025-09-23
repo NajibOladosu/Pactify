@@ -15,7 +15,7 @@ const ContractSendSchema = z.object({
   recipientEmail: z.string().email().toLowerCase().optional()
 });
 
-const secureHandler = withSecurity.withSecurity(
+const secureHandler = withSecurity(
   async (request: NextRequest) => {
     try {
       const supabase = await createClient();
@@ -172,10 +172,9 @@ const secureHandler = withSecurity.withSecurity(
     }
   },
   {
-    rateLimit: { requests: 10, windowMs: 60 * 60 * 1000 }, // 10 emails per hour
-    validateInput: true,
-    requireAuth: true,
-    allowedMethods: ['POST']
+    rateLimit: true,
+    auditLog: true,
+    requireAuth: true
   }
 );
 

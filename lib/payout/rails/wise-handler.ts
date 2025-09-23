@@ -112,9 +112,9 @@ export class WiseRailHandler extends BaseRailHandler {
         `/v1/transfers/${providerReference}/cancel`
       );
       return true;
-    } catch (error) {
+    } catch (error: any) {
       // Wise returns 422 if transfer cannot be cancelled
-      if (error.status === 422) {
+      if (error?.status === 422) {
         return false;
       }
       throw this.handleProviderError(error, 'payout cancellation');

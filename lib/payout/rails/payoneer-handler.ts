@@ -115,9 +115,9 @@ export class PayoneerRailHandler extends BaseRailHandler {
         `/v4/payouts/${providerReference}/cancel`
       );
       return true;
-    } catch (error) {
+    } catch (error: any) {
       // Payoneer may return specific error codes for non-cancelable payouts
-      if (error.status === 400 && error.code === 'PAYOUT_NOT_CANCELABLE') {
+      if (error?.status === 400 && error?.code === 'PAYOUT_NOT_CANCELABLE') {
         return false;
       }
       throw this.handleProviderError(error, 'payout cancellation');

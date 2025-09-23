@@ -9,7 +9,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-07-30.basil',
 });
 
-async function handleBillingPortal(request: NextRequest, user: User) {
+async function handleBillingPortal(request: NextRequest, user?: User) {
+  if (!user) {
+    return NextResponse.json(
+      { error: "Unauthorized", message: "Authentication required" },
+      { status: 401 }
+    );
+  }
   try {
     const supabase = await createClient();
     

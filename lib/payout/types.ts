@@ -1,6 +1,6 @@
 // Core types for the multi-rail payout system
 
-export type Rail = 'stripe' | 'wise' | 'payoneer' | 'paypal' | 'local';
+export type Rail = 'stripe' | 'wise' | 'payoneer' | 'paypal' | 'local' | 'system' | 'contract_system';
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY' | 'NGN' | 'INR' | 'PHP' | string;
 export type PayoutMethod = 'bank' | 'wallet' | 'paypal' | 'mobile';
 

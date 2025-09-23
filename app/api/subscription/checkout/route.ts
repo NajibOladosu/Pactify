@@ -29,7 +29,13 @@ const STRIPE_PRICES = {
   }
 };
 
-async function handleCheckout(request: NextRequest, user: User) {
+async function handleCheckout(request: NextRequest, user?: User) {
+  if (!user) {
+    return NextResponse.json(
+      { error: "Unauthorized", message: "Authentication required" },
+      { status: 401 }
+    );
+  }
   try {
     const supabase = await createClient();
     const body = await request.json();

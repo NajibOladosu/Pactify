@@ -207,7 +207,7 @@ export class PayPalRailHandler extends BaseRailHandler {
     this.accessToken = data.access_token;
     this.tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000; // 1 minute buffer
 
-    return this.accessToken;
+    return this.accessToken!;
   }
 
   private async makePayPalRequest(

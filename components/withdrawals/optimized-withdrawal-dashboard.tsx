@@ -23,11 +23,11 @@ import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 
 // Lazy load heavy components
-const WithdrawDialog = dynamic(() => import('./withdraw-dialog'), {
+const WithdrawDialog = dynamic(() => import('./withdraw-dialog').then(mod => ({ default: mod.WithdrawDialog })), {
   loading: () => <div className="animate-pulse h-8 bg-gray-200 rounded" />
 });
 
-const WithdrawalMethodsManager = dynamic(() => import('./withdrawal-methods-manager'), {
+const WithdrawalMethodsManager = dynamic(() => import('./withdrawal-methods-manager').then(mod => ({ default: mod.WithdrawalMethodsManager })), {
   loading: () => <div className="animate-pulse h-32 bg-gray-200 rounded" />
 });
 
@@ -320,11 +320,16 @@ export const OptimizedWithdrawalDashboard = memo(({
       {/* Lazy loaded dialogs */}
       {showWithdrawDialog && (
         <WithdrawDialog
-          open={showWithdrawDialog}
+          isOpen={showWithdrawDialog}
           onOpenChange={setShowWithdrawDialog}
-          userId={userId}
           availableBalance={(stats?.available_balance || 0) / 100}
-          methods={methods}
+          currency="USD"
+          onSuccess={() => {
+            setShowWithdrawDialog(false);
+            // Refetch stats
+            refetchStats();
+          }}
+          trigger={null}
         />
       )}
     </div>

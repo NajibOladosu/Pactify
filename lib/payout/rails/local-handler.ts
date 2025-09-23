@@ -63,7 +63,7 @@ export class LocalRailHandler extends BaseRailHandler {
       return {
         success: true,
         provider_reference: transferReference,
-        estimated_arrival: estimatedArrival
+        estimated_arrival: estimatedArrival.toISOString()
       };
 
     } catch (error) {
@@ -140,7 +140,7 @@ export class LocalRailHandler extends BaseRailHandler {
         provider_fee: localFee,
         net_amount: netAmount,
         processing_time: processingTime,
-        estimated_arrival: estimatedArrival,
+        estimated_arrival: estimatedArrival.toISOString(),
         supports_instant: false // Local transfers are rarely instant
       };
 
@@ -150,7 +150,7 @@ export class LocalRailHandler extends BaseRailHandler {
   }
 
   private extractBankAccountInfo(method: WithdrawalMethod): LocalBankAccount {
-    const details = method.details as any;
+    const details = (method as any).details || {};
     
     return {
       account_holder_name: details.account_holder_name || '',

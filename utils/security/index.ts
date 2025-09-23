@@ -15,7 +15,6 @@ export {
 // Error handling utilities
 export {
   ErrorHandler,
-  withErrorHandling,
   logError
 } from './error-handling';
 

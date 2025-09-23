@@ -127,7 +127,7 @@ export class OptimizedPayoutJobProcessor {
         const { error: updateError } = await client
           .from('payout_jobs')
           .update({
-            status: 'processing' as any,
+            status: 'processing',
             attempts: job.attempts + 1,
             updated_at: new Date().toISOString()
           })
@@ -274,7 +274,7 @@ export class OptimizedPayoutJobProcessor {
         const retryDelay = Math.floor(baseDelay + jitter);
         const nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
 
-        await client
+        await (client as any)
           .from('payout_jobs')
           .update({
             status: 'retrying',
@@ -290,7 +290,7 @@ export class OptimizedPayoutJobProcessor {
       } else {
         // Mark as permanently failed
         await Promise.all([
-          client
+          (client as any)
             .from('payout_jobs')
             .update({
               status: 'failed',
@@ -334,7 +334,7 @@ export class OptimizedPayoutJobProcessor {
       }
 
       // Create job records in batch
-      const jobInserts = payouts.map(payout => ({
+      const jobInserts = payouts.map((payout: any) => ({
         payout_id: payout.id,
         rail: payout.rail,
         status: 'queued' as const,
@@ -345,7 +345,7 @@ export class OptimizedPayoutJobProcessor {
 
       const { error: jobError } = await client
         .from('payout_jobs')
-        .insert(jobInserts);
+        .insert(jobInserts as any);
 
       if (jobError) {
         throw new PayoutError('Failed to queue payouts', 'JOB_QUEUE_ERROR', true);
@@ -382,8 +382,11 @@ export class OptimizedPayoutJobProcessor {
           return { queued: 0, processing: 0, completed: 0, failed: 0, retrying: 0, workers_active: 0 };
         }
 
-        const stats = data.reduce((acc, job) => {
-          acc[job.status as keyof typeof acc] = (acc[job.status as keyof typeof acc] || 0) + 1;
+        const stats = data.reduce((acc: any, job: any) => {
+          const status = job.status as string;
+          if (status in acc) {
+            acc[status] = (acc[status] || 0) + 1;
+          }
           return acc;
         }, { queued: 0, processing: 0, completed: 0, failed: 0, retrying: 0, workers_active: this.processingWorkers.size });
 

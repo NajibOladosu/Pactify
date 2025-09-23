@@ -7,13 +7,14 @@ import {
   Payout,
   WithdrawalMethod,
   PayoutError,
-  PayoutResult
+  PayoutResult,
+  Rail
 } from './types';
 
 interface PayoutJob {
   id: string;
   payout_id: string;
-  rail: string;
+  rail: Rail;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'retrying';
   attempts: number;
   max_attempts: number;
@@ -177,6 +178,7 @@ export class PayoutJobProcessor {
       await reconciliationManager.logEntry({
         payout_id: job.payout_id,
         rail: job.rail,
+        event_time: new Date().toISOString(),
         action: 'job_started',
         notes: `Background job started for payout processing (attempt ${job.attempts + 1})`,
         created_by: 'job_processor'
@@ -211,6 +213,7 @@ export class PayoutJobProcessor {
         await reconciliationManager.logEntry({
           payout_id: job.payout_id,
           rail: job.rail,
+          event_time: new Date().toISOString(),
           action: 'job_completed',
           provider_reference: result.provider_reference,
           notes: 'Payout processed successfully via rail handler',
@@ -244,6 +247,7 @@ export class PayoutJobProcessor {
     await reconciliationManager.logEntry({
       payout_id: job.payout_id,
       rail: job.rail,
+      event_time: new Date().toISOString(),
       action: 'job_failed',
       notes: `Job attempt ${attempts} failed: ${error.message}`,
       created_by: 'job_processor',

@@ -64,7 +64,7 @@ class SupabaseClientPool {
           inUse: true
         };
         this.clients.push(newClient as any);
-        return { client: newClient.client, release: () => this.releaseClient(newClient as any) };
+        pooledClient = newClient as any;
       } else {
         // Remove oldest client and create new one
         const oldestIndex = this.clients.reduce((oldest, client, index) => 
@@ -86,8 +86,8 @@ class SupabaseClientPool {
     }
 
     return { 
-      client: pooledClient.client as any, 
-      release: () => this.releaseClient(pooledClient! as any) 
+      client: pooledClient!.client, 
+      release: () => this.releaseClient(pooledClient!) 
     };
   }
 
@@ -117,7 +117,7 @@ setInterval(() => {
 // Cached query wrapper
 export async function cachedQuery<T>(
   cacheKey: string,
-  queryFn: (client: ReturnType<typeof createClient>) => Promise<T>,
+  queryFn: (client: any) => Promise<T>,
   ttlSeconds: number = 300
 ): Promise<T> {
   // Try cache first
@@ -158,7 +158,7 @@ export async function createOptimizedClient() {
 
 // Transaction wrapper with pooled connection
 export async function withTransaction<T>(
-  fn: (client: ReturnType<typeof createClient>) => Promise<T>
+  fn: (client: any) => Promise<T>
 ): Promise<T> {
   const { client, release } = clientPool.getClient();
   
@@ -187,7 +187,7 @@ export async function withTransaction<T>(
 
 // Batch query execution
 export async function executeBatchQueries<T extends Record<string, any>>(
-  queries: { [K in keyof T]: (client: ReturnType<typeof createClient>) => Promise<T[K]> }
+  queries: { [K in keyof T]: (client: any) => Promise<T[K]> }
 ): Promise<T> {
   const { client, release } = clientPool.getClient();
   
