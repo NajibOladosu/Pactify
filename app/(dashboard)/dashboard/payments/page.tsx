@@ -105,6 +105,7 @@ export default function PaymentsPage() {
       }
 
       const paymentsData = result.payments || [];
+      
       setCurrentUserId(result.user_id);
       setPayments(paymentsData);
 
@@ -120,6 +121,7 @@ export default function PaymentsPage() {
       const pending = paymentsData
         .filter((p: any) => (p.payee_id === result.user_id || p.payer_id === result.user_id) && p.status === 'pending')
         .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
 
       setStats({ totalIncoming: incoming, totalOutgoing: outgoing, totalPending: pending });
 
@@ -529,6 +531,7 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
       </div>
+
 
       <Card>
         <CardHeader className="pb-3">

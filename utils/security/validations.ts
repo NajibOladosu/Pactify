@@ -350,9 +350,29 @@ export class SecurityValidator {
     }
 
     if (action === "create_contract") {
-      if (profile.subscription_tier === "free" && profile.available_contracts <= 0) {
+      // Get current active contract count for this user
+      const { data: activeCountResult, error: countError } = await this.supabase
+        .rpc('get_active_contract_count', { p_user_id: this.userId });
+        
+      if (countError) {
         throw new SecurityValidationError(
-          "Contract limit reached for free plan",
+          "Error checking contract limits",
+          "LIMIT_CHECK_FAILED",
+          500
+        );
+      }
+      
+      const activeContractCount = activeCountResult || 0;
+      const contractLimit = profile.available_contracts || 3;
+      
+      // Check if user has reached their contract limit
+      if (activeContractCount >= contractLimit) {
+        const planName = profile.subscription_tier === 'free' ? 'Free' : 
+                        profile.subscription_tier === 'professional' ? 'Professional' : 
+                        profile.subscription_tier === 'business' ? 'Business' : 'Unknown';
+                        
+        throw new SecurityValidationError(
+          `Contract limit reached. You have ${activeContractCount}/${contractLimit} active contracts on the ${planName} plan.`,
           "SUBSCRIPTION_LIMIT_REACHED",
           403
         );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { withFullSecurity } from '@/utils/security/middleware';
+import { withAuth } from '@/utils/api/with-auth';
 import { auditLogger } from '@/utils/security/audit-logger';
 import { z } from 'zod';
 import type { User } from '@supabase/supabase-js';
@@ -11,52 +11,69 @@ const onboardingSchema = z.object({
   business_name: z.string().max(100).optional(),
   skills: z.array(z.string()).max(20).optional(),
   bio: z.string().max(1000).optional(),
-  website: z.string().url().optional().or(z.literal('')),
+  website: z.union([z.string().url(), z.literal(''), z.undefined()]).optional(),
   phone: z.string().max(20).optional(),
   onboarding_completed: z.boolean(),
   onboarding_completed_at: z.string()
 });
 
-async function handleOnboardingComplete(request: NextRequest, user?: User) {
-  if (!user) {
-    return NextResponse.json(
-      { error: "Unauthorized", message: "Authentication required" },
-      { status: 401 }
-    );
-  }
+async function handleOnboardingComplete(request: NextRequest, user: User) {
   try {
+    console.log('Onboarding handler - user authenticated:', { userId: user.id, email: user.email });
+    
     const supabase = await createClient();
     const body = await request.json();
     
+    console.log('Onboarding completion request body:', body);
+    
     // Validate request data
     const validatedData = onboardingSchema.parse(body);
-    
-    // Update user profile
+    console.log('Validated onboarding data:', validatedData);
+
+    // Use the database function directly as primary method since it's more reliable
+    // This avoids all RLS issues and works consistently for all users
+    console.log('Using database function for onboarding completion...');
+
     const { data: updatedProfile, error } = await supabase
-      .from('profiles')
-      .update({
-        display_name: validatedData.display_name,
-        user_type: validatedData.user_type,
-        business_name: validatedData.business_name || null,
-        skills: validatedData.skills || null,
-        bio: validatedData.bio || null,
-        website: validatedData.website || null,
-        phone: validatedData.phone || null,
-        onboarding_completed: true,
-        onboarding_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id)
-      .select()
-      .single();
+      .rpc('complete_user_onboarding', {
+        user_id_param: user.id,
+        display_name_param: validatedData.display_name,
+        user_type_param: validatedData.user_type,
+        bio_param: validatedData.bio || null,
+        website_param: validatedData.website || null,
+        phone_param: validatedData.phone || null,
+        skills_param: validatedData.skills || null,
+        company_name_param: validatedData.business_name || null
+      });
 
     if (error) {
-      console.error('Profile update error:', error);
+      console.error('Database function error:', error);
       return NextResponse.json(
-        { error: 'Failed to update profile' },
+        { 
+          error: 'Failed to complete onboarding',
+          details: error.message,
+          code: error.code 
+        },
         { status: 500 }
       );
     }
+
+    console.log('Profile update successful:', { 
+      updatedProfile: updatedProfile,
+      onboardingCompleted: updatedProfile?.onboarding_completed 
+    });
+
+    // Verify the update by reading the profile again
+    const { data: verifyProfile, error: verifyError } = await supabase
+      .from('profiles')
+      .select('id, onboarding_completed, onboarding_completed_at, updated_at')
+      .eq('id', user.id)
+      .single();
+      
+    console.log('Profile verification after update:', {
+      verifyProfile,
+      verifyError: verifyError?.message
+    });
 
     // Log successful onboarding completion
     await auditLogger.logSecurityEvent({
@@ -112,4 +129,4 @@ async function handleOnboardingComplete(request: NextRequest, user?: User) {
   }
 }
 
-export const POST = withFullSecurity(handleOnboardingComplete);
+export const POST = withAuth(handleOnboardingComplete);

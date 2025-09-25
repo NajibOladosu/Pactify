@@ -5,10 +5,9 @@ import type { User } from "@supabase/supabase-js";
 
 async function handlePaymentsRequest(request: NextRequest, user: User) {
   try {
+    // Use regular client with updated RLS policies
     const supabase = await createClient();
     
-    console.log(`[PAYMENTS API] Fetching payments for user ${user.id}`);
-
     // Use the same RPC function as progress API to get contracts (bypasses RLS issues)
     const { data: contractsFromRPC, error: contractsError } = await supabase
       .rpc('get_user_contracts', { 
@@ -16,70 +15,126 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
         p_apply_free_tier_limit: false
       });
 
-    console.log(`[PAYMENTS API] RPC contracts result:`, { 
-      contracts: contractsFromRPC?.length || 0,
-      contractsError: contractsError?.message 
-    });
-
     // Get real payment data from database
     const allPayments: any[] = [];
     
-    // Get escrow payments
-    const { data: escrowPayments, error: escrowError } = await supabase
-      .from("contract_escrows")
-      .select(`
-        *,
-        contracts!inner(
-          id,
-          title,
-          client_id,
-          freelancer_id,
-          profiles!client_id(display_name),
-          freelancer_profile:profiles!freelancer_id(display_name)
-        )
-      `)
-      .or(`contracts.client_id.eq.${user.id},contracts.freelancer_id.eq.${user.id}`)
-      .order("created_at", { ascending: false });
+    // First get contracts where user is client or freelancer
+    const { data: userContracts, error: userContractsError } = await supabase
+      .from("contracts")
+      .select("id")
+      .or(`client_id.eq.${user.id},freelancer_id.eq.${user.id}`);
 
-    // Get milestone payments
-    const { data: milestonePayments, error: milestoneError } = await supabase
+
+    // Get escrow payments - simplified to avoid join issues
+    let escrowPayments = null;
+    let escrowError = null;
+    
+    if (userContracts && userContracts.length > 0) {
+      const contractIds = userContracts.map(c => c.id);
+      
+      const result = await supabase
+        .from("contract_escrows")
+        .select("*")
+        .in("contract_id", contractIds)
+        .order("created_at", { ascending: false });
+      
+      escrowPayments = result.data;
+      escrowError = result.error;
+      
+    }
+
+    // Get milestone payments - using service role, so we can query directly
+    let milestonePayments = null;
+    let milestoneError = null;
+
+    // Query payments directly where user is payer or payee - simplified without complex joins
+    const { data: userPayments, error: paymentsError } = await supabase
       .from("payments")
-      .select(`
-        *,
-        contracts!contract_id(
-          id,
-          title,
-          client_id,
-          freelancer_id,
-          profiles!client_id(display_name),
-          freelancer_profile:profiles!freelancer_id(display_name)
-        )
-      `)
-      .or(`contracts.client_id.eq.${user.id},contracts.freelancer_id.eq.${user.id}`)
+      .select("*")
+      .or(`payer_id.eq.${user.id},payee_id.eq.${user.id}`)
       .order("created_at", { ascending: false });
+    
 
-    // Get withdrawal payments
-    const { data: withdrawalPayments, error: withdrawalError } = await supabase
-      .from("withdrawals")
-      .select(`
-        *,
-        connected_accounts!connected_account_id(
-          profiles!user_id(display_name)
-        )
-      `)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    console.log(`[PAYMENTS API] Database query results:`, {
-      escrowPayments: escrowPayments?.length || 0,
-      milestonePayments: milestonePayments?.length || 0,
-      withdrawalPayments: withdrawalPayments?.length || 0,
-      errors: {
-        escrowError: escrowError?.message,
-        milestoneError: milestoneError?.message,
-        withdrawalError: withdrawalError?.message
+    // Now enhance the payments with contract and profile info
+    if (userPayments && userPayments.length > 0) {
+      const enhancedPayments = [];
+      
+      for (const payment of userPayments) {
+        // Get contract info
+        const { data: contract, error: contractError } = await supabase
+          .from("contracts")
+          .select("id, title, client_id, freelancer_id")
+          .eq("id", payment.contract_id)
+          .single();
+          
+        
+        let clientProfile = null;
+        let freelancerProfile = null;
+        
+        // Get profiles separately
+        if (contract?.client_id) {
+          const { data: client } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", contract.client_id)
+            .single();
+          clientProfile = client;
+        }
+        
+        if (contract?.freelancer_id) {
+          const { data: freelancer } = await supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", contract.freelancer_id)
+            .single();
+          freelancerProfile = freelancer;
+        }
+        
+        enhancedPayments.push({
+          ...payment,
+          contracts: {
+            ...contract,
+            profiles: clientProfile,
+            freelancer_profile: freelancerProfile
+          }
+        });
       }
-    });
+      
+      milestonePayments = enhancedPayments;
+    } else {
+      milestonePayments = [];
+    }
+    
+    milestoneError = paymentsError;
+
+    // Get withdrawal payments (skip if table doesn't exist)
+    let withdrawalPayments = null;
+    let withdrawalError = null;
+    
+    // Check if withdrawals table exists first
+    const { data: tableExists } = await supabase
+      .from("information_schema.tables")
+      .select("table_name")
+      .eq("table_name", "withdrawals")
+      .eq("table_schema", "public")
+      .single();
+    
+    if (tableExists) {
+      const result = await supabase
+        .from("withdrawals")
+        .select(`
+          *,
+          connected_accounts!connected_account_id(
+            profiles!user_id(display_name)
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      
+      withdrawalPayments = result.data;
+      withdrawalError = result.error;
+    }
+
 
     // Process escrow payments
     if (escrowPayments) {
@@ -178,12 +233,8 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
       allPayments.push(...formattedWithdrawalPayments);
     }
 
-    console.log(`[PAYMENTS API] Processed ${allPayments.length} real payments for user ${user.id}`);
-
     // Sort all payments by creation date
     allPayments.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-
-    console.log(`[PAYMENTS API] Final result: ${allPayments.length} payments for user ${user.id}`);
 
     return NextResponse.json({
       success: true,
@@ -205,7 +256,6 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
     });
 
   } catch (error) {
-    console.error("[PAYMENTS API] Unexpected error:", error);
     return NextResponse.json(
       { 
         success: false, 

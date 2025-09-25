@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import { DashboardLayoutWrapper } from "@/components/dashboard/layout-wrapper";
 import { ensureUserProfile, linkUserContracts } from "@/utils/profile-helpers";
 
+// Force dynamic rendering to ensure fresh profile data
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -19,35 +22,31 @@ export default async function DashboardLayout({
     return redirect("/sign-in");
   }
 
-  // Fetch user profile including subscription tier
-  const profileResult = await supabase
-    .from("profiles")
-    .select("*, subscription_tier") // Ensure subscription_tier is selected
-    .eq("id", user.id)
-    .single();
+  // Fetch user profile using secure function that bypasses RLS issues
+  const { data: profileResult, error: profileError } = await supabase
+    .rpc('get_user_profile', { p_user_id: user.id });
 
-  let profile = profileResult.data;
-  const profileError = profileResult.error;
+  let profile = null;
+  if (profileResult?.success) {
+    profile = profileResult.profile;
+  }
 
   // Handle potential error fetching profile
   if (profileError) {
     console.error("Error fetching profile in layout:", profileError);
+    return redirect("/sign-in?error=database_error");
+  }
+  
+  // If no profile found, try to create one using the helper
+  if (!profile) {
+    console.log("No profile found for user:", user.id, "attempting to create one");
     
-    // If no profile found, try to create one using the helper
-    if (profileError.code === 'PGRST116') {
-      console.log("No profile found for user:", user.id, "attempting to create one");
-      
-      try {
-        profile = await ensureUserProfile(user.id);
-        console.log("Profile retrieved/created successfully for user:", user.id);
-      } catch (helperError) {
-        console.error("Profile helper failed:", helperError);
-        return redirect("/sign-in?error=profile_creation_failed&user_id=" + user.id);
-      }
-    } else {
-      // Other database errors
-      console.error("Database error fetching profile:", profileError);
-      return redirect("/sign-in?error=database_error");
+    try {
+      profile = await ensureUserProfile(user.id);
+      console.log("Profile retrieved/created successfully for user:", user.id);
+    } catch (helperError) {
+      console.error("Profile helper failed:", helperError);
+      return redirect("/sign-in?error=profile_creation_failed&user_id=" + user.id);
     }
   }
 
@@ -59,8 +58,21 @@ export default async function DashboardLayout({
   // Check if user needs to complete onboarding
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';
+  const searchParams = headersList.get('x-search-params') || '';
   
-  if (!profile.onboarding_completed && !pathname.includes('/onboarding')) {
+  console.log('Dashboard layout check:', {
+    userId: user.id,
+    pathname,
+    searchParams,
+    onboardingCompleted: profile.onboarding_completed,
+    profileExists: !!profile
+  });
+  
+  // Only redirect to onboarding if user hasn't completed it AND they're not already on onboarding page AND not coming from welcome redirect
+  // Now that onboarding_completed column exists, use it properly
+  const needsOnboarding = !profile.onboarding_completed;
+  if (needsOnboarding && !pathname.includes('/onboarding') && !searchParams.includes('welcome=true')) {
+    console.log('Redirecting to onboarding:', { pathname, onboardingCompleted: profile.onboarding_completed });
     return redirect("/dashboard/onboarding");
   }
 

@@ -1,14 +1,45 @@
 "use client";
 
-import { ReactNode, Suspense, useState } from "react";
+import { ReactNode, Suspense, useState, Component } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Toaster } from "@/components/ui/toaster";
 import dynamic from "next/dynamic";
 
+// Simple error boundary for auth button
+class AuthButtonErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex gap-2">
+          <Link href="/sign-in" className="px-3 py-1.5 text-sm border rounded-md">
+            Sign in
+          </Link>
+          <Link href="/sign-up" className="px-3 py-1.5 text-sm bg-primary-500 text-white rounded-md">
+            Sign up
+          </Link>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Dynamically import AuthButton as a client component
-const AuthButton = dynamic(() => import("./header-auth-client"), { ssr: false });
+const AuthButton = dynamic(() => import("./header-auth-client"), { 
+  ssr: false,
+  loading: () => <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
+});
 
 // Fallback header for client-only rendering (no auth)
 function MinimalHeader() {
@@ -54,7 +85,9 @@ function MinimalHeader() {
         
         {/* Desktop auth and theme */}
         <div className="hidden md:flex items-center gap-4">
-          <AuthButton />
+          <AuthButtonErrorBoundary>
+            <AuthButton />
+          </AuthButtonErrorBoundary>
           <ThemeSwitcher />
         </div>
       </div>
@@ -85,7 +118,9 @@ function MinimalHeader() {
               Features
             </Link>
             <div className="pt-3 border-t border-border">
-              <AuthButton />
+              <AuthButtonErrorBoundary>
+                <AuthButton />
+              </AuthButtonErrorBoundary>
             </div>
           </div>
         </div>

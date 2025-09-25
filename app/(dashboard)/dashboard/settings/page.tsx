@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { redirect } from "next/navigation";
-import { UserIcon, CreditCardIcon, BellIcon, ShieldIcon, GlobeIcon, CheckCircleIcon, ShieldCheckIcon } from "lucide-react";
-import Link from "next/link";
+import { UserIcon, BellIcon, ShieldIcon, GlobeIcon, ShieldCheckIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from 'date-fns';
-import { updateUserProfile } from "@/app/actions"; // Import the server action
+import { ProfileUpdateForm } from "@/components/profile/profile-update-form";
 import { KYCDashboardSection } from "@/components/kyc/kyc-dashboard-section";
 import EmailNotificationSettings from "@/components/dashboard/email-notification-settings";
 
@@ -17,6 +16,10 @@ export const metadata = {
   title: "Settings | Pactify",
   description: "Manage your account settings and profile",
 };
+
+// Force dynamic rendering to ensure fresh data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Never cache this page
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -29,32 +32,19 @@ export default async function SettingsPage() {
     return redirect("/sign-in");
   }
 
-  // Fetch user profile
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  // Fetch user profile using secure function that bypasses RLS issues
+  const { data: profileResult, error: profileError } = await supabase
+    .rpc('get_user_profile', { p_user_id: user.id });
 
-  if (profileError) {
+  let profile = null;
+  if (profileResult?.success) {
+    profile = profileResult.profile;
+  } else if (profileError) {
     console.error("Error fetching profile:", profileError);
   }
+  
+  console.log("Profile data loaded in settings:", profile?.display_name, profile?.updated_at);
 
-  // Fetch user subscription
-  const { data: subscription } = await supabase
-    .from("user_subscriptions")
-    .select(`
-      *,
-      subscription_plans (
-        id,
-        name,
-        description,
-        features
-      )
-    `)
-    .eq("user_id", user.id)
-    .in("status", ["active", "trialing", "past_due"]) // Fetch active, trialing, or past_due subscriptions
-    .maybeSingle(); // Use maybeSingle as user might not have a subscription
 
   // Fetch KYC verification data
   const { data: kycVerification } = await supabase
@@ -77,212 +67,6 @@ export default async function SettingsPage() {
     }
   };
 
-  // Helper function to parse features JSON
-  const parseFeatures = (featuresJson: any) => {
-    try {
-      if (typeof featuresJson === 'string') {
-        const parsed = JSON.parse(featuresJson);
-        return parsed?.features || [];
-      }
-      if (typeof featuresJson === 'object' && featuresJson !== null && Array.isArray(featuresJson.features)) {
-        return featuresJson.features;
-      }
-      return [];
-    } catch (error) {
-      console.error("Error parsing features JSON:", error);
-      return [];
-    }
-  };
-
-  const currentPlan = subscription?.subscription_plans;
-  const currentPlanFeatures = currentPlan ? parseFeatures(currentPlan.features) : [];
-  const isFreeTier = !subscription || currentPlan?.id === 'free'; // Consider no subscription as free tier for display
-
-  // Determine subscription content before return
-  let subscriptionContent;
-  if (currentPlan && !isFreeTier) {
-    // User has an active paid subscription
-    subscriptionContent = (
-      <div className="p-4 border rounded-md bg-muted/30">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-lg">{currentPlan.name} Plan</h3>
-              <Badge variant={subscription.status === 'active' || subscription.status === 'trialing' ? 'default' : 'destructive'}>
-                {subscription.status === 'trialing' ? 'Trialing' : subscription.status === 'past_due' ? 'Past Due' : 'Active'}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">{currentPlan.description}</p>
-          </div>
-          {/* Add Price Display if available in subscription_plans */}
-        </div>
-
-        <div className="mt-4 pt-4 border-t space-y-2 text-sm">
-          <p>
-            Current Period: {formatDate(subscription.current_period_start)} - {formatDate(subscription.current_period_end)}
-          </p>
-          {subscription.cancel_at_period_end && (
-            <p className="text-destructive">
-              Your subscription will be cancelled at the end of the current period ({formatDate(subscription.current_period_end)}).
-            </p>
-          )}
-           {subscription.status === 'trialing' && (
-            <p className="text-primary-500">
-              Your trial ends on {formatDate(subscription.current_period_end)}.
-            </p>
-          )}
-           {subscription.status === 'past_due' && (
-            <p className="text-destructive">
-              Your payment is past due. Please update your payment method.
-            </p>
-          )}
-        </div>
-
-        <div className="mt-4 pt-4 border-t">
-          <h4 className="font-medium mb-2">Plan Features:</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-            {currentPlanFeatures.length > 0 ? (
-              currentPlanFeatures.map((feature: string, index: number) => (
-                <div key={index} className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500 flex-shrink-0" />
-                  <span>{feature}</span>
-                </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground">No specific features listed.</p>
-            )}
-          </div>
-        </div>
-        {/* Placeholder for Manage Billing Button (Phase 2) */}
-        <div className="mt-6 flex justify-end">
-           <Button variant="outline" disabled>Manage Billing (Coming Soon)</Button>
-        </div>
-      </div>
-    );
-  } else {
-    // User is on Free Tier or has no subscription
-    subscriptionContent = (
-      <>
-        <div className="p-4 border rounded-md bg-muted/30">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium text-lg">Free Plan</h3>
-                <Badge>Current Plan</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">Basic features for individuals just getting started</p>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold">$0</span>
-              <span className="text-muted-foreground">/month</span>
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-               <div className="flex items-center gap-2">
-                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                 <span>Up to 3 contracts</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                 <span>Basic contract templates</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                 <span>10% escrow fee</span>
-               </div>
-            </div> {/* Close Grid */}
-          </div> {/* Close Features container */}
-        </div> {/* Close Free plan block */}
-
-        {/* Upgrade Section */}
-        <div className="space-y-4 pt-6 border-t">
-          <h3 className="font-medium text-lg">Upgrade Your Plan</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Professional Plan Card */}
-            <Card>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>Professional</CardTitle>
-                  <CardDescription className="mt-1">For growing freelance businesses</CardDescription>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold">$19.99</span> {/* TODO: Fetch dynamically */}
-                  <span className="text-muted-foreground">/mo</span> {/* TODO: Add yearly toggle */}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                {/* TODO: Fetch features dynamically */}
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>Unlimited contracts</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>All professional templates</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>7.5% escrow fee</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>Basic custom branding</span>
-                </div>
-              </div>
-              <Button asChild className="w-full">
-                <Link href="/checkout/professional">Upgrade to Professional</Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Business Plan Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>Business</CardTitle>
-                  <CardDescription className="mt-1">For established freelance businesses</CardDescription>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold">$49.99</span> {/* TODO: Fetch dynamically */}
-                  <span className="text-muted-foreground">/mo</span> {/* TODO: Add yearly toggle */}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                {/* TODO: Fetch features dynamically */}
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>All Professional features</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>Team collaboration (up to 5)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>5% escrow fee</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-primary-500" />
-                  <span>Full white-labeling</span>
-                </div>
-              </div>
-               <Button asChild variant="outline" className="w-full">
-                 <Link href="/checkout/business">Upgrade to Business</Link>
-               </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-      </>
-    );
-  }
 
 
   return (
@@ -301,10 +85,6 @@ export default async function SettingsPage() {
           <TabsTrigger value="verification" className="flex items-center gap-2">
             <ShieldCheckIcon className="h-4 w-4" />
             <span>Verification</span>
-          </TabsTrigger>
-          <TabsTrigger value="subscription" className="flex items-center gap-2">
-            <CreditCardIcon className="h-4 w-4" />
-            <span>Subscription</span>
           </TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <BellIcon className="h-4 w-4" />
@@ -339,66 +119,18 @@ export default async function SettingsPage() {
                 </div>
               </div>
 
-              {/* Add action attribute and name attributes to inputs */}
-              <form action={updateUserProfile} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="display_name">Full Name</Label>
-                    <Input
-                      id="display_name"
-                      name="display_name" // Add name attribute
-                      defaultValue={displayName}
-                      placeholder="Your name"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      defaultValue={user.email}
-                      disabled
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="company">Company Name</Label>
-                    <Input
-                      id="company"
-                      name="company_name" // Add name attribute
-                      defaultValue={profile?.company_name || ''}
-                      placeholder="Your company name"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="website">Website</Label>
-                    <Input
-                      id="website"
-                      name="website" // Add name attribute
-                      defaultValue={profile?.website || ''}
-                      placeholder="https://your-website.com"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="bio">Bio</Label>
-                  <textarea
-                    id="bio"
-                    name="bio" // Add name attribute
-                    className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    defaultValue={profile?.bio || ''}
-                    placeholder="Tell others about yourself or your business..."
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit">Save Changes</Button>
-                </div>
-              </form>
+              <ProfileUpdateForm 
+                user={{
+                  id: user.id,
+                  email: user.email || null
+                }}
+                profile={{
+                  display_name: profile?.display_name || null,
+                  company_name: profile?.company_name || null,
+                  website: profile?.website || null,
+                  bio: profile?.bio || null
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -416,20 +148,6 @@ export default async function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* Subscription Tab */}
-        <TabsContent value="subscription">
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle>Subscription Plan</CardTitle>
-              <CardDescription>
-                Manage your subscription and billing information.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {subscriptionContent} {/* Render the determined content */}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
 
         {/* Notifications Tab */}

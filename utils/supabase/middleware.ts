@@ -12,6 +12,10 @@ export const updateSession = async (request: NextRequest) => {
       },
     });
 
+    // Set the pathname and search params headers so the layout can access them
+    response.headers.set('x-pathname', request.nextUrl.pathname);
+    response.headers.set('x-search-params', request.nextUrl.searchParams.toString());
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

@@ -3,13 +3,20 @@
 
 // Conditional Redis import - only load if available
 let createRedisClient: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const redis = require('redis');
-  createRedisClient = redis.createClient;
-} catch {
-  // Redis not available, will use memory cache fallback
-  console.log('Redis not available, using memory cache fallback');
+
+async function loadRedis() {
+  try {
+    if (typeof window === 'undefined') { // Only load on server-side
+      const redis = await import('redis').catch(() => {
+        console.log('Redis package not found, using memory cache fallback');
+        return null;
+      });
+      return redis?.createClient || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 // In-memory cache fallback
@@ -25,22 +32,28 @@ class CacheManager {
 
   private async initializeRedis() {
     try {
-      if (process.env.REDIS_URL && createRedisClient) {
-        this.redis = createRedisClient({
-          url: process.env.REDIS_URL
-        });
+      if (process.env.REDIS_URL) {
+        createRedisClient = await loadRedis();
+        
+        if (createRedisClient) {
+          this.redis = createRedisClient({
+            url: process.env.REDIS_URL
+          });
 
-        this.redis.on('error', (err: any) => {
-          console.error('Redis error:', err);
-          this.useRedis = false;
-        });
+          this.redis.on('error', (err: any) => {
+            console.error('Redis error:', err);
+            this.useRedis = false;
+          });
 
-        this.redis.on('connect', () => {
-          console.log('Redis connected');
-          this.useRedis = true;
-        });
+          this.redis.on('connect', () => {
+            console.log('Redis connected');
+            this.useRedis = true;
+          });
 
-        await this.redis.connect();
+          await this.redis.connect();
+        } else {
+          console.log('Redis not available, using memory cache fallback');
+        }
       }
     } catch (error) {
       console.warn('Redis initialization failed, using memory cache:', error);

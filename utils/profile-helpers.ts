@@ -21,31 +21,27 @@ export async function ensureUserProfile(userId: string) {
     return existingProfile;
   }
 
-  // If profile doesn't exist, create it
+  // If profile doesn't exist, create it using secure function
   if (fetchError?.code === 'PGRST116') {
     console.log("Creating missing profile for user:", userId);
     
-    const { data: newProfile, error: createError } = await supabase
-      .from("profiles")
-      .insert({
-        id: userId,
-        display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || "User",
-        user_type: user.user_metadata?.user_type || "both",
-        subscription_tier: "free",
-        available_contracts: 3
-      })
-      .select()
-      .single();
+    const { data: createResult, error: rpcError } = await supabase
+      .rpc('create_user_profile', {
+        p_user_id: userId,
+        p_display_name: user.user_metadata?.full_name,
+        p_user_type: user.user_metadata?.user_type || "both",
+        p_email: user.email
+      });
 
-    if (createError) {
-      console.error("Error creating profile:", createError);
-      throw new Error(`Failed to create profile: ${createError.message}`);
+    if (rpcError || !createResult?.success) {
+      console.error("Error creating profile:", rpcError || createResult?.error);
+      throw new Error(`Failed to create profile: ${rpcError?.message || createResult?.error}`);
     }
 
     // After creating profile, link any contracts waiting for this user
     await linkUserContracts(userId, user.email || '');
 
-    return newProfile;
+    return createResult.profile;
   }
 
   // Other database errors

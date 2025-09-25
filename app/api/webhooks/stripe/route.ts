@@ -307,13 +307,14 @@ async function handleSubscriptionUpdate(subscriptionEventData: Stripe.Subscripti
     throw new Error(`Database error during subscription update: ${updateError.message}`);
   }
 
-   const { error: profileUpdateError } = await supabaseAdmin
-     .from('profiles')
-     .update({ subscription_tier: plan.id })
-     .eq('id', userId);
+   // Use the sync function instead of manual profile update to ensure all fields are synced
+   const { data: syncResult, error: syncError } = await supabaseAdmin
+     .rpc('sync_user_subscription_to_profile', { user_id_param: userId });
 
-    if (profileUpdateError) {
-      console.error(`Failed to update profile tier for user ${userId}:`, profileUpdateError);
+    if (syncError) {
+      console.error(`Failed to sync subscription data for user ${userId}:`, syncError);
+    } else {
+      console.log(`Successfully synced subscription data for user ${userId}:`, syncResult);
     }
 
 }
@@ -355,13 +356,14 @@ async function handleSubscriptionDelete(subscription: Stripe.Subscription) {
       console.error("Supabase Admin client became null before updating profile tier.");
       return;
   }
-  const { error: profileUpdateError } = await supabaseAdmin
-    .from('profiles')
-    .update({ subscription_tier: 'free' })
-    .eq('id', userId);
+  // Use the sync function to reset subscription data properly
+  const { data: syncResult, error: syncError } = await supabaseAdmin
+    .rpc('sync_user_subscription_to_profile', { user_id_param: userId });
 
-   if (profileUpdateError) {
-     console.error(`Failed to reset profile tier for user ${userId} after cancellation:`, profileUpdateError);
+   if (syncError) {
+     console.error(`Failed to sync subscription data after cancellation for user ${userId}:`, syncError);
+   } else {
+     console.log(`Successfully reset subscription data after cancellation for user ${userId}:`, syncResult);
    }
 
 }
