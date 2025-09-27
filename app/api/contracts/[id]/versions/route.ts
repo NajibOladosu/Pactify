@@ -41,7 +41,7 @@ export async function GET(
     }
 
     // Format versions with proposer name
-    const formattedVersions = versions?.map(version => ({
+    const formattedVersions = versions?.map((version: any) => ({
       ...version,
       proposed_by_name: version.proposer_name || 'Unknown',
     })) || [];

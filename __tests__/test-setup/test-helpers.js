@@ -3,9 +3,9 @@
  * Utility functions for test setup, user management, and common operations
  */
 
-import { createClient } from '@supabase/supabase-js';
-import Stripe from 'stripe';
-import TEST_CONFIG from './test-config.js';
+const { createClient } = require('@supabase/supabase-js');
+const Stripe = require('stripe');
+const { TEST_CONFIG, createTestDelay } = require('./test-config.js');
 
 // Initialize test clients with fallback values for testing
 // Ensure environment is loaded before creating client
@@ -513,9 +513,17 @@ export class TestEnvironment {
 }
 
 // Export all helpers  
-export {
-  TEST_CONFIG,
-  stripe
-};
+const supabaseAdmin = getSupabaseAdmin();
 
-export const supabaseAdmin = getSupabaseAdmin();
+module.exports = {
+  TestUserManager,
+  TestContractManager,
+  TestPaymentManager,
+  TestDatabaseManager,
+  TestAPIManager,
+  TestEnvironment,
+  TEST_CONFIG,
+  stripe,
+  supabaseAdmin,
+  createTestDelay
+};

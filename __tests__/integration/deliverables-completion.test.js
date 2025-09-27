@@ -3,21 +3,21 @@
  * Tests file uploads, deliverable submissions, reviews, and contract completion workflows
  */
 
-import {
+const {
   setupTestUsers,
   cleanupTestUsers,
   getTestUser,
   authenticateTestUser,
   resetTestUsers
-} from '../test-setup/setup-test-users.js';
-import {
+} = require('../test-setup/setup-test-users.js');
+const {
   TestContractManager,
   TestPaymentManager,
   TestAPIManager,
   TEST_CONFIG,
   supabaseAdmin,
   createTestDelay
-} from '../test-setup/test-helpers.js';
+} = require('../test-setup/test-helpers.js');
 
 describe('Deliverables and Contract Completion', () => {
   let freelancerUser, clientUser;

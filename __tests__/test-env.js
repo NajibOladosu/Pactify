@@ -6,6 +6,13 @@
 const fs = require('fs');
 const path = require('path');
 
+// Setup fetch polyfill globally for all tests
+const fetch = require('cross-fetch');
+global.fetch = fetch;
+global.Headers = fetch.Headers;
+global.Request = fetch.Request;
+global.Response = fetch.Response;
+
 // Load environment variables from .env.local for real data testing
 function loadEnvLocal() {
   try {

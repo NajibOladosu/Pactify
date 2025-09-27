@@ -13,7 +13,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    
+
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -28,10 +28,12 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (accountError || !connectedAccount) {
-      return NextResponse.json({ 
-        error: 'No connected account found. Please complete account verification first.' 
+      return NextResponse.json({
+        error: 'No connected account found. Please complete account verification first.'
       }, { status: 400 });
     }
+
+    console.log('Fetching external accounts for Stripe account:', connectedAccount.stripe_account_id);
 
     // Get external accounts from Stripe
     const externalAccounts = await stripe.accounts.listExternalAccounts(
@@ -78,7 +80,8 @@ export async function GET(request: NextRequest) {
         display_name: `${account.bank_name || 'Bank Transfer'} •••• ${account.last4}`,
         description: 'Bank Transfer',
         processing_time: account.country === 'US' ? '1-3 business days' : '1-5 business days',
-        fee: account.country === 'US' ? 'Free' : 'Low fees',
+        fee: account.country === 'US' ? 'Free' : '$1.50',
+        fee_amount: account.country === 'US' ? 0 : 1.50, // Actual fee amount for calculations
         icon: '🏦',
       })),
       ...debitCards.data.map((card: any) => ({
@@ -100,7 +103,8 @@ export async function GET(request: NextRequest) {
         display_name: `${card.brand?.toUpperCase() || 'Debit Card'} •••• ${card.last4}`,
         description: 'Instant Card Transfer',
         processing_time: 'Within 30 minutes',
-        fee: 'Standard processing fee',
+        fee: '$1.50',
+        fee_amount: 1.50, // Actual fee amount for instant card transfers
         icon: card.brand?.toLowerCase() === 'visa' ? '💳' : card.brand?.toLowerCase() === 'mastercard' ? '💳' : '💳',
       })),
     ];

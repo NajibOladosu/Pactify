@@ -105,22 +105,81 @@ export default function PaymentsPage() {
       }
 
       const paymentsData = result.payments || [];
+
+      // Debug logging
+      console.log('API Debug Info:', result.debug);
+      console.log('Total payments received:', paymentsData.length);
+      console.log('User ID:', result.user_id);
+
+      const withdrawalPayments = paymentsData.filter((p: any) => p.payment_type === 'withdrawal' || p.payment_type === 'withdrawal_fee');
+      console.log('Withdrawal payments:', withdrawalPayments);
+
+      console.log('All payment types:', [...new Set(paymentsData.map((p: any) => p.payment_type))]);
+
+      // Debug balance calculation components
+      const incomingPayments = paymentsData.filter((p: any) =>
+        p.payee_id === result.user_id &&
+        (p.status === 'released' || p.status === 'paid') &&
+        p.payment_type !== 'withdrawal' &&
+        p.payment_type !== 'withdrawal_fee'
+      );
+      console.log('Incoming payments for balance:', incomingPayments);
+
+      const withdrawalsForBalance = paymentsData.filter((p: any) =>
+        (p.payment_type === 'withdrawal' || p.payment_type === 'withdrawal_fee') &&
+        (p.status === 'processing' || p.status === 'paid')
+      );
+      console.log('Withdrawals for balance calculation:', withdrawalsForBalance);
+
+      const incomingTotal = incomingPayments.reduce((sum: number, p: any) => sum + Number(p.net_amount || p.amount), 0);
+      const withdrawalTotal = withdrawalsForBalance.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      console.log('Balance calculation:', {
+        incoming: incomingTotal,
+        withdrawals: withdrawalTotal,
+        final: Math.max(0, incomingTotal - withdrawalTotal)
+      });
       
       setCurrentUserId(result.user_id);
       setPayments(paymentsData);
 
       // Calculate stats
-      const incoming = paymentsData
-        .filter((p: any) => p.payee_id === result.user_id && p.status === 'released')
+      const incomingFromPayments = paymentsData
+        .filter((p: any) =>
+          p.payee_id === result.user_id &&
+          (p.status === 'released' || p.status === 'paid') &&
+          p.payment_type !== 'withdrawal' &&
+          p.payment_type !== 'withdrawal_fee'
+        )
         .reduce((sum: number, p: any) => sum + Number(p.net_amount || p.amount), 0);
 
       const outgoing = paymentsData
-        .filter((p: any) => p.payer_id === result.user_id && p.status === 'released')
+        .filter((p: any) =>
+          p.payer_id === result.user_id &&
+          (p.status === 'released' || p.status === 'paid') &&
+          p.payment_type !== 'withdrawal_fee'
+        )
         .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
 
       const pending = paymentsData
-        .filter((p: any) => (p.payee_id === result.user_id || p.payer_id === result.user_id) && p.status === 'pending')
+        .filter((p: any) =>
+          (p.payee_id === result.user_id || p.payer_id === result.user_id) &&
+          p.status === 'pending' &&
+          p.payment_type !== 'withdrawal' &&
+          p.payment_type !== 'withdrawal_fee'
+        )
         .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+      // Calculate total withdrawals and fees (exclude cancelled/failed ones)
+      // Only processing and completed withdrawals reduce available balance
+      const totalWithdrawals = paymentsData
+        .filter((p: any) =>
+          (p.payment_type === 'withdrawal' || p.payment_type === 'withdrawal_fee') &&
+          (p.status === 'processing' || p.status === 'paid')
+        )
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+      // Available balance = incoming payments - withdrawals
+      const incoming = Math.max(0, incomingFromPayments - totalWithdrawals);
 
 
       setStats({ totalIncoming: incoming, totalOutgoing: outgoing, totalPending: pending });
@@ -285,11 +344,16 @@ export default function PaymentsPage() {
     }
   };
 
-  const filteredPayments = payments.filter(payment => 
-    payment.contract?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.payer?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.payee?.display_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPayments = payments.filter(payment => {
+    if (!searchTerm) return true; // Show all payments when no search term
+
+    return (
+      payment.contract?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.payer?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.payee?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.payment_type?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -469,6 +533,9 @@ export default function PaymentsPage() {
                       </p>
                       <p className="text-xs text-blue-600 dark:text-blue-400">
                         <strong>Fee:</strong> {externalAccounts.find(acc => acc.id === selectedPayoutMethod)?.fee}
+                        {(externalAccounts.find(acc => acc.id === selectedPayoutMethod) as any)?.fee_amount === 0 && (
+                          <span className="text-green-600 dark:text-green-400"> ✨ Free</span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -557,7 +624,10 @@ export default function PaymentsPage() {
           ) : filteredPayments.length > 0 ? (
             <div className="space-y-4">
               {filteredPayments.map((payment) => {
-                const isIncoming = currentUserId && payment.payee_id === currentUserId;
+                // Withdrawals are always outgoing transactions (money leaving your account)
+                // Withdrawal fees are also outgoing (you pay the fee)
+                const isWithdrawalOrFee = payment.payment_type === 'withdrawal' || payment.payment_type === 'withdrawal_fee';
+                const isIncoming = !isWithdrawalOrFee && currentUserId && payment.payee_id === currentUserId;
                 const otherParty = isIncoming ? payment.payer : payment.payee;
                 
                 return (
@@ -574,13 +644,18 @@ export default function PaymentsPage() {
                       </div>
                       <div>
                         <div className="font-medium">
-                          {payment.contract?.title || 'Contract Payment'}
+                          {payment.payment_type === 'withdrawal' ? 'Withdrawal' :
+                           payment.payment_type === 'withdrawal_fee' ? 'Withdrawal Fee' :
+                           payment.contract?.title || 'Contract Payment'}
                         </div>
                         <div className="text-sm text-muted-foreground">
                           {isIncoming ? 'From' : 'To'}: {otherParty?.display_name || 'Unknown User'}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Type: {payment.payment_type === 'contract_release' ? 'Contract Payment' : payment.payment_type}
+                          Type: {payment.payment_type === 'contract_release' ? 'Contract Payment' :
+                                 payment.payment_type === 'withdrawal' ? 'Withdrawal' :
+                                 payment.payment_type === 'withdrawal_fee' ? 'Withdrawal Fee' :
+                                 payment.payment_type}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {new Date(payment.created_at).toLocaleDateString()}

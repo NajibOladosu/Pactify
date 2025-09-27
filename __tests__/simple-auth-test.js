@@ -4,10 +4,12 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-// Mock global fetch if not available
-if (!global.fetch) {
-  global.fetch = require('node-fetch');
-}
+// Setup fetch polyfill for Node.js environment
+const fetch = require('cross-fetch');
+global.fetch = fetch;
+global.Headers = fetch.Headers;
+global.Request = fetch.Request;
+global.Response = fetch.Response;
 
 describe('Simple Supabase Auth Test', () => {
   let supabase;

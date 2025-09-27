@@ -3,19 +3,19 @@
  * Tests KYC verification, payment method management, and withdrawal processing
  */
 
-import {
+const {
   setupTestUsers,
   cleanupTestUsers,
   getTestUser,
   authenticateTestUser,
   resetTestUsers
-} from '../test-setup/setup-test-users.js';
-import {
+} = require('../test-setup/setup-test-users.js');
+const {
   TestAPIManager,
   TEST_CONFIG,
   supabaseAdmin,
   createTestDelay
-} from '../test-setup/test-helpers.js';
+} = require('../test-setup/test-helpers.js');
 
 describe('Withdrawal System Management', () => {
   let freelancerUser, clientUser;

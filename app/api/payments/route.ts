@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { withAuth } from "@/utils/api/with-auth";
 import type { User } from "@supabase/supabase-js";
 
@@ -7,6 +8,12 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
   try {
     // Use regular client with updated RLS policies
     const supabase = await createClient();
+
+    // Create service role client for queries that need to bypass RLS
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE!
+    );
     
     // Use the same RPC function as progress API to get contracts (bypasses RLS issues)
     const { data: contractsFromRPC, error: contractsError } = await supabase
@@ -107,33 +114,19 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
     
     milestoneError = paymentsError;
 
-    // Get withdrawal payments (skip if table doesn't exist)
-    let withdrawalPayments = null;
-    let withdrawalError = null;
-    
-    // Check if withdrawals table exists first
-    const { data: tableExists } = await supabase
-      .from("information_schema.tables")
-      .select("table_name")
-      .eq("table_name", "withdrawals")
-      .eq("table_schema", "public")
-      .single();
-    
-    if (tableExists) {
-      const result = await supabase
-        .from("withdrawals")
-        .select(`
-          *,
-          connected_accounts!connected_account_id(
-            profiles!user_id(display_name)
-          )
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      
-      withdrawalPayments = result.data;
-      withdrawalError = result.error;
-    }
+    // Get withdrawal payments using service role client to bypass RLS
+    const { data: withdrawalPayments, error: withdrawalError } = await serviceSupabase
+      .from("withdrawals")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    // Debug withdrawal fetching
+    console.log('Withdrawal query result:', {
+      withdrawalPayments: withdrawalPayments?.length || 0,
+      withdrawalError: withdrawalError?.message,
+      userId: user.id
+    });
 
 
     // Process escrow payments
@@ -212,24 +205,30 @@ async function handlePaymentsRequest(request: NextRequest, user: User) {
 
     // Process withdrawal payments
     if (withdrawalPayments) {
-      const formattedWithdrawalPayments = withdrawalPayments.map(withdrawal => ({
-        id: `withdrawal-${withdrawal.id}`,
-        amount: parseFloat(withdrawal.amount) || 0,
-        net_amount: parseFloat(withdrawal.amount) || 0,
-        fee: 0, // Withdrawal fees are handled separately
-        currency: withdrawal.currency || "USD",
-        status: withdrawal.status, // processing, paid, failed, canceled
-        payment_type: "withdrawal",
-        created_at: withdrawal.created_at,
-        completed_at: withdrawal.arrived_at,
-        payer_id: "platform", // Platform pays out
-        payee_id: user.id,
-        contract: null,
-        payer: { display_name: "Pactify" },
-        payee: { display_name: "You" },
-        stripe_payout_id: withdrawal.stripe_payout_id,
-        expected_arrival_date: withdrawal.expected_arrival_date
-      }));
+      const formattedWithdrawalPayments = withdrawalPayments.map(withdrawal => {
+        const amount = parseFloat(withdrawal.amount) || 0;
+        // Determine if this is a fee transaction
+        const isFeeTransaction = withdrawal.stripe_payout_id?.endsWith('_fee');
+
+        return {
+          id: `withdrawal-${withdrawal.id}`,
+          amount: amount,
+          net_amount: amount,
+          fee: 0, // Individual transactions don't have fees, fee is separate transaction
+          currency: withdrawal.currency || "USD",
+          status: withdrawal.status, // processing, paid, failed, canceled
+          payment_type: isFeeTransaction ? "withdrawal_fee" : "withdrawal",
+          created_at: withdrawal.created_at,
+          completed_at: withdrawal.arrived_at,
+          payer_id: isFeeTransaction ? user.id : "platform", // User pays fee, platform pays withdrawal
+          payee_id: isFeeTransaction ? "platform" : user.id, // Platform receives fee, user receives withdrawal
+          contract: null,
+          payer: { display_name: isFeeTransaction ? "You" : "Pactify" },
+          payee: { display_name: isFeeTransaction ? "Pactify" : "You" },
+          stripe_payout_id: withdrawal.stripe_payout_id,
+          expected_arrival_date: withdrawal.expected_arrival_date
+        };
+      });
       allPayments.push(...formattedWithdrawalPayments);
     }
 

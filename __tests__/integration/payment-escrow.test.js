@@ -3,14 +3,14 @@
  * Tests payment processing, escrow funding, and payment release workflows
  */
 
-import {
+const {
   setupTestUsers,
   cleanupTestUsers,
   getTestUser,
   authenticateTestUser,
   resetTestUsers
-} from '../test-setup/setup-test-users.js';
-import {
+} = require('../test-setup/setup-test-users.js');
+const {
   TestContractManager,
   TestPaymentManager,
   TestAPIManager,
@@ -18,7 +18,7 @@ import {
   supabaseAdmin,
   stripe,
   createTestDelay
-} from '../test-setup/test-helpers.js';
+} = require('../test-setup/test-helpers.js');
 
 describe('Payment and Escrow Management', () => {
   let freelancerUser, clientUser;

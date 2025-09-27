@@ -3,29 +3,29 @@
  * Centralized configuration for all test suites
  */
 
-export const TEST_CONFIG = {
-  // Test users for comprehensive testing
+const TEST_CONFIG = {
+  // Test users for comprehensive testing - using real test accounts
   USERS: {
     FREELANCER: {
-      email: 'freelancer.test@pactify.com',
-      password: 'Test123!@#',
-      displayName: 'John Freelancer',
+      email: 'alex.verified@testuser.com',
+      password: 'testpassword123',
+      displayName: 'Alex Verified',
       userType: 'freelancer',
       profile: {
-        bio: 'Experienced web developer specializing in React and Node.js',
+        bio: 'Experienced developer for testing',
         companyName: 'FreelanceDev Solutions',
         website: 'https://freelancedev.com'
       }
     },
     CLIENT: {
-      email: 'client.test@pactify.com',
-      password: 'Test123!@#',
-      displayName: 'Jane Client',
+      email: 'sarah.pending@testuser.com',
+      password: 'testpassword123',
+      displayName: 'Sarah Pending',
       userType: 'client',
       profile: {
-        bio: 'Tech startup founder looking for quality development services',
-        companyName: 'StartupCorp Inc',
-        website: 'https://startupcorp.com'
+        bio: 'Test client for integration testing',
+        companyName: 'Test Client Corp',
+        website: 'https://testclient.com'
       }
     }
   },
@@ -198,20 +198,25 @@ export const TEST_CONFIG = {
 };
 
 // Helper functions for test data generation
-export const generateTestEmail = (prefix = 'test') => {
+const generateTestEmail = (prefix = 'test') => {
   const timestamp = Date.now();
   return `${prefix}.${timestamp}@pactify-test.com`;
 };
 
-export const generateContractNumber = () => {
+const generateContractNumber = () => {
   const date = new Date();
   const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
   const sequence = Math.floor(Math.random() * 999) + 1;
   return `PACT-${dateStr}-${sequence.toString().padStart(3, '0')}`;
 };
 
-export const createTestDelay = (ms = 1000) => {
+const createTestDelay = (ms = 1000) => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
 
-export default TEST_CONFIG;
+module.exports = {
+  TEST_CONFIG,
+  generateTestEmail,
+  generateContractNumber,
+  createTestDelay
+};

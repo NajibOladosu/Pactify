@@ -3,21 +3,21 @@
  * Tests subscription plans, upgrades, cancellations, and billing workflows
  */
 
-import {
+const {
   setupTestUsers,
   cleanupTestUsers,
   getTestUser,
   authenticateTestUser,
   resetTestUsers
-} from '../test-setup/setup-test-users.js';
-import {
+} = require('../test-setup/setup-test-users.js');
+const {
   TestPaymentManager,
   TestAPIManager,
   TEST_CONFIG,
   supabaseAdmin,
   stripe,
   createTestDelay
-} from '../test-setup/test-helpers.js';
+} = require('../test-setup/test-helpers.js');
 
 describe('Subscription Management', () => {
   let freelancerUser, clientUser;

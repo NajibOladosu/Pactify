@@ -5,7 +5,7 @@
 
 const { spawn } = require('child_process');
 const { promisify } = require('util');
-const fetch = require('node-fetch');
+const fetch = require('cross-fetch');
 
 // Configuration
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

@@ -17,8 +17,7 @@ const customJestConfig = {
   },
   testEnvironment: 'node',
   collectCoverageFrom: [
-    'app/**/*.{js,jsx,ts,tsx}',
-    'components/**/*.{js,jsx,ts,tsx}',
+    'app/api/**/*.{js,jsx,ts,tsx}',
     'lib/**/*.{js,jsx,ts,tsx}',
     'utils/**/*.{js,jsx,ts,tsx}',
     '!**/*.d.ts',
@@ -37,12 +36,14 @@ const customJestConfig = {
     '<rootDir>/__tests__/enable-comprehensive-testing.js',
     '<rootDir>/__tests__/test-env.js',
     '<rootDir>/__tests__/test-setup/',
-    '<rootDir>/__tests__/integration/',
+    '<rootDir>/__tests__/stripe-connect/setup/',
+    '<rootDir>/__tests__/stripe-connect/utils/',
     '<rootDir>/__tests__/api/contracts.test.js',
     '<rootDir>/__tests__/api/payments.test.js',
     '<rootDir>/__tests__/api/subscriptions.test.js',
     '<rootDir>/__tests__/e2e/'
   ],
+  testTimeout: 30000,
   transformIgnorePatterns: [
     '/node_modules/',
     '^.+\\.module\\.(css|sass|scss)$',

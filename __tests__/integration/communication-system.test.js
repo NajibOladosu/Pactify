@@ -3,20 +3,20 @@
  * Tests messaging, comments, and real-time communication features
  */
 
-import {
+const {
   setupTestUsers,
   cleanupTestUsers,
   getTestUser,
   authenticateTestUser,
   resetTestUsers
-} from '../test-setup/setup-test-users.js';
-import {
+} = require('../test-setup/setup-test-users.js');
+const {
   TestContractManager,
   TestAPIManager,
   TEST_CONFIG,
   supabaseAdmin,
   createTestDelay
-} from '../test-setup/test-helpers.js';
+} = require('../test-setup/test-helpers.js');
 
 describe('Communication System', () => {
   let freelancerUser, clientUser;
