@@ -83,12 +83,30 @@ const secureHandler = withSecurity(
         );
       }
 
-      // Determine recipient email - use provided email or contract's client email
-      const recipientEmail = validatedData.recipientEmail || contract.client_email;
+      // Determine recipient email based on who is sending the contract
+      let recipientEmail = validatedData.recipientEmail;
+
+      if (!recipientEmail) {
+        // If sender is the client, send to freelancer
+        if (contract.client_id === user.id) {
+          recipientEmail = contract.freelancer_email;
+        }
+        // If sender is the freelancer, send to client
+        else if (contract.freelancer_id === user.id) {
+          recipientEmail = contract.client_email;
+        }
+        // If sender is the creator but not assigned to a role, try both emails
+        else if (contract.creator_id === user.id) {
+          recipientEmail = contract.client_email || contract.freelancer_email;
+        }
+      }
       
       if (!recipientEmail) {
         return NextResponse.json(
-          { error: "NO_RECIPIENT", message: "No recipient email found. Please specify client email in contract or provide recipient email." },
+          {
+            error: "NO_RECIPIENT",
+            message: "No recipient email found. The contract is missing email information for the other party. Please edit the contract to add the required email address."
+          },
           { status: 400 }
         );
       }
@@ -125,9 +143,9 @@ const secureHandler = withSecurity(
           contract_id: contract.id,
           user_id: user.id,
           activity_type: 'contract_sent',
-          description: `Contract sent to ${validatedData.recipientEmail}`,
+          description: `Contract sent to ${recipientEmail}`,
           metadata: {
-            recipient_email: validatedData.recipientEmail,
+            recipient_email: recipientEmail,
             sent_at: new Date().toISOString()
           }
         });
@@ -138,7 +156,7 @@ const secureHandler = withSecurity(
           contract.id,
           user.id,
           {
-            recipient_email: validatedData.recipientEmail,
+            recipient_email: recipientEmail,
             contract_status: contract.status
           }
         );
@@ -153,10 +171,10 @@ const secureHandler = withSecurity(
           userId: user.id,
           action: 'contract_send_failed',
           resource: 'contract',
-          details: { 
-            contractId: validatedData.contractId, 
-            recipientEmail: validatedData.recipientEmail,
-            reason: 'email_send_failed' 
+          details: {
+            contractId: validatedData.contractId,
+            recipientEmail: recipientEmail,
+            reason: 'email_send_failed'
           },
           success: false,
           severity: 'medium'

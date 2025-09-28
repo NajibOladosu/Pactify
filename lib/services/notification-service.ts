@@ -198,15 +198,36 @@ export class NotificationService {
         to: profile.email,
         subject: notificationData.title,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333;">${notificationData.title}</h2>
-            <div style="color: #666; line-height: 1.6;">
-              ${notificationData.message.replace(/\n/g, '<br>')}
+          <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #3A86FF 0%, #2563EB 100%); padding: 32px 24px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Pactify</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px; font-weight: 500;">Secure Contract Management Platform</p>
             </div>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #999; font-size: 12px;">
-              This is an automated message from Pactify. If you have questions, please contact support.
-            </p>
+
+            <!-- Content -->
+            <div style="padding: 48px 32px; line-height: 1.7; color: #374151; background-color: #ffffff;">
+              <h2 style="color: #1f2937; margin: 0 0 24px 0; font-size: 24px; font-weight: 600;">${notificationData.title}</h2>
+              <div style="color: #374151; line-height: 1.7;">
+                ${notificationData.message.replace(/\n/g, '<br>')}
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="background-color: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0 0 12px 0; font-size: 13px; color: #64748b; font-weight: 500;">
+                Need help? Contact us at
+                <a href="mailto:support@pactify.com" style="color: #3A86FF; text-decoration: none; font-weight: 600;">support@pactify.com</a>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                © ${new Date().getFullYear()} Pactify Inc. All rights reserved.
+              </p>
+              <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+                  This is an automated message from Pactify. If you have questions, please contact support.
+                </p>
+              </div>
+            </div>
           </div>
         `,
         text: notificationData.message

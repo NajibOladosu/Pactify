@@ -7,16 +7,16 @@ export function SmtpMessage() {
       <InfoIcon size={16} className="mt-0.5" />
       <div className="flex flex-col gap-1">
         <small className="text-sm text-secondary-foreground">
-          <strong> Note:</strong> Emails are rate limited. Enable Custom SMTP to
-          increase the rate limit.
+          <strong> Note:</strong> Email delivery is powered by Gmail SMTP for reliable
+          email sending.
         </small>
         <div>
           <Link
-            href="https://supabase.com/docs/guides/auth/auth-smtp"
+            href="https://support.google.com/accounts/answer/185833"
             target="_blank"
             className="text-primary/50 hover:text-primary flex items-center text-sm gap-1"
           >
-            Learn more <ArrowUpRight size={14} />
+            Learn about Gmail App Passwords <ArrowUpRight size={14} />
           </Link>
         </div>
       </div>
